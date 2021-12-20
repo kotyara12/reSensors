@@ -1,5 +1,7 @@
 # reSensors
 
+> If you do not understand this text, please use the English version: <br/>https://github.com/kotyara12/reSensors/blob/master/README_EN.md <br/>Sorry for the machine translation into English.
+
 В данном репозитории собраны драйвера для различных сенсоров, адаптированные для [Espressif ESP32 ESP-IDF framework](https://github.com/espressif/esp-idf). Для более подробной информации смотрите README в папке сенсора. ***Прошу извинений: на данный момент не для всех сенсоров созданы описания - катастрофически не хватает времени на это.***
 
 **Все драйвера сенсоров являются потомками [класса rSensor](https://github.com/kotyara12/reSensors/tree/master/rSensor)**, который предоставляет следующий функционал:
