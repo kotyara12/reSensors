@@ -1,6 +1,6 @@
 {
-  "name": "rSensor",
-  "version": "2.0.0",
+  "name": "reSensor",
+  "version": "3.0.0",
   "description": "A unified base sensor class used by the sensor libraries.",
   "keywords": "sensors",
   "authors":

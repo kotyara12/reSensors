@@ -13,7 +13,7 @@
 
 #include <stdint.h>
 #include <esp_err.h>
-#include <rSensor.h>
+#include <reSensor.h>
 
 #define HTU2X_ADDRESS               0x40       // chip i2c address
 #define HTU2X_ERROR                 0xFF       // returns 255, if communication error is occurred

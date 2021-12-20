@@ -15,7 +15,7 @@
 
 #include <stdint.h>
 #include <esp_err.h>
-#include <rSensor.h>
+#include <reSensor.h>
 #include "bme68x/bme68x.h"
 #include "bme68x/bme68x_defs.h"
 

@@ -10,7 +10,7 @@
 #define __RE_AHT1x_H__
 
 #include <stdint.h>
-#include <rSensor.h>
+#include <reSensor.h>
 
 #define AHT10_ADDRESS_0X38         0x38  // chip I2C address no.1 for AHT10/AHT15/AHT20, address pin connected to GND
 #define AHT10_ADDRESS_0X39         0x39  // chip I2C address no.2 for AHT10 only, address pin connected to Vcc

@@ -11,7 +11,7 @@
 
 #include <stdint.h>
 #include <esp_err.h>
-#include <rSensor.h>
+#include <reSensor.h>
 
 #define AM232x_ADDRESS        0x5C // I2C fixed address
 

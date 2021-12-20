@@ -12,7 +12,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <driver/gpio.h>
-#include "rSensor.h"
+#include "reSensor.h"
 #include "onewire.h"
 
 // Model IDs

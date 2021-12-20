@@ -14,7 +14,7 @@
 #include "freertos/queue.h"
 #include "freertos/portmacro.h"
 #include <driver/gpio.h>
-#include <rSensor.h>
+#include <reSensor.h>
 
 typedef enum {
   DHT_DHT11         = 0,  // DHT11

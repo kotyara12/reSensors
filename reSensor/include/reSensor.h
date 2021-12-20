@@ -6,8 +6,8 @@
    kotyara12@yandex.ru | https://kotyara12.ru | tg: @kotyara1971
 */
 
-#ifndef __RSENSOR_H__
-#define __RSENSOR_H__
+#ifndef __RESENSOR_H__
+#define __RESENSOR_H__
 
 #include <sys/types.h>
 #include <time.h>
@@ -701,5 +701,5 @@ class rSensorX5: public rSensor {
 }
 #endif
 
-#endif // __RSENSOR_H__
+#endif // __RESENSOR_H__
 

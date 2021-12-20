@@ -2,7 +2,7 @@
 
 This repository contains drivers for various sensors adapted for the [Espressif ESP32 ESP-IDF framework](https://github.com/espressif/esp-idf). For more details see the README in the sensor subfolders. ***I apologize: not all sensors have descriptions at the moment - there is a sorely lack of time for that.***
 
-**All sensor drivers are descendants of the [rSensor class](https://github.com/kotyara12/reSensors/tree/master/rSensor)**, which provides the following functionality:
+**All sensor drivers are descendants of the [rSensor class](https://github.com/kotyara12/reSensors/tree/master/reSensor)**, which provides the following functionality:
 - Monitoring the status of the sensor (norm, error, timeout, CRC error) with the ability to notify the user about a change in state through a callback.
 - Built-in customizable data filters with the ability to change the buffer size. Currently implemented:
     - SENSOR_FILTER_RAW: no filtering, default
@@ -13,7 +13,7 @@ This repository contains drivers for various sensors adapted for the [Espressif 
 - Publishing data on an MQTT broker (using a callback): in a simple form and in several topics or in JSON format in one topic.
 - Support for saving filtering settings in NVS and automatic subscription to these parameters via MQTT.
 
-For more details see the description of the [rSensor class](https://github.com/kotyara12/reSensors/tree/master/rSensor).
+For more details see the description of the [rSensor class](https://github.com/kotyara12/reSensors/tree/master/reSensor).
 
 
 ## Notes

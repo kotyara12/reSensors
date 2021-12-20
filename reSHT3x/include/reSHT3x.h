@@ -13,7 +13,7 @@
 
 #include <stdint.h>
 #include <esp_err.h>
-#include "rSensor.h"
+#include "reSensor.h"
 
 #define SHT3xD_ADDRESS_1 0x44
 #define SHT3xD_ADDRESS_2 0x45

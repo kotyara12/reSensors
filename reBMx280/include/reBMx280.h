@@ -11,7 +11,7 @@
 
 #include <stdint.h>
 #include <esp_err.h>
-#include <rSensor.h>
+#include <reSensor.h>
 
 #define BMx_ADDRESS_0 0x76
 #define BMx_ADDRESS_1 0x77

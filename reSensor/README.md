@@ -5,7 +5,7 @@ Base class for various temperature and humidity sensors. Features: built-in filt
 ## Dependencies:
   - https://github.com/kotyara12/rLog
   - https://github.com/kotyara12/rStrings
-  - https://github.com/kotyara12/reEsp32 (only for ESP-IDF)
+  - https://github.com/kotyara12/reEsp32
 
 ### Notes:
   - libraries starting with the <b>re</b> prefix are only suitable for ESP32 and ESP-IDF

@@ -12,7 +12,7 @@
 #include <stdint.h>
 #include <driver/gpio.h>
 #include <reParams.h>
-#include <rSensor.h>
+#include <reSensor.h>
 #include "project_config.h"
 
 #ifdef __cplusplus
