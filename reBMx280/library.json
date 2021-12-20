@@ -1,0 +1,17 @@
+{
+  "name": "reBMx280",
+  "version": "1.0.0",
+  "description": "ESP32 library for BMP280 / BME280 sensors.",
+  "keywords": "BMP280, BME280",
+  "authors":
+  [
+    {
+      "name": "Alexander Razzhivin",
+      "email": "kotyara12@yandex.ru",
+      "url": "https://kotyara12.ru"
+    }
+  ],
+  "license": "MIT",
+  "frameworks": ["espidf"],
+  "platforms": ["espressif32"]
+}

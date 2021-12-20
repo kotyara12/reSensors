@@ -1,0 +1,17 @@
+{
+  "name": "rSensor",
+  "version": "2.0.0",
+  "description": "A unified base sensor class used by the sensor libraries.",
+  "keywords": "sensors",
+  "authors":
+  [
+    {
+      "name": "Alexander Razzhivin",
+      "email": "kotyara12@yandex.ru",
+      "url": "https://kotyara12.ru"
+    }
+  ],
+  "license": "MIT",
+  "frameworks": ["espidf"],
+  "platforms": ["espressif32"]
+}

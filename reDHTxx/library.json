@@ -1,0 +1,17 @@
+{
+  "name": "reDHTxx",
+  "version": "2.0.0",
+  "description": "ESP32 library for DHT11 / DHT12 / DHT21 / AM2301 / DHT22 / AM2302 sensors.",
+  "keywords": "DHT11, DHT12, DHT21, DHT22, AM2301, AM2302",
+  "authors":
+  [
+    {
+      "name": "Alexander Razzhivin",
+      "email": "kotyara12@yandex.ru",
+      "url": "https://kotyara12.ru"
+    }
+  ],
+  "license": "MIT",
+  "frameworks": ["espidf"],
+  "platforms": ["espressif32"]
+}
