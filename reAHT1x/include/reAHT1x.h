@@ -16,14 +16,14 @@
 #define AHT10_ADDRESS_0X39         0x39  // chip I2C address no.2 for AHT10 only, address pin connected to Vcc
 
 typedef enum {
-  AHT10_SENSOR = 0x00,
-  AHT15_SENSOR = 0x01,
-  AHT20_SENSOR = 0x02
+  AHT1X_SENSOR = 0x00,
+  AHT2X_SENSOR = 0x02
 } ASAIR_I2C_SENSOR;
 
 typedef enum {
-  AHT1x_MODE_NORMAL = 0x00,
-  AHT1x_MODE_CYCLED = 0x20
+  AHT1x_MODE_NORMAL  = 0x00,
+  AHT1x_MODE_CYCLED  = 0x20,
+  AHT1x_MODE_COMMAND = 0x40 
 } AHT1x_MODE;
 
 #ifdef __cplusplus
@@ -66,12 +66,13 @@ class AHT1x : public rSensorHT {
     uint8_t          _I2C_addr;
     ASAIR_I2C_SENSOR _sensorType;
     uint8_t          _rawCmdBuffer[3] = {0, 0, 0};
-    uint8_t          _rawDataBuffer[6] = {0, 0, 0, 0, 0, 0};
+    uint8_t          _rawDataBuffer[7] = {0, 0, 0, 0, 0, 0, 0};
 
     uint8_t readStatus();
-    void    waitBusy(uint32_t delay);
+    uint8_t waitBusy(uint32_t delay);
     sensor_status_t setMode(const AHT1x_MODE newMode);
     bool initHardware(ASAIR_I2C_SENSOR sensorType, const int numI2C, const uint8_t addrI2C, const AHT1x_MODE sensorMode);
+    bool checkCRC8();
 };
 
 #ifdef __cplusplus
