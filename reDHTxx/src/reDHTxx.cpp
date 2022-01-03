@@ -96,15 +96,12 @@ uint32_t DHTxx::expectPulse(bool level)
 // Get data from device
 sensor_status_t DHTxx::readRawData()
 {
-  uint8_t data[5];
-
-  // Initialize
-  data[0] = data[1] = data[2] = data[3] = data[4] = 0;
+  uint8_t data[5] = {0, 0, 0, 0, 0};
 
   // Send start signal to DHT sensor, pull down ~ 2ms to wake up
   DHT_CHECK(gpio_set_direction(_sensorGPIO, GPIO_MODE_OUTPUT), "Failed to change port mode");
 	DHT_CHECK(gpio_set_level(_sensorGPIO, 0), "Failed to send start signal");
-  if (_sensorType == DHT_DHT11) {
+  if ((_sensorType == DHT_DHT11) || (getStatus() == SENSOR_STATUS_TIMEOUT)) {
     ets_delay_us(20000);
   } else {
   	ets_delay_us(2000);
