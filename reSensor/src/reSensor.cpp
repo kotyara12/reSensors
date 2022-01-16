@@ -143,7 +143,7 @@ bool rSensorItem::doChangeFilterMode()
   // Allocating memory for an array of filter values
   if ((_filterMode != SENSOR_FILTER_RAW) && (_filterSize > 0)) {
     _filterInit = false;
-    _filterBuf = (value_t*)calloc(_filterSize, sizeof(value_t)); 
+    _filterBuf = (value_t*)esp_calloc(_filterSize, sizeof(value_t)); 
     if (_filterBuf == nullptr) {
       _filterSize = 0;
       if (_owner) {
