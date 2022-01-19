@@ -40,6 +40,10 @@
 #define AHTXX_TIMEOUT                1000  // Default i2c timeout 
 #define AHTXX_ERROR                  0xFF  // Returns 255, if communication error is occurred
 
+AHT1x::AHT1x():rSensorHT() 
+{
+}
+
 // Dynamically creating internal items on the heap
 bool AHT1x::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal, 
   ASAIR_I2C_SENSOR sensorType, const int numI2C, const uint8_t addrI2C, const AHT1x_MODE sensorMode,

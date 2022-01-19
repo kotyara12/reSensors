@@ -126,7 +126,7 @@ class rSensorFilterHandler: public param_handler_t {
   private:
     rSensorItem *_item;
   public:
-    rSensorFilterHandler(rSensorItem *item);
+    explicit rSensorFilterHandler(rSensorItem *item);
     void onChange(param_change_mode_t mode) override;
 };
 

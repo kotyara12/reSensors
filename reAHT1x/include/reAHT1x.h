@@ -32,6 +32,8 @@ extern "C" {
 
 class AHT1x : public rSensorHT {
   public:
+    AHT1x();
+    
     // Dynamically creating internal items on the heap
     bool initIntItems(const char* sensorName, const char* topicName, const bool topicLocal, 
       // hardware properties
