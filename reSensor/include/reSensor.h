@@ -164,13 +164,12 @@ class rSensorItem {
     void registerParameters(paramsGroupHandle_t parent_group, const char * key_name, const char * topic_name, const char * friendly_name);
 
     // Publishing values
-    char* asNumeric(const value_t value);
-    char* asString(const value_t value);
+    char* asString(const char* format, const value_t value);
     #if CONFIG_SENSOR_AS_PLAIN
-    bool publishDataValue(const char* topic, const value_t value);
+    bool publishDataValue(const char* topic, const char* format, const value_t value);
     #endif // CONFIG_SENSOR_AS_PLAIN
     #if CONFIG_SENSOR_AS_JSON
-    char* jsonDataValue(bool brackets, const value_t value);
+    char* jsonDataValue(bool brackets, const char* format, const value_t value);
     #endif // CONFIG_SENSOR_AS_JSON
 
     // Publishing timestamp

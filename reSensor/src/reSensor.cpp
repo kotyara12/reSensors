@@ -309,40 +309,39 @@ void rSensorItem::registerItemParameters(paramsGroup_t * group)
 // ------------------------------------------------ Publishing values ----------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
 
-char* rSensorItem::asNumeric(const value_t value)
+char* rSensorItem::asString(const char* format, const value_t value)
 {
-  return malloc_stringf(_fmtNumeric, value);
-}
-
-char* rSensorItem::asString(const value_t value)
-{
-  return malloc_stringf(_fmtString, value);
+  if (isnan(value)) {
+    return malloc_stringf("\"%s\"", CONFIG_FORMAT_EMPTY);
+  } else {
+    return malloc_stringf(format, value);
+  };
 }
 
 char* rSensorItem::getStringRaw()
 {
-  return malloc_stringf(_fmtString, _data.lastValue.rawValue);
+  return asString(_fmtString, _data.lastValue.rawValue);
 }
 
 char* rSensorItem::getStringFiltered()
 {
-  return malloc_stringf(_fmtString, _data.lastValue.filteredValue);
+  return asString(_fmtString, _data.lastValue.filteredValue);
 }
 
 #if CONFIG_SENSOR_AS_PLAIN
 
-bool rSensorItem::publishDataValue(const char* topic, const value_t value)
+bool rSensorItem::publishDataValue(const char* topic, const char* format, const value_t value)
 {
   bool ret = false;
   if (_owner) {
     // .../%topic%/numeric = 0.00
     char* _topicNum = mqttGetSubTopic(topic, CONFIG_SENSOR_NUMERIC_VALUE);
-    ret = (_topicNum) && _owner->publish(_topicNum, asNumeric(value), true);
+    ret = (_topicNum) && _owner->publish(_topicNum, asString(format, value), true);
     if (_topicNum) free(_topicNum);
     #if CONFIG_SENSOR_STRING_ENABLE
       // .../%topic%/string = "0.00°С"
       char* _topicStr = mqttGetSubTopic(topic, CONFIG_SENSOR_STRING_VALUE);
-      ret = (_topicStr) && _owner->publish(_topicStr, asString(value), true);
+      ret = (_topicStr) && _owner->publish(_topicStr, asString(_fmtString, value), true);
       if (_topicStr) free(_topicStr);
     #endif // CONFIG_SENSOR_STRING_ENABLE
     return ret;
@@ -354,14 +353,14 @@ bool rSensorItem::publishDataValue(const char* topic, const value_t value)
 
 #if CONFIG_SENSOR_AS_JSON
 
-char* rSensorItem::jsonDataValue(bool brackets, const value_t value)
+char* rSensorItem::jsonDataValue(bool brackets, const char* format, const value_t value)
 {
   char* ret = nullptr;
   #if CONFIG_SENSOR_STRING_ENABLE
     // {"numeric":0.00,"string":"0.00°С"}
-    char* _numeric = asNumeric(value);
+    char* _numeric = asString(format, value);
     if (_numeric) {
-      char* _string = asString(value);
+      char* _string = asString(_fmtString, value);
       if (_string) {
         if (brackets) {
           ret = malloc_stringf("{\"%s\":%s,\"%s\":\"%s\"}", CONFIG_SENSOR_NUMERIC_VALUE, _numeric, CONFIG_SENSOR_STRING_VALUE, _string);
@@ -374,7 +373,7 @@ char* rSensorItem::jsonDataValue(bool brackets, const value_t value)
     };
   #else
     // 0.00
-    ret = asNumeric(value);
+    ret = asString(format, value);
   #endif // CONFIG_SENSOR_STRING_ENABLE
   return ret;
 }
@@ -387,7 +386,7 @@ char* rSensorItem::jsonDataValue(bool brackets, const value_t value)
 
 char* rSensorItem::asTimestamp(const sensor_value_t data)
 {
-  return malloc_timestr(_fmtTimestamp, data.timestamp);
+  return malloc_timestr_empty(_fmtTimestamp, data.timestamp);
 }
 
 #if CONFIG_SENSOR_TIMESTAMP_ENABLE
@@ -430,22 +429,26 @@ char* rSensorItem::jsonTimestamp(const sensor_value_t data)
 // --------------------------------- Publishing "timestring" (string value and timestamp) --------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
 
+#if CONFIG_SENSOR_TIMESTRING_ENABLE
+
 char* rSensorItem::asStringTimeValue(const sensor_value_t data)
 {
   char* ret = nullptr;
-  char* _string = asString(data.filteredValue);
-  if (_string) {
-    char* _time = malloc_timestr(_fmtTimestampValue, data.timestamp);
-    if (_time) {
-      ret = malloc_stringf(_fmtStringTimeValue, _string, _time);
-      free(_time);
+  if (isnan(data.filteredValue)) {
+    ret = malloc_stringf("%s", CONFIG_FORMAT_EMPTY);
+  } else {
+    char* _string = asString(_fmtString, data.filteredValue);
+    if (_string) {
+      char* _time = malloc_timestr_empty(_fmtTimestampValue, data.timestamp);
+      if (_time) {
+        ret = malloc_stringf(_fmtStringTimeValue, _string, _time);
+        free(_time);
+      };
+      free(_string);
     };
-    free(_string);
   };
   return ret;
 }
-
-#if CONFIG_SENSOR_TIMESTRING_ENABLE
 
 #if CONFIG_SENSOR_AS_PLAIN
 
@@ -493,20 +496,20 @@ bool rSensorItem::publishValue(const char* topic, const sensor_value_t data)
   // filtered value
   char* _topicFiltered = mqttGetSubTopic(topic, CONFIG_SENSOR_FILTERED_VALUE);
   if (_topicFiltered) {
-    ret = publishDataValue(_topicFiltered, data.filteredValue);
+    ret = publishDataValue(_topicFiltered, _fmtNumeric, data.filteredValue);
     free(_topicFiltered);
     // raw value
     if (ret) {
       #if (CONFIG_SENSOR_RAW_ENABLE == 1)
         // raw value - always
         char* _topicRaw = mqttGetSubTopic(topic, CONFIG_SENSOR_RAW_VALUE);
-        ret = (_topicRaw) && publishDataValue(_topicRaw, data.rawValue);
+        ret = (_topicRaw) && publishDataValue(_topicRaw, "%f", data.rawValue);
         if (_topicRaw) free(_topicRaw);
       #elif (CONFIG_SENSOR_RAW_ENABLE == 2)
         // raw value - only when there is filtration
         if (_forcedRawPublish || (_filterMode != SENSOR_FILTER_RAW) || (_offsetValue != 0.0)) {
           char* _topicRaw = mqttGetSubTopic(topic, CONFIG_SENSOR_RAW_VALUE);
-          ret = (_topicRaw) && publishDataValue(_topicRaw, data.rawValue);
+          ret = (_topicRaw) && publishDataValue(_topicRaw, "%f", data.rawValue);
           if (_topicRaw) free(_topicRaw);
         };
       #endif // CONFIG_SENSOR_RAW_ENABLE
@@ -523,9 +526,9 @@ char* rSensorItem::jsonValue(const sensor_value_t data)
   char* ret = nullptr;
   #if (CONFIG_SENSOR_RAW_ENABLE == 1)
     // {"value":{...},"raw":{...}} - always
-    char* _json_raw = jsonDataValue(true, data.rawValue);
+    char* _json_raw = jsonDataValue(true, "%f", data.rawValue);
     if (_json_raw) {
-      char* _json_flt = jsonDataValue(true, data.filteredValue);
+      char* _json_flt = jsonDataValue(true, _fmtNumeric, data.filteredValue);
       if (_json_flt) {
         ret = malloc_stringf("\"%s\":%s,\"%s\":%s", CONFIG_SENSOR_FILTERED_VALUE, _json_flt, CONFIG_SENSOR_RAW_VALUE, _json_raw);
         free(_json_flt);
@@ -535,9 +538,9 @@ char* rSensorItem::jsonValue(const sensor_value_t data)
   #elif (CONFIG_SENSOR_RAW_ENABLE == 2)
     //  {"value":{...},"raw":{...}} - only when there is filtration
     if (_forcedRawPublish || (_filterMode != SENSOR_FILTER_RAW) || (_offsetValue != 0.0)) {
-      char* _json_raw = jsonDataValue(true, data.rawValue);
+      char* _json_raw = jsonDataValue(true, "%f", data.rawValue);
       if (_json_raw) {
-        char* _json_flt = jsonDataValue(true, data.filteredValue);
+        char* _json_flt = jsonDataValue(true, _fmtNumeric, data.filteredValue);
         if (_json_flt) {
           ret = malloc_stringf("\"%s\":%s,\"%s\":%s", CONFIG_SENSOR_FILTERED_VALUE, _json_flt, CONFIG_SENSOR_RAW_VALUE, _json_raw);
           free(_json_flt);
@@ -546,11 +549,11 @@ char* rSensorItem::jsonValue(const sensor_value_t data)
       };
     } else {
       // ...
-      ret = jsonDataValue(false, data.filteredValue);
+      ret = jsonDataValue(false, _fmtNumeric, data.filteredValue);
     };
   #else
     // ...
-    ret = jsonDataValue(false, data.filteredValue);
+    ret = jsonDataValue(false, _fmtNumeric, data.filteredValue);
   #endif // CONFIG_SENSOR_RAW_ENABLE
   return ret;
 }
@@ -1854,12 +1857,12 @@ void rSensorHT::createSensorItems(const sensor_filter_t filterMode1, const uint1
   // Humidity
   _item1 = new rSensorItem(this, CONFIG_SENSOR_HUMIDITY_NAME, 
     filterMode1, filterSize1,
-    CONFIG_FORMAT_HUMIDITY_VALUE, CONFIG_FORMAT_HUMIDITY_STRING,
+    CONFIG_FORMAT_HUMIDITY_VALUE, CONFIG_FORMAT_HUMIDITY_STRING
     #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-    CONFIG_FORMAT_TIMESTAMP_L, 
+    , CONFIG_FORMAT_TIMESTAMP_L
     #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
     #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-    CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
+    , CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
     #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
   );
   if (_item1) {
@@ -1869,12 +1872,12 @@ void rSensorHT::createSensorItems(const sensor_filter_t filterMode1, const uint1
   // Temperature
   _item2 = new rTemperatureItem(this, CONFIG_SENSOR_TEMP_NAME, (unit_temperature_t)CONFIG_FORMAT_TEMP_UNIT,
     filterMode2, filterSize2,
-    CONFIG_FORMAT_TEMP_VALUE, CONFIG_FORMAT_TEMP_STRING,
+    CONFIG_FORMAT_TEMP_VALUE, CONFIG_FORMAT_TEMP_STRING
     #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-    CONFIG_FORMAT_TIMESTAMP_L, 
+    , CONFIG_FORMAT_TIMESTAMP_L 
     #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
     #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-    CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
+    , CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
     #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
   );
   if (_item2) {
