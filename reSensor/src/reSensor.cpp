@@ -1427,7 +1427,7 @@ bool rSensorX1::setFilterMode(const sensor_filter_t filterMode, const uint16_t f
 // Writing measured RAW values to internal items
 void rSensorX1::setRawValues(const value_t newValue)
 {
-  if (newValue == NAN) {
+  if (isnan(newValue)) {
     setRawStatus(SENSOR_STATUS_NAN, false);
   } else {
     time_t timestamp = time(nullptr);
@@ -1620,7 +1620,7 @@ bool rSensorX2::setFilterMode2(const sensor_filter_t filterMode, const uint16_t 
 // Writing measured RAW values to internal items
 void rSensorX2::setRawValues(const value_t newValue1, const value_t newValue2)
 {
-  if ((newValue1 == NAN) || (newValue2 == NAN)) {
+  if (isnan(newValue1) || isnan(newValue2)) {
     setRawStatus(SENSOR_STATUS_NAN, true);
   } else {
     time_t timestamp = time(nullptr);
@@ -2020,7 +2020,7 @@ bool rSensorX3::setFilterMode3(const sensor_filter_t filterMode, const uint16_t 
 // Writing measured RAW values to internal items
 void rSensorX3::setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3)
 {
-  if ((newValue1 == NAN) || (newValue2 == NAN) || (newValue3 == NAN)) {
+  if (isnan(newValue1) || isnan(newValue2) || isnan(newValue3)) {
     setRawStatus(SENSOR_STATUS_NAN, true);
   } else {
     time_t timestamp = time(nullptr);
@@ -2431,7 +2431,7 @@ bool rSensorX4::setFilterMode4(const sensor_filter_t filterMode, const uint16_t 
 // Writing measured RAW values to internal items
 void rSensorX4::setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4)
 {
-  if ((newValue1 == NAN) || (newValue2 == NAN) || (newValue3 == NAN) || (newValue4 == NAN)) {
+  if (isnan(newValue1) || isnan(newValue2) || isnan(newValue3) || isnan(newValue4)) {
     setRawStatus(SENSOR_STATUS_NAN, true);
   } else {
     time_t timestamp = time(nullptr);
@@ -2916,7 +2916,7 @@ bool rSensorX5::setFilterMode5(const sensor_filter_t filterMode, const uint16_t 
 // Writing measured RAW values to internal items
 void rSensorX5::setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4, const value_t newValue5)
 {
-  if ((newValue1 == NAN) || (newValue2 == NAN) || (newValue3 == NAN) || (newValue4 == NAN) || (newValue5 == NAN)) {
+  if (isnan(newValue1) || isnan(newValue2) || isnan(newValue3) || isnan(newValue4) || isnan(newValue5)) {
     setRawStatus(SENSOR_STATUS_NAN, true);
   } else {
     time_t timestamp = time(nullptr);
