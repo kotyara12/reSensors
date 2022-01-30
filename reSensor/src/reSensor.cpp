@@ -136,7 +136,7 @@ bool rSensorItem::setFilterMode(const sensor_filter_t filterMode, const uint16_t
 bool rSensorItem::doChangeFilterMode()
 {
   // Freeing memory if it was previously allocated
-  if (_filterBuf != nullptr) {
+  if (_filterBuf) {
     free(_filterBuf);
     _filterBuf = nullptr;
   };
@@ -298,11 +298,15 @@ void rSensorItem::registerItemParameters(paramsGroup_t * group)
   _prm_filterMode = paramsRegisterValue(OPT_KIND_PARAMETER, OPT_TYPE_U8, _filterHandler, group,
     CONFIG_SENSOR_PARAM_FILTERMODE_KEY, CONFIG_SENSOR_PARAM_FILTERMODE_FRIENDLY,
     CONFIG_MQTT_PARAMS_QOS, &_filterMode);
-  paramsSetLimitsU8(_prm_filterMode, SENSOR_FILTER_RAW, SENSOR_FILTER_MEDIAN);
+  if (_prm_filterMode) {
+    paramsSetLimitsU8(_prm_filterMode, SENSOR_FILTER_RAW, SENSOR_FILTER_MEDIAN);
+  };
   _prm_filterSize = paramsRegisterValue(OPT_KIND_PARAMETER, OPT_TYPE_U16, _filterHandler, group,
     CONFIG_SENSOR_PARAM_FILTERSIZE_KEY, CONFIG_SENSOR_PARAM_FILTERSIZE_FRIENDLY,
     CONFIG_MQTT_PARAMS_QOS, &_filterSize);
-  paramsSetLimitsU16(_prm_filterSize, 0, 65535);
+  if (_prm_filterSize) {
+    paramsSetLimitsU16(_prm_filterSize, 0, CONFIG_SENSOR_PARAM_FILTERSIZE_MAX);
+  };
 }
 
 // -----------------------------------------------------------------------------------------------------------------------
@@ -1062,7 +1066,11 @@ void rSensor::topicsCreate(bool topicPrimary)
 {
   if (_topicPub) free(_topicPub);
   _topicPub =  mqttGetTopicDevice1(topicPrimary, _topicLocal, _topicName);
-  rlog_i(logTAG, "Generated topic for sensor \"%s\": [ %s ]", _name, _topicPub);
+  if (_topicPub ) {
+    rlog_i(logTAG, "Generated topic for sensor \"%s\": [ %s ]", _name, _topicPub);
+  } else {
+    rlog_e(logTAG, "Failed to generate topic for sensor \"%s\"", _name);
+  };
 }
 
 void rSensor::topicsFree()
@@ -1081,7 +1089,7 @@ void rSensor::setEventId(uint8_t eventId)
 {
   if ((eventId != _eventId) && (eventId < 8)) {
     _eventId = eventId;
-  }
+  };
 }
 
 // -----------------------------------------------------------------------------------------------------------------------
@@ -1498,8 +1506,10 @@ char* rSensorX1::getDisplayValue()
     if (_displayFormat) {
       // If the format is specified, we apply the specified format
       char* _str_value = _item->getStringFiltered();
-      ret = malloc_stringf(_displayFormat, _str_value);
-      free(_str_value);
+      if (_str_value) {
+        ret = malloc_stringf(_displayFormat, _str_value);
+        free(_str_value);
+      };
     } else {
       // If the format is not specified, we simply return a string value.
       return _item->getStringFiltered();
@@ -1776,13 +1786,19 @@ char* rSensorX2::getDisplayValue()
     };
     // If the format is specified, we apply the specified format
     if (_displayFormat) {
-      ret = malloc_stringf(_displayFormat, _str_value1, _str_value2);
-      if (_str_value1) free(_str_value1);
-      if (_str_value2) free(_str_value2);
+      if (_str_value1 && _str_value2) {
+        ret = malloc_stringf(_displayFormat, _str_value1, _str_value2);
+      } else {
+        if (_str_value1) {
+          ret = malloc_stringf(_displayFormat, _str_value1);
+        };
+      };
     } else {
       ret = _str_value1;
-      if (_str_value2) free(_str_value2);
     };
+    // Free temp strings
+    if (_str_value1) free(_str_value1);
+    if (_str_value2) free(_str_value2);
   };
   return ret;
 }
@@ -2273,15 +2289,22 @@ char* rSensorX3::getDisplayValue()
     };
     // If the format is specified, we apply the specified format
     if (_displayFormat) {
-      ret = malloc_stringf(_displayFormat, _str_value1, _str_value2, _str_value3);
-      if (_str_value1) free(_str_value1);
-      if (_str_value2) free(_str_value2);
-      if (_str_value3) free(_str_value3);
+      if (_str_value1 && _str_value2 && _str_value3) {
+        ret = malloc_stringf(_displayFormat, _str_value1, _str_value2, _str_value3);
+      } else {
+        if (_str_value1 && _str_value2) {
+          ret = malloc_stringf(_displayFormat, _str_value1, _str_value2);
+        } else {
+          ret = malloc_stringf(_displayFormat, _str_value1);
+        };
+      };
     } else {
       ret = _str_value1;
-      if (_str_value2) free(_str_value2);
-      if (_str_value3) free(_str_value3);
     };
+    // Free temp strings
+    if (_str_value1) free(_str_value1);
+    if (_str_value2) free(_str_value2);
+    if (_str_value3) free(_str_value3);
   };
   return ret;
 }
@@ -2388,7 +2411,7 @@ bool rSensorX4::initSensorItems(const sensor_filter_t filterMode1, const uint16_
                                 const sensor_filter_t filterMode4, const uint16_t filterSize4)
 {
   // Create items by default if they were not assigned externally
-  if ((!_item1) || (!_item2) || (!_item3)) {
+  if ((!_item1) || (!_item2) || (!_item3) || (!_item4)) {
     createSensorItems(filterMode1, filterSize1, filterMode2, filterSize2, filterMode3, filterSize3, filterMode4, filterSize4);
     if (_item1) _item1->setOwner(this);
     if (_item2) _item2->setOwner(this);
@@ -2742,15 +2765,22 @@ char* rSensorX4::getDisplayValue()
     };
     // If the format is specified, we apply the specified format
     if (_displayFormat) {
-      ret = malloc_stringf(_displayFormat, _str_value1, _str_value2, _str_value3);
-      if (_str_value1) free(_str_value1);
-      if (_str_value2) free(_str_value2);
-      if (_str_value3) free(_str_value3);
+      if (_str_value1 && _str_value2 && _str_value3) {
+        ret = malloc_stringf(_displayFormat, _str_value1, _str_value2, _str_value3);
+      } else {
+        if (_str_value1 && _str_value2) {
+          ret = malloc_stringf(_displayFormat, _str_value1, _str_value2);
+        } else {
+          ret = malloc_stringf(_displayFormat, _str_value1);
+        };
+      };
     } else {
       ret = _str_value1;
-      if (_str_value2) free(_str_value2);
-      if (_str_value3) free(_str_value3);
     };
+    // Free temp strings
+    if (_str_value1) free(_str_value1);
+    if (_str_value2) free(_str_value2);
+    if (_str_value3) free(_str_value3);
   };
   return ret;
 }
@@ -2866,7 +2896,7 @@ bool rSensorX5::initSensorItems(const sensor_filter_t filterMode1, const uint16_
                                 const sensor_filter_t filterMode5, const uint16_t filterSize5)
 {
   // Create items by default if they were not assigned externally
-  if ((!_item1) || (!_item2) || (!_item3)) {
+  if ((!_item1) || (!_item2) || (!_item3) || (!_item4) || (!_item5)) {
     createSensorItems(filterMode1, filterSize1, filterMode2, filterSize2, filterMode3, filterSize3, filterMode4, filterSize4, filterMode5, filterSize5);
     if (_item1) _item1->setOwner(this);
     if (_item2) _item2->setOwner(this);
@@ -3285,15 +3315,22 @@ char* rSensorX5::getDisplayValue()
     };
     // If the format is specified, we apply the specified format
     if (_displayFormat) {
-      ret = malloc_stringf(_displayFormat, _str_value1, _str_value2, _str_value3);
-      if (_str_value1) free(_str_value1);
-      if (_str_value2) free(_str_value2);
-      if (_str_value3) free(_str_value3);
+      if (_str_value1 && _str_value2 && _str_value3) {
+        ret = malloc_stringf(_displayFormat, _str_value1, _str_value2, _str_value3);
+      } else {
+        if (_str_value1 && _str_value2) {
+          ret = malloc_stringf(_displayFormat, _str_value1, _str_value2);
+        } else {
+          ret = malloc_stringf(_displayFormat, _str_value1);
+        };
+      };
     } else {
       ret = _str_value1;
-      if (_str_value2) free(_str_value2);
-      if (_str_value3) free(_str_value3);
     };
+    // Free temp strings
+    if (_str_value1) free(_str_value1);
+    if (_str_value2) free(_str_value2);
+    if (_str_value3) free(_str_value3);
   };
   return ret;
 }
