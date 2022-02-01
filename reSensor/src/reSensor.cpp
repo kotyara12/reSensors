@@ -388,12 +388,12 @@ char* rSensorItem::jsonDataValue(bool brackets, const char* format, const value_
 // ------------------------------------------------- Publishing timestamp ------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
 
+#if CONFIG_SENSOR_TIMESTAMP_ENABLE
+
 char* rSensorItem::asTimestamp(const sensor_value_t data)
 {
   return malloc_timestr_empty(_fmtTimestamp, data.timestamp);
 }
-
-#if CONFIG_SENSOR_TIMESTAMP_ENABLE
 
 #if CONFIG_SENSOR_AS_PLAIN
 
