@@ -17,18 +17,26 @@
 #include "reParams.h"
 #include "reEvents.h"
 
-#define RSENSOR_LOG_MSG_INIT_OK           "Sensor [%s] initialization completed successfully"
-#define RSENSOR_LOG_MSG_CREATE_ITEM       "Created item \"%s\" for sensor [%s]"
-#define RSENSOR_LOG_MSG_SOFT_RESET        "Sensor [%s] has been reset!"
-#define RSENSOR_LOG_MSG_SOFT_RESET_FAILED "Soft reset failed: %d %s!"
-#define RSENSOR_LOG_MSG_HEATER_TMPL       "Heater is %s"
-#define RSENSOR_LOG_MSG_HEATER_ON         "ON"
-#define RSENSOR_LOG_MSG_HEATER_OFF        "OFF"
-#define RSENSOR_LOG_MSG_HEATER_FAILED     "Heating control failed: %d %s!"
-#define RSENSOR_LOG_MSG_READ_FAILED       "Failed to read values: %d %s!"
-#define RSENSOR_LOG_MSG_READ_DEVICEID     "Failed to read device information: %d %s!"
-#define RSENSOR_LOG_MSG_READ_HUMD_FAILED  "Failed to read humidity value: %d %s!"
-#define RSENSOR_LOG_MSG_READ_TEMP_FAILED  "Failed to read temperature value: %d %s!"
+#define RSENSOR_LOG_MSG_INIT_OK             "Sensor [%s] initialization completed successfully"
+#define RSENSOR_LOG_MSG_CREATE_ITEM         "Created item \"%s\" for sensor [%s]"
+#define RSENSOR_LOG_MSG_WAKEUP_FAILED       "Failed to wakeup sensor [%s]: %d %s!"
+#define RSENSOR_LOG_MSG_SET_MODE_FAILED     "Failed to set mode for sensor [%s]: %d %s!"
+#define RSENSOR_LOG_MSG_CAL_FAILED          "Failed to load factory calibration data for sensor [%s]!"
+#define RSENSOR_LOG_MSG_CRC_FAILED          "Failed to check CRC for sensor [%s]!"
+#define RSENSOR_LOG_MSG_SOFT_RESET          "Sensor [%s] has been reset!"
+#define RSENSOR_LOG_MSG_SOFT_RESET_FAILED   "Soft reset failed: %d %s!"
+#define RSENSOR_LOG_MSG_SOFT_RESET_FAILED_N "Soft reset [%s] failed: %d %s!"
+#define RSENSOR_LOG_MSG_HEATER_TMPL         "Heater is %s"
+#define RSENSOR_LOG_MSG_HEATER_NAMED        "Sensor [%s]: heater is %s"
+#define RSENSOR_LOG_MSG_HEATER_ON           "ON"
+#define RSENSOR_LOG_MSG_HEATER_OFF          "OFF"
+#define RSENSOR_LOG_MSG_HEATER_FAILED       "Heating control failed: %d %s!"
+#define RSENSOR_LOG_MSG_SEND_MEASURMENT     "Failed to send measurment command for sensor [%s]: %d %s!"
+#define RSENSOR_LOG_MSG_READ_FAILED         "Failed to read values: %d %s!"
+#define RSENSOR_LOG_MSG_READ_DEVICEID       "Failed to read device information: %d %s!"
+#define RSENSOR_LOG_MSG_READ_DATA_FAILED    "Failed to read data from sensor [%s]: %d %s!"
+#define RSENSOR_LOG_MSG_READ_HUMD_FAILED    "Failed to read humidity value: %d %s!"
+#define RSENSOR_LOG_MSG_READ_TEMP_FAILED    "Failed to read temperature value: %d %s!"
 
 #ifdef __cplusplus
 extern "C" {
@@ -351,8 +359,9 @@ class rSensor {
     // Sensor status
     sensor_status_t _lastStatus;
     virtual sensor_status_t readRawData() = 0;
-    void setRawStatus(const sensor_status_t newStatus, const bool forced);
-    sensor_status_t setEspError(const uint32_t error, const bool forced);
+    void setRawStatus(sensor_status_t newStatus, bool forced);
+    sensor_status_t convertEspError(const uint32_t error);
+    sensor_status_t setEspError(uint32_t error, bool forced);
 
     // Register parameters of items
     virtual void registerCustomParameters(paramsGroupHandle_t sensor_group); 

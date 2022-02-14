@@ -7,9 +7,11 @@
 #include <time.h>
 #include "soc/rtc.h" 
 
+static const char* logTAG = "DHTxx";
+
 #define DHT_CHECK(err, str) \
   if (err != ESP_OK) { \
-    rlog_e(_name, "%s: #%d %s", str, err, esp_err_to_name(err)); \
+    rlog_e(logTAG, "%s for sensor [%s]: #%d %s", str, _name, err, esp_err_to_name(err)); \
     this->rSensor::setRawStatus(SENSOR_STATUS_ERROR, false); \
     return SENSOR_STATUS_ERROR; \
   };
@@ -77,7 +79,7 @@ bool DHTxx::initHardware()
   } else {
     gpio_pullup_dis(_sensorGPIO);
   };
-  rlog_d(_name, RSENSOR_LOG_MSG_INIT_OK, _name);
+  rlog_d(logTAG, RSENSOR_LOG_MSG_INIT_OK, _name);
   return true;
 }
 
@@ -121,13 +123,13 @@ sensor_status_t DHTxx::readRawData()
     // Wait sensor response signal: DHT will keep the line low for 80 µs and then high for 80 µs
     if (expectPulse(0) == DHT_TIMEOUT) {
       xTaskResumeAll();
-      rlog_e(_name, "DHT timeout waiting for start signal low pulse!");
+      rlog_e(logTAG, "%s timeout waiting for start signal low pulse!", _name);
       this->rSensor::setRawStatus(SENSOR_STATUS_TIMEOUT, false);
       return SENSOR_STATUS_TIMEOUT;
     };
     if (expectPulse(1) == DHT_TIMEOUT) {
       xTaskResumeAll();
-      rlog_e(_name, "DHT timeout waiting for start signal high pulse!");
+      rlog_e(logTAG, "%s timeout waiting for start signal high pulse!", _name);
       this->rSensor::setRawStatus(SENSOR_STATUS_TIMEOUT, false);
       return SENSOR_STATUS_TIMEOUT;
     };
@@ -155,7 +157,7 @@ sensor_status_t DHTxx::readRawData()
     uint32_t lowCycles = cycles[2 * i];
     uint32_t highCycles = cycles[2 * i + 1];  
     if ((lowCycles == DHT_TIMEOUT) || (highCycles == DHT_TIMEOUT)) {
-      rlog_e(_name, "DHT timeout waiting for pulse %d!", i + 1);
+      rlog_e(logTAG, "%s timeout waiting for pulse %d!", i + 1);
       this->rSensor::setRawStatus(SENSOR_STATUS_TIMEOUT, false);
       return SENSOR_STATUS_TIMEOUT;
     };
@@ -169,8 +171,8 @@ sensor_status_t DHTxx::readRawData()
 
   // Verify if checksum is ok
   if (data[4] != ((data[0] + data[1] + data[2] + data[3]) & 0xFF)) {
-    rlog_e(_name, "Invalid checksum on reading data from sensor: %.2X, %.2X, %.2X, %.2X, rcvd CRC: %.2X, calc CRC: %.2X!",
-      data[0], data[1], data[2], data[3], data[4], ((data[0] + data[1] + data[2] + data[3]) & 0xFF));
+    rlog_e(logTAG, "Invalid checksum on reading data from sensor [%s]: %.2X, %.2X, %.2X, %.2X, rcvd CRC: %.2X, calc CRC: %.2X!",
+      _name, data[0], data[1], data[2], data[3], data[4], ((data[0] + data[1] + data[2] + data[3]) & 0xFF));
     this->rSensor::setRawStatus(SENSOR_STATUS_CRC_ERROR, false);
     return SENSOR_STATUS_CRC_ERROR;
   };

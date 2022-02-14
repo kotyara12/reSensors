@@ -75,6 +75,7 @@ class AHT1x : public rSensorHT {
     sensor_status_t setMode(const AHT1x_MODE newMode);
     bool initHardware(ASAIR_I2C_SENSOR sensorType, const int numI2C, const uint8_t addrI2C, const AHT1x_MODE sensorMode);
     bool checkCRC8();
+    sensor_status_t readRawDataEx(bool resetBus);
 };
 
 #ifdef __cplusplus

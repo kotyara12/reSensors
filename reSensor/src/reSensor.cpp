@@ -1132,7 +1132,7 @@ void rSensor::postEventStatus(const sensor_status_t oldStatus, const sensor_stat
   // rlog_w(_name, "Post event RE_SENSOR_EVENTS :: RE_SENSOR_STATUS_CHANGED for %s (%d). Old status: %d, new status: %d", _name, data.sensor_id, data.old_status, data.new_status);
 }
 
-void rSensor::setRawStatus(const sensor_status_t newStatus, const bool forced)
+void rSensor::setRawStatus(sensor_status_t newStatus, bool forced)
 {
   sensor_status_t prevStatus = _lastStatus;
   if (_lastStatus != newStatus) {
@@ -1173,23 +1173,23 @@ void rSensor::setRawStatus(const sensor_status_t newStatus, const bool forced)
   };
 }
 
-sensor_status_t rSensor::setEspError(const uint32_t error, const bool forced)
+sensor_status_t rSensor::convertEspError(const uint32_t error)
 {
-  sensor_status_t ret;
   switch (error) {
-    case ESP_OK:
-      ret = SENSOR_STATUS_OK;
-      break;
-    case ESP_ERR_TIMEOUT:
-      ret = SENSOR_STATUS_TIMEOUT;
-      break;
-    case ESP_ERR_INVALID_CRC:
-      ret = SENSOR_STATUS_CRC_ERROR;
-      break;
-    default:
-      ret = SENSOR_STATUS_ERROR;
-      break;
+    case ESP_OK:              
+      return SENSOR_STATUS_OK;
+    case ESP_ERR_TIMEOUT:     
+      return SENSOR_STATUS_TIMEOUT;
+    case ESP_ERR_INVALID_CRC: 
+      return SENSOR_STATUS_CRC_ERROR;
+    default:                  
+      return SENSOR_STATUS_ERROR;
   };
+}
+
+sensor_status_t rSensor::setEspError(uint32_t error, bool forced)
+{
+  sensor_status_t ret = convertEspError(error);
   setRawStatus(ret, forced);
   return ret;
 }
