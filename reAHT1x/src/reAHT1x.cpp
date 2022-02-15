@@ -4,6 +4,7 @@
 #include "rLog.h"
 #include "driver/i2c.h"
 #include <time.h>
+#include <math.h>
 
 /* List of command registers */
 #define AHT1X_CMD_INIT               0xE1  // Initialization command, for AHT1x only
@@ -196,7 +197,8 @@ bool AHT1x::checkCRC8()
 
 sensor_status_t AHT1x::readRawDataEx(bool resetBus)
 {
-  static uint32_t hData, tData;
+  uint32_t hData, tData;
+  float hValue, tValue;
   esp_err_t err = ESP_OK;
 
   // Reset bus
@@ -237,18 +239,26 @@ sensor_status_t AHT1x::readRawDataEx(bool resetBus)
     };
 
     // Check CRC8
-    if((_sensorType == AHT2X_SENSOR) && !checkCRC8()) {
+    if ((_sensorType == AHT2X_SENSOR) && !checkCRC8()) {
       rlog_e(logTAG, RSENSOR_LOG_MSG_CRC_FAILED, _name);
       return SENSOR_STATUS_CRC_ERROR;
     };
 
     // Decode 20-bit raw humidity data
     hData = (((uint32_t)_rawDataBuffer[1] << 16) | ((uint16_t)_rawDataBuffer[2] << 8) | (_rawDataBuffer[3])) >> 4;
+    hValue = ((float)hData * 100) / 0x100000;
     // Decode 20-bit raw temperature data
     tData = ((uint32_t)(_rawDataBuffer[3] & 0x0F) << 16) | ((uint16_t)_rawDataBuffer[4] << 8) | _rawDataBuffer[5]; 
+    tValue = ((float)tData / 0x100000) * 200 - 50;
+
+    // Check values
+    if ((_sensorType != AHT2X_SENSOR) && ((hData == 0x0) || (tData = 0x0))) {
+      rlog_e(logTAG, RSENSOR_LOG_MSG_BAD_VALUE, _name);
+      return SENSOR_STATUS_NAN;
+    };
     
     // Set raw values
-    this->rSensorX2::setRawValues(((float)hData * 100) / 0x100000, ((float)tData / 0x100000) * 200 - 50);
+    this->rSensorX2::setRawValues(hValue, tValue);
     return SENSOR_STATUS_OK;
   };
   return SENSOR_STATUS_ERROR;

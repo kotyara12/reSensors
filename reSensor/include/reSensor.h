@@ -37,6 +37,7 @@
 #define RSENSOR_LOG_MSG_READ_DATA_FAILED    "Failed to read data from sensor [%s]: %d %s!"
 #define RSENSOR_LOG_MSG_READ_HUMD_FAILED    "Failed to read humidity value: %d %s!"
 #define RSENSOR_LOG_MSG_READ_TEMP_FAILED    "Failed to read temperature value: %d %s!"
+#define RSENSOR_LOG_MSG_BAD_VALUE           "Failed to read data from sensor [%s]: incorrect data"
 
 #ifdef __cplusplus
 extern "C" {
