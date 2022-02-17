@@ -21,7 +21,7 @@
 typedef enum {
   HTU2X_NULL       = 0,                        // could not determine 
   HTU2X_SHT20      = 1,                        // SHT20
-  HTU2X_HTU21D     = 2,                        // HTU21D/SHT21
+  HTU2X_HTU2x      = 2,                        // HTU2x/SHT21
   HTU2X_SI7013     = 3,                        // Si7013
   HTU2X_SI7020     = 4,                        // Si7020
   HTU2X_SI7021     = 5,                        // Si7021
