@@ -7,40 +7,45 @@
 #include <math.h>
 
 /* List of command registers */
-#define AHT1X_CMD_INIT               0xE1  // Initialization command, for AHT1x only
-#define AHT2X_CMD_INIT               0xBE  // Initialization command, for AHT2x only
-#define AHTXX_CMD_SOFTRESET          0xBA  // Soft reset command
-#define AHTXX_CMD_MEASURMENT         0xAC  // Start measurment command
-#define AHTXX_STATUS_REG             0x71  // Read status byte command
+#define AHT1X_CMD_INIT                    0xE1  // Initialization command, for AHT1x only
+#define AHT2X_CMD_INIT                    0xBE  // Initialization command, for AHT2x only
+#define AHTXX_CMD_SOFTRESET               0xBA  // Soft reset command
+#define AHTXX_CMD_MEASURMENT              0xAC  // Start measurment command
+#define AHTXX_STATUS_REG                  0x71  // Read status byte command
 
 /* Calibration register controls */
-#define AHT1X_INIT_CTRL_NORMAL_MODE  0x00  // Enable normal mode, for AHT1x only
-#define AHT1X_INIT_CTRL_CYCLE_MODE   0x20  // Enable cycle mode, for AHT1x only
-#define AHT1X_INIT_CTRL_CMD_MODE     0x40  // Enable command mode, for AHT1x only
-#define AHT1X_INIT_CTRL_CAL_ENABLE   0x08  // Load factory calibration coeff
-#define AHTXX_INIT_CTRL_NOP          0x00  // NOP control, send after any "AHT1X_INIT_CTRL..."
+#define AHT1X_INIT_CTRL_NORMAL_MODE       0x00  // Enable normal mode, for AHT1x only
+#define AHT1X_INIT_CTRL_CYCLE_MODE        0x20  // Enable cycle mode, for AHT1x only
+#define AHT1X_INIT_CTRL_CMD_MODE          0x40  // Enable command mode, for AHT1x only
+#define AHT1X_INIT_CTRL_CAL_ENABLE        0x08  // Load factory calibration coeff
+#define AHTXX_INIT_CTRL_NOP               0x00  // NOP control, send after any "AHT1X_INIT_CTRL..."
 
 /* Status byte register controls */
-#define AHTXX_STATUS_BUSY            0x80  // Status bit for busy
-#define AHTXX_STATUS_CALIBRATED      0x08  // Status bit for calibrated
-#define AHT1X_STATUS_NORMAL_MODE     0x00  // Normal mode status, for AHT1x only
-#define AHT1X_STATUS_CYCLE_MODE      0x20  // Cycle mode status, for AHT1x only
-#define AHT1X_STATUS_CMD_MODE        0x40  // Command mode status, for AHT1x only
-#define AHTXX_STATUS_CRC             0x10  // CRC8 status, no info in datasheet
+#define AHTXX_STATUS_CTRL_BUSY            0x80  // Busy                      bit[7]
+#define AHT1X_STATUS_CTRL_NORMAL_MODE     0x00  // Normal mode status        bit[6:5], for AHT1x only
+#define AHT1X_STATUS_CTRL_CYCLE_MODE      0x20  // Cycle mode status         bit[6:5], for AHT1x only
+#define AHT1X_STATUS_CTRL_CMD_MODE        0x40  // Command mode status       bit[6:5], for AHT1x only
+#define AHTXX_STATUS_CTRL_CRC             0x10  // CRC8 status               bit[4], no info in datasheet
+#define AHTXX_STATUS_CTRL_CAL_ON          0x08  // Calibration coeff status  bit[3]
+#define AHTXX_STATUS_CTRL_FIFO_ON         0x04  // FIFO on status            bit[2], no info in datasheet
+#define AHTXX_STATUS_CTRL_FIFO_FULL       0x02  // FIFO full status          bit[1], no info in datasheet
+#define AHTXX_STATUS_CTRL_FIFO_EMPTY      0x02  // FIFO empty status         bit[1], no info in datasheet
 
 /* Measurement register controls */
-#define AHTXX_START_MEASUREMENT_CTRL 0x33  // Measurement controls, suspect this is temperature & humidity DAC resolution
-#define AHTXX_MEASUREMENT_CTRL_NOP   0x00  // NOP control, send after any "AHTXX_DATA_MEASURMENT..."
+#define AHTXX_START_MEASUREMENT_CTRL      0x33  // Measurement controls, suspect this is temperature & humidity DAC resolution
+#define AHTXX_MEASUREMENT_CTRL_NOP        0x00  // NOP control, send after any "AHTXX_DATA_MEASURMENT..."
 
 /* Sensor delays */
-#define AHTXX_CMD_DELAY              10    // Delay between commands, in milliseconds
-#define AHTXX_MEASURMENT_DELAY       100   // Wait for measurement to complete, in milliseconds
-#define AHT1X_POWER_ON_DELAY         40    // Wait for AHT1x to initialize after power-on, in milliseconds
-#define AHT2X_POWER_ON_DELAY         100   // Wait for AHT2x to initialize after power-on, in milliseconds
-#define AHTXX_SOFT_RESET_DELAY       20    // Less than 20 milliseconds 
-#define AHTXX_REPEAT_DELAY           500   // Waiting before re-requesting data
-#define AHTXX_TIMEOUT                5000  // Default i2c timeout 
-#define AHTXX_ERROR                  0xFF  // Returns 255, if communication error is occurred
+#define AHTXX_CMD_DELAY                   300   // Delay between commands, at least 300 milliseconds, no info in datasheet!!!
+#define AHTXX_MEASURMENT_DELAY            75    // Wait for measurement to complete, at least 75 milliseconds
+#define AHT1X_POWER_ON_DELAY              40    // Wait for AHT1x to initialize after power-on, at least 20..40 milliseconds
+#define AHT2X_POWER_ON_DELAY              100   // Wait for AHT2x to initialize after power-on, in milliseconds
+#define AHTXX_SOFT_RESET_DELAY            20    // Less than 20 milliseconds 
+#define AHTXX_REPEAT_DELAY                500   // Waiting before re-requesting data
+#define AHTXX_TIMEOUT                     500   // Default i2c timeout 
+#define AHTXX_CHANGE_LIMIT_TEMP           5.0   // The maximum change in humidity between adjacent measurements above which the value is considered suspicious
+#define AHTXX_CHANGE_LIMIT_HUMD           5.0   // The maximum change in temperature between adjacent measurements above which the value is considered suspicious
+#define AHTXX_ERROR                       0xFF  // Returns 255, if communication error is occurred
 
 static const char* logTAG = "AHT1x";
 
@@ -115,7 +120,7 @@ uint8_t AHT1x::waitBusy(uint32_t delay)
 {
   vTaskDelay(delay / portTICK_RATE_MS);
   uint8_t status = readStatus();
-  while ((status != AHTXX_ERROR) && (status & AHTXX_STATUS_BUSY)) {
+  while ((status != AHTXX_ERROR) && (status & AHTXX_STATUS_CTRL_BUSY)) {
     vTaskDelay(AHTXX_CMD_DELAY / portTICK_RATE_MS);
     status = readStatus();
   };
@@ -146,11 +151,12 @@ sensor_status_t AHT1x::setMode(const AHT1x_MODE newMode)
   // Wait for a response from the sensor
   waitBusy(AHTXX_CMD_DELAY);
   // Check calibration enable
-  if (!(readStatus() & AHTXX_STATUS_CALIBRATED)) {
+  if (!(readStatus() & AHTXX_STATUS_CTRL_CAL_ON)) {
     rlog_e(logTAG, RSENSOR_LOG_MSG_CAL_FAILED, _name);
     this->rSensor::setRawStatus(SENSOR_STATUS_CAL_ERROR, false);
     return SENSOR_STATUS_CAL_ERROR;
   };
+  _sensorMode = newMode;
   this->rSensor::setRawStatus(SENSOR_STATUS_OK, true);
   rlog_i(logTAG, "For sensor [%s] has been set mode 0x%.2X", _name, newMode);
   return SENSOR_STATUS_OK;
@@ -204,6 +210,7 @@ sensor_status_t AHT1x::readRawDataEx(bool resetBus)
   // Reset bus
   if (resetBus) {
     generalCallResetI2C(_I2C_num);
+    softReset(_sensorMode);
   };
   
   // Send measurment command
@@ -220,7 +227,7 @@ sensor_status_t AHT1x::readRawDataEx(bool resetBus)
   uint8_t status = waitBusy(AHTXX_MEASURMENT_DELAY);
   if (status != AHTXX_ERROR) {
     // Check calibration enable
-    if (!(status & AHTXX_STATUS_CALIBRATED)) {
+    if (!(status & AHTXX_STATUS_CTRL_CAL_ON)) {
       rlog_e(logTAG, RSENSOR_LOG_MSG_CAL_FAILED, _name);
       return SENSOR_STATUS_CAL_ERROR;
     };
@@ -252,7 +259,10 @@ sensor_status_t AHT1x::readRawDataEx(bool resetBus)
     tValue = ((float)tData / 0x100000) * 200 - 50;
 
     // Check values
-    if ((_sensorType != AHT2X_SENSOR) && ((hData == 0x0) || (tData = 0x0))) {
+    if ((_sensorType != AHT2X_SENSOR) 
+     && ((hData == 0x0) || (tData = 0x0) 
+      || (!resetBus && ((fabsf(hValue-getHandle1()->lastValue.rawValue)>AHTXX_CHANGE_LIMIT_HUMD) 
+                     || (fabsf(tValue-getHandle2()->lastValue.rawValue)>AHTXX_CHANGE_LIMIT_TEMP))))) {
       rlog_e(logTAG, RSENSOR_LOG_MSG_BAD_VALUE, _name);
       return SENSOR_STATUS_NAN;
     };

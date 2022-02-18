@@ -67,6 +67,7 @@ class AHT1x : public rSensorHT {
     int              _I2C_num;
     uint8_t          _I2C_addr;
     ASAIR_I2C_SENSOR _sensorType;
+    AHT1x_MODE       _sensorMode = AHT1x_MODE_NORMAL;
     uint8_t          _rawCmdBuffer[3] = {0, 0, 0};
     uint8_t          _rawDataBuffer[7] = {0, 0, 0, 0, 0, 0, 0};
 
