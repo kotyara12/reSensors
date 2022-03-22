@@ -157,7 +157,7 @@ sensor_status_t DHTxx::readRawData()
     uint32_t lowCycles = cycles[2 * i];
     uint32_t highCycles = cycles[2 * i + 1];  
     if ((lowCycles == DHT_TIMEOUT) || (highCycles == DHT_TIMEOUT)) {
-      rlog_e(logTAG, "%s timeout waiting for pulse %d!", i + 1);
+      rlog_e(logTAG, "%s timeout waiting for pulse %d!", _name, i + 1);
       this->rSensor::setRawStatus(SENSOR_STATUS_TIMEOUT, false);
       return SENSOR_STATUS_TIMEOUT;
     };
