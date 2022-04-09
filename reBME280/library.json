@@ -1,8 +1,8 @@
 {
-  "name": "reBMx280",
-  "version": "1.0.0",
-  "description": "ESP32 library for BMP280 / BME280 sensors.",
-  "keywords": "BMP280, BME280",
+  "name": "reBME280",
+  "version": "2.0.0",
+  "description": "Driver for BME280 sensor over BME280 sensor API: https://github.com/BoschSensortec/BME280_driver",
+  "keywords": "BME280",
   "authors":
   [
     {

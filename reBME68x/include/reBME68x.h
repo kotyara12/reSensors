@@ -173,7 +173,7 @@ class BME68x : public rSensorX4 {
     void registerItemsParameters(paramsGroupHandle_t parent_group) override;
     sensor_status_t readRawData() override;  
     #if CONFIG_SENSOR_DISPLAY_ENABLED
-    void initDisplayMode() override;
+    char* getDisplayValue() override;
     #endif // CONFIG_SENSOR_DISPLAY_ENABLED
     #if CONFIG_SENSOR_AS_PLAIN
     bool publishCustomValues() override; 
@@ -187,6 +187,7 @@ class BME68x : public rSensorX4 {
     struct bme68x_dev        _dev;
     struct bme68x_conf       _conf;
     struct bme68x_heatr_conf _heatr_conf;
+    BME280_MODE              _mode = BME280_MODE_SLEEP;
     paramsGroupHandle_t      _prm_heater = nullptr;
     paramsEntryHandle_t      _prm_heatr_temp = nullptr;
     paramsEntryHandle_t      _prm_heatr_dur = nullptr;

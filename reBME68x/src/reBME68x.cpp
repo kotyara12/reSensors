@@ -15,7 +15,7 @@
 // ------------------------------------------------------ Callbacks ------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
 
-static BME68X_INTF_RET_TYPE BME68x_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr)
+int8_t BME68X_INTF_RET_TYPE BME68x_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr)
 {
   BME68x* sensor = (BME68x*)intf_ptr;
   if (sensor) {
@@ -232,10 +232,16 @@ BME68x::~BME68x()
 // Displaying multiple values in one topic
 #if CONFIG_SENSOR_DISPLAY_ENABLED
 
-void BME68x::initDisplayMode()
+char* BME68x::getDisplayValue()
 {
-  _displayMode = SENSOR_MIXED_ITEMS_23;
-  _displayFormat = (char*)CONFIG_FORMAT_MIXED_STRING2;
+  char* ret = nullptr;
+  if (_item2) { 
+    ret = _item2->getStringFiltered(); 
+  };
+  if (_item3) {
+    ret = concat_strings_div(ret, _item3->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+  };
+  return ret;
 }
 
 #endif // CONFIG_SENSOR_DISPLAY_ENABLED

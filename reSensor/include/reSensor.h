@@ -161,6 +161,7 @@ class rSensorItem {
       );
     virtual ~rSensorItem();
 
+    virtual bool initItem();
     void  setOwner(rSensor *sensor);
     bool  setFilterMode(const sensor_filter_t filterMode, const uint16_t filterSize);
     bool  doChangeFilterMode();
@@ -179,6 +180,9 @@ class rSensorItem {
 
     // Register internal parameters
     void registerParameters(paramsGroupHandle_t parent_group, const char * key_name, const char * topic_name, const char * friendly_name);
+
+    // Reading data in rSensorItem itself
+    virtual sensor_status_t getRawValue(value_t * rawValue);
 
     // Publishing values
     char* asString(const char* format, const value_t value);
@@ -252,10 +256,10 @@ class rSensorItem {
     bool _forcedRawPublish = false;
     virtual void registerItemParameters(paramsGroup_t * group);
   private:
-    rSensor *_owner;
-    const char * _name;
-    const char * _fmtNumeric;
-    const char * _fmtString;
+    rSensor *_owner = nullptr;
+    const char * _name = nullptr;
+    const char * _fmtNumeric = nullptr;
+    const char * _fmtString = nullptr;
     #if CONFIG_SENSOR_TIMESTAMP_ENABLE
     const char * _fmtTimestamp;
     #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
@@ -333,7 +337,6 @@ class rSensor {
     void setEventId(uint8_t eventId);
 
     // Reading data from a physical sensor
-    sensor_status_t readRawDataCustom(const uint16_t command, const uint32_t measure_delay);
     sensor_status_t readData();
 
     // Register internal parameters
@@ -343,11 +346,6 @@ class rSensor {
     void setCallbackOnChangeStatus(cb_status_changed_t cb);
     sensor_status_t getStatus();
     const char* getStatusString();
-
-    // Displaying multiple values in one topic
-    #if CONFIG_SENSOR_DISPLAY_ENABLED
-    void setDisplayMode(const sensor_mixed_t displayMode, char* displayFormat);
-    #endif // CONFIG_SENSOR_DISPLAY_ENABLED
 
     // Publishing data
     void setCallbackOnPublishData(cb_publish_data_t cb);
@@ -378,9 +376,6 @@ class rSensor {
 
     // Displaying multiple values in one topic
     #if CONFIG_SENSOR_DISPLAY_ENABLED
-    sensor_mixed_t _displayMode;
-    char* _displayFormat;
-    virtual void  initDisplayMode();
     virtual char* getDisplayValue() = 0;
     virtual char* getDisplayValueStatus();
     #endif // CONFIG_SENSOR_DISPLAY_ENABLED
@@ -428,6 +423,7 @@ class rSensorX1: public rSensor {
     #endif // CONFIG_SENSOR_AS_JSON
   protected:
     rSensorItem *_item;
+
     void setSensorItems(rSensorItem* item);
     bool initSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize);
     virtual void createSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize) = 0;
@@ -438,6 +434,20 @@ class rSensorX1: public rSensor {
     #if CONFIG_SENSOR_AS_PLAIN
     bool publishItems() override;
     #endif // CONFIG_SENSOR_AS_PLAIN
+};
+
+class rSensorStub: public rSensorX1 {
+  public:
+    rSensorStub();  
+    // Connecting external previously created items, for example statically declared
+    bool initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
+      rSensorItem* item, const uint32_t minReadInterval = 0, const uint16_t errorLimit = 0,
+      cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
+    // Reading data in rSensorItem itself
+    virtual sensor_status_t readRawData() override;
+  protected:
+    void createSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize) override;
+    void registerItemsParameters(paramsGroupHandle_t parent_group) override;
 };
 
 class rSensorX2: public rSensor {
@@ -497,7 +507,7 @@ class rSensorHT: public rSensorX2 {
       const sensor_filter_t filterMode2, const uint16_t filterSize2) override;
     void registerItemsParameters(paramsGroupHandle_t parent_group) override;
     #if CONFIG_SENSOR_DISPLAY_ENABLED
-    void initDisplayMode() override;
+    char* getDisplayValue() override;
     #endif // CONFIG_SENSOR_DISPLAY_ENABLED
     #if CONFIG_SENSOR_AS_PLAIN
     bool publishCustomValues() override; 

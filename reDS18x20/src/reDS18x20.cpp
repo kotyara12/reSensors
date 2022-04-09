@@ -70,21 +70,13 @@ void DS18x20::registerItemsParameters(paramsGroupHandle_t parent_group)
   };
 }
 
-#if CONFIG_SENSOR_DISPLAY_ENABLED
-void DS18x20::initDisplayMode()
-{
-  _displayMode = SENSOR_MIXED_ITEM_1;
-  _displayFormat = (char*)CONFIG_FORMAT_MIXED_STRING1;
-}
-#endif // CONFIG_SENSOR_DISPLAY_ENABLED
-
 bool DS18x20::initHardware(gpio_num_t pin, onewire_addr_t address, uint8_t index, DS18x20_RESOLUTION resolution, bool saveScratchPad)
 {
   _pin = pin;
   _saveScratchPad = saveScratchPad;
   if (address == ONEWIRE_NONE) {
     return scanDevices(index) && readPowerSupply() && setResolution(resolution);
-  }  else {
+  } else {
     return readROM(true) && readPowerSupply() && setResolution(resolution);
   };
 }

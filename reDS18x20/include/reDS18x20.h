@@ -69,9 +69,6 @@ class DS18x20 : public rSensorX1 {
   protected:
     void createSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize) override;
     void registerItemsParameters(paramsGroupHandle_t parent_group) override;
-    #if CONFIG_SENSOR_DISPLAY_ENABLED
-    void initDisplayMode() override;
-    #endif // CONFIG_SENSOR_DISPLAY_ENABLED
     sensor_status_t readRawData() override;
   private:
     typedef uint8_t scratchpad[9];

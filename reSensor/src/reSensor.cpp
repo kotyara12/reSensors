@@ -74,7 +74,6 @@ rSensorItem::rSensorItem(rSensor *sensor, const char* itemName,
   , const char* formatTimestampValue, const char* formatStringTimeValue
   #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
 ) {
-  // memset(&_data, 0, sizeof(_data));
   _owner = sensor;
   _name = itemName;
   _fmtNumeric = formatNumeric;
@@ -105,6 +104,11 @@ rSensorItem::~rSensorItem()
 {
   if (_filterHandler) delete _filterHandler;
   if (_filterBuf) free(_filterBuf);
+}
+
+bool rSensorItem::initItem()
+{
+  return true;
 }
 
 void rSensorItem::setOwner(rSensor *sensor)
@@ -174,6 +178,11 @@ void rSensorItem::setOffsetValue(float offsetValue)
 value_t rSensorItem::convertValue(const value_t rawValue)
 {
   return rawValue;
+}
+
+sensor_status_t rSensorItem::getRawValue(value_t * rawValue)
+{
+  return SENSOR_STATUS_NOT_SUPPORTED;
 }
 
 void rSensorItem::setRawValue(const value_t rawValue, const time_t rawTime)
@@ -281,12 +290,18 @@ sensor_extremums_t rSensorItem::getExtremumsDaily()
 
 void rSensorItem::registerParameters(paramsGroupHandle_t parent_group, const char * key_name, const char * topic_name, const char * friendly_name)
 {
-  if (!_pgItem) {
-    _pgItem = paramsRegisterGroup(parent_group, key_name, topic_name, friendly_name);
-  };
+  if ((key_name) && (topic_name) && (friendly_name)) {
+    if (!_pgItem) {
+      _pgItem = paramsRegisterGroup(parent_group, key_name, topic_name, friendly_name);
+    };
 
-  if (_pgItem) {
-    registerItemParameters(_pgItem);
+    if (_pgItem) {
+      registerItemParameters(_pgItem);
+    } else {
+      registerItemParameters(parent_group);
+    };
+  } else {
+    registerItemParameters(parent_group);
   };
 }
 
@@ -318,7 +333,7 @@ char* rSensorItem::asString(const char* format, const value_t value)
   if (isnan(value)) {
     return malloc_stringf("\"%s\"", CONFIG_FORMAT_EMPTY);
   } else {
-    return malloc_stringf(format, value);
+    return malloc_stringf(format, (float)value);
   };
 }
 
@@ -949,6 +964,7 @@ rTemperatureItem::rTemperatureItem(rSensor *sensor, const char* itemName, const 
 
 value_t rTemperatureItem::convertValue(const value_t rawValue)
 {
+  if (isnan(rawValue)) { return rawValue; };
   switch (_units) {
     case UNIT_TEMP_FAHRENHEIT:
       return 32.0 + 1.8 * rawValue;
@@ -988,6 +1004,7 @@ rPressureItem::rPressureItem(rSensor *sensor, const char* itemName, const unit_p
 
 value_t rPressureItem::convertValue(const value_t rawValue)
 {
+  if (isnan(rawValue)) { return rawValue; };
   switch (_units) {
     case UNIT_PRESSURE_HPA:
       return rawValue / 100.0;
@@ -1046,9 +1063,6 @@ void rSensor::initProperties(const char* sensorName, const char* topicName, cons
   _lastStatus = SENSOR_STATUS_NAN;
   _cbOnChangeStatus = cb_status;
   _cbOnPublishData = cb_publish;
-  #if CONFIG_SENSOR_DISPLAY_ENABLED
-  initDisplayMode();
-  #endif // CONFIG_SENSOR_DISPLAY_ENABLED
 }
 
 // -----------------------------------------------------------------------------------------------------------------------
@@ -1225,18 +1239,6 @@ const char* rSensor::getStatusString()
 
 #if CONFIG_SENSOR_DISPLAY_ENABLED
 
-void rSensor::initDisplayMode()
-{
-  _displayMode = SENSOR_MIXED_NONE;
-  _displayFormat = nullptr;
-}
-
-void rSensor::setDisplayMode(const sensor_mixed_t displayMode, char* displayFormat)
-{
-  _displayMode = displayMode;
-  _displayFormat = displayFormat;
-}
-
 char* rSensor::getDisplayValueStatus()
 {
   #if CONFIG_SENSOR_STATUS_AS_MIXED_ON_ERROR
@@ -1256,6 +1258,7 @@ sensor_status_t rSensor::readData()
 {
   if (millis() >= (_readLast + _readInterval)) {
     _readLast = millis();
+    rlog_v(logTAG, "Read data from [ %s ]...", _name);
     return readRawData();
   };
   return _lastStatus;
@@ -1355,9 +1358,7 @@ char* rSensor::jsonDisplayAndCustomValues()
   char* ret = nullptr;
   #if CONFIG_SENSOR_DISPLAY_ENABLED
     char* _custom = jsonCustomValues();
-    char* _display = nullptr;
-    if (_displayMode != SENSOR_MIXED_NONE) 
-      _display = getDisplayValueStatus();
+    char* _display = getDisplayValueStatus();
     if (_custom) {
       if (_display) {
         // Both lines
@@ -1405,7 +1406,10 @@ rSensorX1::~rSensorX1()
 void rSensorX1::setSensorItems(rSensorItem* item)
 {
   _item = item;
-  if (_item) _item->setOwner(this);
+  if (_item) {
+    _item->setOwner(this);
+    _item->initItem();
+  };
 };
 
 // Initialization of internal items
@@ -1416,10 +1420,7 @@ bool rSensorX1::initSensorItems(const sensor_filter_t filterMode, const uint16_t
     createSensorItems(filterMode, filterSize);
     if (_item) {
       _item->setOwner(this);
-    } else {
-      setRawStatus(SENSOR_STATUS_ERROR, true);
-      rlog_e(_name, "Failed to create items for %s sensor!", _name);
-      return false;
+      _item->initItem();
     };
   };
   return true;
@@ -1501,21 +1502,10 @@ sensor_extremums_t rSensorX1::getExtremumsDaily(const bool readSensor)
 
 char* rSensorX1::getDisplayValue()
 {
-  char* ret = nullptr;
-  if (_displayMode != SENSOR_MIXED_NONE) {
-    if (_displayFormat) {
-      // If the format is specified, we apply the specified format
-      char* _str_value = _item->getStringFiltered();
-      if (_str_value) {
-        ret = malloc_stringf(_displayFormat, _str_value);
-        free(_str_value);
-      };
-    } else {
-      // If the format is not specified, we simply return a string value.
-      return _item->getStringFiltered();
-    };
+  if (_item) {
+    return  _item->asStringTimeValue(_item->getValue());
   };
-  return ret;
+  return nullptr;
 }
 
 #endif // CONFIG_SENSOR_DISPLAY_ENABLED
@@ -1534,37 +1524,73 @@ bool rSensorX1::publishItems()
 char* rSensorX1::getJSON()
 {
   char* ret = nullptr;
-  if (_item) {
-    char* _json_value = _item->jsonNamedValues();
-    if (_json_value) {
-      // Preparing a string with a display (mixed) value
-      char* _json_custom = jsonDisplayAndCustomValues();
-      // Generating full JSON
-      #if CONFIG_SENSOR_STATUS_ENABLE
-        if (_json_custom) {
-          // {"status":"OK","sensor":{...},"mixed":"0.00°С"}
-          ret = malloc_stringf("{\"%s\":\"%s\",%s,%s}", CONFIG_SENSOR_STATUS, getStatusString(), _json_value, _json_custom);
-        } else {
-          // {"status":"OK","sensor":{...}}
-          ret = malloc_stringf("{\"%s\":\"%s\",%s}", CONFIG_SENSOR_STATUS, getStatusString(), _json_value);
-        };
-      #else
-        if (_json_custom) {
-          // {"sensor":{...},"mixed":"0.00°С"}
-          ret = malloc_stringf("{%s,%s}", _json_value, _json_custom);
-        } else {
-          // {"sensor":{...}}
-          ret = malloc_stringf("{%s}", _json_value);
-        };
-      #endif //CONFIG_SENSOR_STATUS_ENABLE
-      if (_json_custom) free(_json_custom);
-      free(_json_value);
-    };
+  char* _json_values = nullptr;
+  if (_item) { _json_values = _item->jsonNamedValues(); };
+  // Add mixed content line
+  _json_values = concat_strings_div(_json_values, jsonDisplayAndCustomValues(), ",");
+  // Generating full JSON
+  if (_json_values) {
+    #if CONFIG_SENSOR_STATUS_ENABLE
+      ret = malloc_stringf("{\"%s\":\"%s\",%s}", CONFIG_SENSOR_STATUS, getStatusString(), _json_values);
+    #else
+      ret = malloc_stringf("{%s}", _json_values);
+    #endif //CONFIG_SENSOR_STATUS_ENABLE
+    free(_json_values);
   };
   return ret;
 }
 
 #endif // CONFIG_SENSOR_AS_JSON
+
+// =======================================================================================================================
+// =======================================================================================================================
+// ===================================================== rSensorStub =====================================================
+// =======================================================================================================================
+// =======================================================================================================================
+
+// Constructor
+rSensorStub::rSensorStub():rSensorX1()
+{ 
+}
+
+// Connecting external previously created items, for example statically declared
+bool rSensorStub::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
+  rSensorItem* item, const uint32_t minReadInterval, const uint16_t errorLimit,
+  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+{
+  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
+  this->rSensorX1::setSensorItems(item);
+  return (_item != nullptr);
+}
+
+// Initialization of internal items
+void rSensorStub::createSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize)
+{
+  rlog_e(logTAG, "Only external items can be used for [ %s ] sensor!", _name);
+  setRawStatus(SENSOR_STATUS_NOT_SUPPORTED, true);
+}
+
+// Registration of parameters
+void rSensorStub::registerItemsParameters(paramsGroupHandle_t parent_group)
+{
+  if (_item) {
+    _item->registerParameters(parent_group, nullptr, nullptr, nullptr);
+  };
+}
+
+sensor_status_t rSensorStub::readRawData()
+{
+  sensor_status_t status = SENSOR_STATUS_NOT_SUPPORTED;
+  if (_item) {
+    value_t rawValue;
+    status = _item->getRawValue(&rawValue);
+    if (status == SENSOR_STATUS_OK) {
+      setRawValues(rawValue);
+    };
+  };
+  setRawStatus(status, false);
+  return status;
+}
 
 // =======================================================================================================================
 // =======================================================================================================================
@@ -1592,8 +1618,14 @@ void rSensorX2::setSensorItems(rSensorItem* item1, rSensorItem* item2)
 {
   _item1 = item1;
   _item2 = item2;
-  if (_item1) _item1->setOwner(this);
-  if (_item2) _item2->setOwner(this);
+  if (_item1) {
+    _item1->setOwner(this);
+    _item1->initItem();
+  };
+  if (_item2) {
+    _item2->setOwner(this);
+    _item2->initItem();
+  };
 };
 
 // Initialization of internal items
@@ -1603,12 +1635,13 @@ bool rSensorX2::initSensorItems(const sensor_filter_t filterMode1, const uint16_
   // Create items by default if they were not assigned externally
   if ((!_item1) || (!_item2)) {
     createSensorItems(filterMode1, filterSize1, filterMode2, filterSize2);
-    if (_item1) _item1->setOwner(this);
-    if (_item2) _item2->setOwner(this);
-    if ((!_item1) || (!_item2)) {
-      setRawStatus(SENSOR_STATUS_ERROR, true);
-      rlog_e(_name, "Failed to create items for %s sensor!", _name);
-      return false;
+    if (_item1) {
+      _item1->setOwner(this);
+      _item1->initItem();
+    };
+    if (_item2) {
+      _item2->setOwner(this);
+      _item2->initItem();
     };
   };
   return true;
@@ -1630,7 +1663,8 @@ bool rSensorX2::setFilterMode2(const sensor_filter_t filterMode, const uint16_t 
 // Writing measured RAW values to internal items
 void rSensorX2::setRawValues(const value_t newValue1, const value_t newValue2)
 {
-  if (isnan(newValue1) || isnan(newValue2)) {
+  if ((isnan(newValue1) && (_item1)) 
+   || (isnan(newValue2) && (_item2))) {
     setRawStatus(SENSOR_STATUS_NAN, true);
   } else {
     time_t timestamp = time(nullptr);
@@ -1762,43 +1796,11 @@ sensor_extremums_t rSensorX2::getExtremumsDaily2(const bool readSensor)
 char* rSensorX2::getDisplayValue()
 {
   char* ret = nullptr;
-  if (_displayMode != SENSOR_MIXED_NONE) {
-    // Get string values
-    char* _str_value1 = nullptr;
-    char* _str_value2 = nullptr;
-    switch (_displayMode) {
-      case SENSOR_MIXED_ITEM_1:
-        _str_value1 = _item1->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEM_2:
-        _str_value1 = _item2->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_12:
-        _str_value1 = _item1->getStringFiltered();
-        _str_value2 = _item2->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_21:
-        _str_value1 = _item2->getStringFiltered();
-        _str_value2 = _item1->getStringFiltered();
-        break;
-      default:
-        break;
-    };
-    // If the format is specified, we apply the specified format
-    if (_displayFormat) {
-      if (_str_value1 && _str_value2) {
-        ret = malloc_stringf(_displayFormat, _str_value1, _str_value2);
-      } else {
-        if (_str_value1) {
-          ret = malloc_stringf(_displayFormat, _str_value1);
-        };
-      };
-    } else {
-      ret = _str_value1;
-    };
-    // Free temp strings
-    if (_str_value1) free(_str_value1);
-    if (_str_value2) free(_str_value2);
+  if (_item1) { 
+    ret = _item1->getStringFiltered(); 
+  };
+  if (_item2) {
+    ret = concat_strings_div(ret, _item2->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
   };
   return ret;
 }
@@ -1819,37 +1821,19 @@ bool rSensorX2::publishItems()
 char* rSensorX2::getJSON()
 {
   char* ret = nullptr;
-  if ((_item1) && (_item2)) {
-    char* _json_value1 = _item1->jsonNamedValues();
-    if (_json_value1) {
-      char* _json_value2 = _item2->jsonNamedValues();
-      if (_json_value2) {
-        // Preparing a string with a mixed value
-        char* _json_custom = jsonDisplayAndCustomValues();
-        // Generating full JSON
-        #if CONFIG_SENSOR_STATUS_ENABLE
-          // The status is always read by the first sensor
-          if (_json_custom) {
-            // {"status":"OK","value1":{...},"value2":{...},"mixed":"0.00°С 33.33%"}
-            ret = malloc_stringf("{\"%s\":\"%s\",%s,%s,%s}", CONFIG_SENSOR_STATUS, getStatusString(), _json_value1, _json_value2, _json_custom);
-          } else {
-            // {"status":"OK","value1":{...},"value2":{...}}
-            ret = malloc_stringf("{\"%s\":\"%s\",%s,%s}", CONFIG_SENSOR_STATUS, getStatusString(), _json_value1, _json_value2);
-          };
-        #else
-          if (_json_custom) {
-            // {"value1":{...},"value2":{...},"mixed":"0.00°С 33.33%"}
-            ret = malloc_stringf("{%s,%s,%s}", _json_value1, _json_value2, _json_custom);
-          } else {
-            // {"value1":{...},"value2":{...}}
-            ret = malloc_stringf("{%s,%s}", _json_value1, _json_value2);
-          };
-        #endif //CONFIG_SENSOR_STATUS_ENABLE
-        if (_json_custom) free(_json_custom);
-        free(_json_value2);
-      };
-      free(_json_value1);
-    };
+  char* _json_values = nullptr;
+  if (_item1) { _json_values = _item1->jsonNamedValues(); };
+  if (_item2) { _json_values = concat_strings_div(_json_values, _item2->jsonNamedValues(), ","); };
+  // Add mixed content line
+  _json_values = concat_strings_div(_json_values, jsonDisplayAndCustomValues(), ",");
+  // Generating full JSON
+  if (_json_values) {
+    #if CONFIG_SENSOR_STATUS_ENABLE
+      ret = malloc_stringf("{\"%s\":\"%s\",%s}", CONFIG_SENSOR_STATUS, getStatusString(), _json_values);
+    #else
+      ret = malloc_stringf("{%s}", _json_values);
+    #endif //CONFIG_SENSOR_STATUS_ENABLE
+    free(_json_values);
   };
   return ret;
 }
@@ -1917,10 +1901,16 @@ void rSensorHT::registerItemsParameters(paramsGroupHandle_t parent_group)
 // Displaying multiple values in one topic
 #if CONFIG_SENSOR_DISPLAY_ENABLED
 
-void rSensorHT::initDisplayMode()
+char* rSensorHT::getDisplayValue()
 {
-  _displayMode = SENSOR_MIXED_ITEMS_21;
-  _displayFormat = (char*)CONFIG_FORMAT_MIXED_STRING2;
+  char* ret = nullptr;
+  if (_item2) { 
+    ret = _item2->getStringFiltered(); 
+  };
+  if (_item1) {
+    ret = concat_strings_div(ret, _item1->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+  };
+  return ret;
 }
 
 #endif // CONFIG_SENSOR_DISPLAY_ENABLED
@@ -1989,9 +1979,18 @@ void rSensorX3::setSensorItems(rSensorItem* item1, rSensorItem* item2, rSensorIt
   _item1 = item1;
   _item2 = item2;
   _item3 = item3;
-  if (_item1) _item1->setOwner(this);
-  if (_item2) _item2->setOwner(this);
-  if (_item3) _item3->setOwner(this);
+  if (_item1) {
+    _item1->setOwner(this);
+    _item1->initItem();
+  };
+  if (_item2) {
+    _item2->setOwner(this);
+    _item2->initItem();
+  };
+  if (_item3) {
+    _item3->setOwner(this);
+    _item3->initItem();
+  };
 };
 
 // Initialization of internal items
@@ -2002,13 +2001,17 @@ bool rSensorX3::initSensorItems(const sensor_filter_t filterMode1, const uint16_
   // Create items by default if they were not assigned externally
   if ((!_item1) || (!_item2) || (!_item3)) {
     createSensorItems(filterMode1, filterSize1, filterMode2, filterSize2, filterMode3, filterSize3);
-    if (_item1) _item1->setOwner(this);
-    if (_item2) _item2->setOwner(this);
-    if (_item3) _item3->setOwner(this);
-    if ((!_item1) || (!_item2) || (!_item3)) {
-      setRawStatus(SENSOR_STATUS_ERROR, true);
-      rlog_e(_name, "Failed to create items for %s sensor!", _name);
-      return false;
+    if (_item1) {
+      _item1->setOwner(this);
+      _item1->initItem();
+    };
+    if (_item2) {
+      _item2->setOwner(this);
+      _item2->initItem();
+    };
+    if (_item3) {
+      _item3->setOwner(this);
+      _item3->initItem();
     };
   };
   return true;
@@ -2036,7 +2039,9 @@ bool rSensorX3::setFilterMode3(const sensor_filter_t filterMode, const uint16_t 
 // Writing measured RAW values to internal items
 void rSensorX3::setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3)
 {
-  if (isnan(newValue1) || isnan(newValue2) || isnan(newValue3)) {
+  if ((isnan(newValue1) && (_item1)) 
+   || (isnan(newValue2) && (_item2)) 
+   || (isnan(newValue3) && (_item3))) {
     setRawStatus(SENSOR_STATUS_NAN, true);
   } else {
     time_t timestamp = time(nullptr);
@@ -2225,86 +2230,14 @@ sensor_extremums_t rSensorX3::getExtremumsDaily3(const bool readSensor)
 char* rSensorX3::getDisplayValue()
 {
   char* ret = nullptr;
-  if (_displayMode != SENSOR_MIXED_NONE) {
-    // Get string values
-    char* _str_value1 = nullptr;
-    char* _str_value2 = nullptr;
-    char* _str_value3 = nullptr;
-    switch (_displayMode) {
-      case SENSOR_MIXED_ITEM_1:
-        _str_value1 = _item1->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEM_2:
-        _str_value1 = _item2->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEM_3:
-        _str_value1 = _item3->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_12:
-        _str_value1 = _item1->getStringFiltered();
-        _str_value2 = _item2->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_13:
-        _str_value1 = _item1->getStringFiltered();
-        _str_value2 = _item3->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_21:
-        _str_value1 = _item2->getStringFiltered();
-        _str_value2 = _item1->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_23:
-        _str_value1 = _item2->getStringFiltered();
-        _str_value2 = _item3->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_31:
-        _str_value1 = _item3->getStringFiltered();
-        _str_value2 = _item1->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_32:
-        _str_value1 = _item3->getStringFiltered();
-        _str_value2 = _item2->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_123:
-        _str_value1 = _item1->getStringFiltered();
-        _str_value2 = _item2->getStringFiltered();
-        _str_value3 = _item3->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_213:
-        _str_value1 = _item2->getStringFiltered();
-        _str_value2 = _item1->getStringFiltered();
-        _str_value3 = _item3->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_321:
-        _str_value1 = _item3->getStringFiltered();
-        _str_value2 = _item2->getStringFiltered();
-        _str_value3 = _item1->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_312:
-        _str_value1 = _item3->getStringFiltered();
-        _str_value2 = _item1->getStringFiltered();
-        _str_value3 = _item2->getStringFiltered();
-        break;
-      default:
-        break;
-    };
-    // If the format is specified, we apply the specified format
-    if (_displayFormat) {
-      if (_str_value1 && _str_value2 && _str_value3) {
-        ret = malloc_stringf(_displayFormat, _str_value1, _str_value2, _str_value3);
-      } else {
-        if (_str_value1 && _str_value2) {
-          ret = malloc_stringf(_displayFormat, _str_value1, _str_value2);
-        } else {
-          ret = malloc_stringf(_displayFormat, _str_value1);
-        };
-      };
-    } else {
-      ret = _str_value1;
-    };
-    // Free temp strings
-    if (_str_value1) free(_str_value1);
-    if (_str_value2) free(_str_value2);
-    if (_str_value3) free(_str_value3);
+  if (_item1) { 
+    ret = _item1->getStringFiltered(); 
+  };
+  if (_item2) {
+    ret = concat_strings_div(ret, _item2->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+  };
+  if (_item3) {
+    ret = concat_strings_div(ret, _item3->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
   };
   return ret;
 }
@@ -2325,41 +2258,20 @@ bool rSensorX3::publishItems()
 char* rSensorX3::getJSON()
 {
   char* ret = nullptr;
-  if ((_item1) && (_item2) && (_item3)) {
-    char* _json_value1 = _item1->jsonNamedValues();
-    if (_json_value1) {
-      char* _json_value2 = _item2->jsonNamedValues();
-      if (_json_value2) {
-        char* _json_value3 = _item3->jsonNamedValues();
-        if (_json_value3) {
-          // Preparing a string with a mixed value
-          char* _json_custom = jsonDisplayAndCustomValues();
-          // Generating full JSON
-          #if CONFIG_SENSOR_STATUS_ENABLE
-            // The status is always read by the first sensor
-            if (_json_custom) {
-              // {"status":"OK","value1":{...},"value2":{...},"value3":{...},"mixed":"0.00°С 33.33%"}
-              ret = malloc_stringf("{\"%s\":\"%s\",%s,%s,%s,%s}", CONFIG_SENSOR_STATUS, getStatusString(), _json_value1, _json_value2, _json_value3, _json_custom);
-            } else {
-              // {"status":"OK","value1":{...},"value2":{...},"value3":{...}}
-              ret = malloc_stringf("{\"%s\":\"%s\",%s,%s,%s}", CONFIG_SENSOR_STATUS, getStatusString(), _json_value1, _json_value2, _json_value3);
-            };
-          #else
-            if (_json_custom) {
-              // {"value1":{...},"value2":{...},"value3":{...},"mixed":"0.00°С 33.33%"}
-              ret = malloc_stringf("{%s,%s,%s,%s}", _json_value1, _json_value2, _json_value3, _json_custom);
-            } else {
-              // {"value1":{...},"value2":{...},"value3":{...}}
-              ret = malloc_stringf("{%s,%s,%s}", _json_value1, _json_value2, _json_value3);
-            };
-          #endif //CONFIG_SENSOR_STATUS_ENABLE
-          if (_json_custom) free (_json_custom);
-          free(_json_value3);
-        };
-        free(_json_value2);
-      };
-      free(_json_value1);
-    };
+  char* _json_values = nullptr;
+  if (_item1) { _json_values = _item1->jsonNamedValues(); };
+  if (_item2) { _json_values = concat_strings_div(_json_values, _item2->jsonNamedValues(), ","); };
+  if (_item3) { _json_values = concat_strings_div(_json_values, _item3->jsonNamedValues(), ","); };
+  // Add mixed content line
+  _json_values = concat_strings_div(_json_values, jsonDisplayAndCustomValues(), ",");
+  // Generating full JSON
+  if (_json_values) {
+    #if CONFIG_SENSOR_STATUS_ENABLE
+      ret = malloc_stringf("{\"%s\":\"%s\",%s}", CONFIG_SENSOR_STATUS, getStatusString(), _json_values);
+    #else
+      ret = malloc_stringf("{%s}", _json_values);
+    #endif //CONFIG_SENSOR_STATUS_ENABLE
+    free(_json_values);
   };
   return ret;
 }
@@ -2398,10 +2310,22 @@ void rSensorX4::setSensorItems(rSensorItem* item1, rSensorItem* item2, rSensorIt
   _item2 = item2;
   _item3 = item3;
   _item4 = item4;
-  if (_item1) _item1->setOwner(this);
-  if (_item2) _item2->setOwner(this);
-  if (_item3) _item3->setOwner(this);
-  if (_item4) _item4->setOwner(this);
+  if (_item1) {
+    _item1->setOwner(this);
+    _item1->initItem();
+  };
+  if (_item2) {
+    _item2->setOwner(this);
+    _item2->initItem();
+  };
+  if (_item3) {
+    _item3->setOwner(this);
+    _item3->initItem();
+  };
+  if (_item4) {
+    _item4->setOwner(this);
+    _item4->initItem();
+  };
 };
 
 // Initialization of internal items
@@ -2413,14 +2337,21 @@ bool rSensorX4::initSensorItems(const sensor_filter_t filterMode1, const uint16_
   // Create items by default if they were not assigned externally
   if ((!_item1) || (!_item2) || (!_item3) || (!_item4)) {
     createSensorItems(filterMode1, filterSize1, filterMode2, filterSize2, filterMode3, filterSize3, filterMode4, filterSize4);
-    if (_item1) _item1->setOwner(this);
-    if (_item2) _item2->setOwner(this);
-    if (_item3) _item3->setOwner(this);
-    if (_item4) _item4->setOwner(this);
-    if ((!_item1) || (!_item2) || (!_item3) || (!_item4)) {
-      setRawStatus(SENSOR_STATUS_ERROR, true);
-      rlog_e(_name, "Failed to create items for %s sensor!", _name);
-      return false;
+    if (_item1) {
+      _item1->setOwner(this);
+      _item1->initItem();
+    };
+    if (_item2) {
+      _item2->setOwner(this);
+      _item2->initItem();
+    };
+    if (_item3) {
+      _item3->setOwner(this);
+      _item3->initItem();
+    };
+    if (_item4) {
+      _item4->setOwner(this);
+      _item4->initItem();
     };
   };
   return true;
@@ -2454,7 +2385,10 @@ bool rSensorX4::setFilterMode4(const sensor_filter_t filterMode, const uint16_t 
 // Writing measured RAW values to internal items
 void rSensorX4::setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4)
 {
-  if (isnan(newValue1) || isnan(newValue2) || isnan(newValue3) || isnan(newValue4)) {
+  if ((isnan(newValue1) && (_item1))
+   || (isnan(newValue2) && (_item2)) 
+   || (isnan(newValue3) && (_item3)) 
+   || (isnan(newValue4) && (_item4))) {
     setRawStatus(SENSOR_STATUS_NAN, true);
   } else {
     time_t timestamp = time(nullptr);
@@ -2701,86 +2635,17 @@ sensor_extremums_t rSensorX4::getExtremumsDaily4(const bool readSensor)
 char* rSensorX4::getDisplayValue()
 {
   char* ret = nullptr;
-  if (_displayMode != SENSOR_MIXED_NONE) {
-    // Get string values
-    char* _str_value1 = nullptr;
-    char* _str_value2 = nullptr;
-    char* _str_value3 = nullptr;
-    switch (_displayMode) {
-      case SENSOR_MIXED_ITEM_1:
-        _str_value1 = _item1->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEM_2:
-        _str_value1 = _item2->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEM_3:
-        _str_value1 = _item3->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_12:
-        _str_value1 = _item1->getStringFiltered();
-        _str_value2 = _item2->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_13:
-        _str_value1 = _item1->getStringFiltered();
-        _str_value2 = _item3->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_21:
-        _str_value1 = _item2->getStringFiltered();
-        _str_value2 = _item1->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_23:
-        _str_value1 = _item2->getStringFiltered();
-        _str_value2 = _item3->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_31:
-        _str_value1 = _item3->getStringFiltered();
-        _str_value2 = _item1->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_32:
-        _str_value1 = _item3->getStringFiltered();
-        _str_value2 = _item2->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_123:
-        _str_value1 = _item1->getStringFiltered();
-        _str_value2 = _item2->getStringFiltered();
-        _str_value3 = _item3->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_213:
-        _str_value1 = _item2->getStringFiltered();
-        _str_value2 = _item1->getStringFiltered();
-        _str_value3 = _item3->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_321:
-        _str_value1 = _item3->getStringFiltered();
-        _str_value2 = _item2->getStringFiltered();
-        _str_value3 = _item1->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_312:
-        _str_value1 = _item3->getStringFiltered();
-        _str_value2 = _item1->getStringFiltered();
-        _str_value3 = _item2->getStringFiltered();
-        break;
-      default:
-        break;
-    };
-    // If the format is specified, we apply the specified format
-    if (_displayFormat) {
-      if (_str_value1 && _str_value2 && _str_value3) {
-        ret = malloc_stringf(_displayFormat, _str_value1, _str_value2, _str_value3);
-      } else {
-        if (_str_value1 && _str_value2) {
-          ret = malloc_stringf(_displayFormat, _str_value1, _str_value2);
-        } else {
-          ret = malloc_stringf(_displayFormat, _str_value1);
-        };
-      };
-    } else {
-      ret = _str_value1;
-    };
-    // Free temp strings
-    if (_str_value1) free(_str_value1);
-    if (_str_value2) free(_str_value2);
-    if (_str_value3) free(_str_value3);
+  if (_item1) { 
+    ret = _item1->getStringFiltered(); 
+  };
+  if (_item2) {
+    ret = concat_strings_div(ret, _item2->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+  };
+  if (_item3) {
+    ret = concat_strings_div(ret, _item3->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+  };
+  if (_item4) {
+    ret = concat_strings_div(ret, _item4->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
   };
   return ret;
 }
@@ -2801,45 +2666,21 @@ bool rSensorX4::publishItems()
 char* rSensorX4::getJSON()
 {
   char* ret = nullptr;
-  if ((_item1) && (_item2) && (_item3) && (_item4)) {
-    char* _json_value1 = _item1->jsonNamedValues();
-    if (_json_value1) {
-      char* _json_value2 = _item2->jsonNamedValues();
-      if (_json_value2) {
-        char* _json_value3 = _item3->jsonNamedValues();
-        if (_json_value3) {
-          char* _json_value4 = _item4->jsonNamedValues();
-          if (_json_value4) {
-            // Preparing a string with a mixed value
-            char* _json_custom = jsonDisplayAndCustomValues();
-            // Generating full JSON
-            #if CONFIG_SENSOR_STATUS_ENABLE
-              // The status is always read by the first sensor
-              if (_json_custom) {
-                // {"status":"OK","value1":{...},"value2":{...},"value3":{...},"value4":{...},"mixed":"0.00°С 33.33%"}
-                ret = malloc_stringf("{\"%s\":\"%s\",%s,%s,%s,%s,%s}", CONFIG_SENSOR_STATUS, getStatusString(), _json_value1, _json_value2, _json_value3, _json_value4, _json_custom);
-              } else {
-                // {"status":"OK","value1":{...},"value2":{...},"value3":{...},"value4":{...}}
-                ret = malloc_stringf("{\"%s\":\"%s\",%s,%s,%s,%s}", CONFIG_SENSOR_STATUS, getStatusString(), _json_value1, _json_value2, _json_value3, _json_value4);
-              };
-            #else
-              if (_json_custom) {
-                // {"value1":{...},"value2":{...},"value3":{...},"value4":{...},"mixed":"0.00°С 33.33%"}
-                ret = malloc_stringf("{%s,%s,%s,%s,%s}", _json_value1, _json_value2, _json_value3, _json_value4, _json_custom);
-              } else {
-                // {"value1":{...},"value2":{...},"value3":{...},"value4":{...}}
-                ret = malloc_stringf("{%s,%s,%s,%s}", _json_value1, _json_value2, _json_value3, _json_value4);
-              };
-            #endif //CONFIG_SENSOR_STATUS_ENABLE
-            if (_json_custom) free (_json_custom);
-            free(_json_value4);
-          };
-          free(_json_value3);
-        };
-        free(_json_value2);
-      };
-      free(_json_value1);
-    };
+  char* _json_values = nullptr;
+  if (_item1) { _json_values = _item1->jsonNamedValues(); };
+  if (_item2) { _json_values = concat_strings_div(_json_values, _item2->jsonNamedValues(), ","); };
+  if (_item3) { _json_values = concat_strings_div(_json_values, _item3->jsonNamedValues(), ","); };
+  if (_item4) { _json_values = concat_strings_div(_json_values, _item4->jsonNamedValues(), ","); };
+  // Add mixed content line
+  _json_values = concat_strings_div(_json_values, jsonDisplayAndCustomValues(), ",");
+  // Generating full JSON
+  if (_json_values) {
+    #if CONFIG_SENSOR_STATUS_ENABLE
+      ret = malloc_stringf("{\"%s\":\"%s\",%s}", CONFIG_SENSOR_STATUS, getStatusString(), _json_values);
+    #else
+      ret = malloc_stringf("{%s}", _json_values);
+    #endif //CONFIG_SENSOR_STATUS_ENABLE
+    free(_json_values);
   };
   return ret;
 }
@@ -2881,11 +2722,26 @@ void rSensorX5::setSensorItems(rSensorItem* item1, rSensorItem* item2, rSensorIt
   _item3 = item3;
   _item4 = item4;
   _item5 = item5;
-  if (_item1) _item1->setOwner(this);
-  if (_item2) _item2->setOwner(this);
-  if (_item3) _item3->setOwner(this);
-  if (_item4) _item4->setOwner(this);
-  if (_item5) _item5->setOwner(this);
+  if (_item1) {
+    _item1->setOwner(this);
+    _item1->initItem();
+  };
+  if (_item2) {
+    _item2->setOwner(this);
+    _item2->initItem();
+  };
+  if (_item3) {
+    _item3->setOwner(this);
+    _item3->initItem();
+  };
+  if (_item4) {
+    _item4->setOwner(this);
+    _item4->initItem();
+  };
+  if (_item5) {
+    _item5->setOwner(this);
+    _item5->initItem();
+  };
 };
 
 // Initialization of internal items
@@ -2898,15 +2754,25 @@ bool rSensorX5::initSensorItems(const sensor_filter_t filterMode1, const uint16_
   // Create items by default if they were not assigned externally
   if ((!_item1) || (!_item2) || (!_item3) || (!_item4) || (!_item5)) {
     createSensorItems(filterMode1, filterSize1, filterMode2, filterSize2, filterMode3, filterSize3, filterMode4, filterSize4, filterMode5, filterSize5);
-    if (_item1) _item1->setOwner(this);
-    if (_item2) _item2->setOwner(this);
-    if (_item3) _item3->setOwner(this);
-    if (_item4) _item4->setOwner(this);
-    if (_item5) _item5->setOwner(this);
-    if ((!_item1) || (!_item2) || (!_item3) || (!_item4) || (!_item5)) {
-      setRawStatus(SENSOR_STATUS_ERROR, true);
-      rlog_e(_name, "Failed to create items for %s sensor!", _name);
-      return false;
+    if (_item1) {
+      _item1->setOwner(this);
+      _item1->initItem();
+    };
+    if (_item2) {
+      _item2->setOwner(this);
+      _item2->initItem();
+    };
+    if (_item3) {
+      _item3->setOwner(this);
+      _item3->initItem();
+    };
+    if (_item4) {
+      _item4->setOwner(this);
+      _item4->initItem();
+    };
+    if (_item5) {
+      _item5->setOwner(this);
+      _item5->initItem();
     };
   };
   return true;
@@ -2946,7 +2812,11 @@ bool rSensorX5::setFilterMode5(const sensor_filter_t filterMode, const uint16_t 
 // Writing measured RAW values to internal items
 void rSensorX5::setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4, const value_t newValue5)
 {
-  if (isnan(newValue1) || isnan(newValue2) || isnan(newValue3) || isnan(newValue4) || isnan(newValue5)) {
+  if ((isnan(newValue1) && (_item1))
+   || (isnan(newValue2) && (_item2)) 
+   || (isnan(newValue3) && (_item3)) 
+   || (isnan(newValue4) && (_item4))
+   || (isnan(newValue5) && (_item5))) {
     setRawStatus(SENSOR_STATUS_NAN, true);
   } else {
     time_t timestamp = time(nullptr);
@@ -3251,86 +3121,20 @@ sensor_extremums_t rSensorX5::getExtremumsDaily5(const bool readSensor)
 char* rSensorX5::getDisplayValue()
 {
   char* ret = nullptr;
-  if (_displayMode != SENSOR_MIXED_NONE) {
-    // Get string values
-    char* _str_value1 = nullptr;
-    char* _str_value2 = nullptr;
-    char* _str_value3 = nullptr;
-    switch (_displayMode) {
-      case SENSOR_MIXED_ITEM_1:
-        _str_value1 = _item1->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEM_2:
-        _str_value1 = _item2->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEM_3:
-        _str_value1 = _item3->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_12:
-        _str_value1 = _item1->getStringFiltered();
-        _str_value2 = _item2->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_13:
-        _str_value1 = _item1->getStringFiltered();
-        _str_value2 = _item3->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_21:
-        _str_value1 = _item2->getStringFiltered();
-        _str_value2 = _item1->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_23:
-        _str_value1 = _item2->getStringFiltered();
-        _str_value2 = _item3->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_31:
-        _str_value1 = _item3->getStringFiltered();
-        _str_value2 = _item1->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_32:
-        _str_value1 = _item3->getStringFiltered();
-        _str_value2 = _item2->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_123:
-        _str_value1 = _item1->getStringFiltered();
-        _str_value2 = _item2->getStringFiltered();
-        _str_value3 = _item3->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_213:
-        _str_value1 = _item2->getStringFiltered();
-        _str_value2 = _item1->getStringFiltered();
-        _str_value3 = _item3->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_321:
-        _str_value1 = _item3->getStringFiltered();
-        _str_value2 = _item2->getStringFiltered();
-        _str_value3 = _item1->getStringFiltered();
-        break;
-      case SENSOR_MIXED_ITEMS_312:
-        _str_value1 = _item3->getStringFiltered();
-        _str_value2 = _item1->getStringFiltered();
-        _str_value3 = _item2->getStringFiltered();
-        break;
-      default:
-        break;
-    };
-    // If the format is specified, we apply the specified format
-    if (_displayFormat) {
-      if (_str_value1 && _str_value2 && _str_value3) {
-        ret = malloc_stringf(_displayFormat, _str_value1, _str_value2, _str_value3);
-      } else {
-        if (_str_value1 && _str_value2) {
-          ret = malloc_stringf(_displayFormat, _str_value1, _str_value2);
-        } else {
-          ret = malloc_stringf(_displayFormat, _str_value1);
-        };
-      };
-    } else {
-      ret = _str_value1;
-    };
-    // Free temp strings
-    if (_str_value1) free(_str_value1);
-    if (_str_value2) free(_str_value2);
-    if (_str_value3) free(_str_value3);
+  if (_item1) { 
+    ret = _item1->getStringFiltered(); 
+  };
+  if (_item2) {
+    ret = concat_strings_div(ret, _item2->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+  };
+  if (_item3) {
+    ret = concat_strings_div(ret, _item3->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+  };
+  if (_item4) {
+    ret = concat_strings_div(ret, _item4->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+  };
+  if (_item5) {
+    ret = concat_strings_div(ret, _item5->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
   };
   return ret;
 }
@@ -3355,53 +3159,22 @@ bool rSensorX5::publishItems()
 char* rSensorX5::getJSON()
 {
   char* ret = nullptr;
-  if ((_item1) && (_item2) && (_item3) && (_item4)) {
-    char* _json_value1 = _item1->jsonNamedValues();
-    if (_json_value1) {
-      char* _json_value2 = _item2->jsonNamedValues();
-      if (_json_value2) {
-        char* _json_value3 = _item3->jsonNamedValues();
-        if (_json_value3) {
-          char* _json_value4 = _item4->jsonNamedValues();
-          if (_json_value4) {
-            char* _json_value5 = _item5->jsonNamedValues();
-            if (_json_value5) {
-              // Preparing a string with a mixed value
-              char* _json_custom = jsonDisplayAndCustomValues();
-              // Generating full JSON
-              #if CONFIG_SENSOR_STATUS_ENABLE
-                // The status is always read by the first sensor
-                if (_json_custom) {
-                  // {"status":"OK","value1":{...},"value2":{...},"value3":{...},"value4":{...},"value5":{...},"mixed":"0.00°С 33.33%"}
-                  ret = malloc_stringf("{\"%s\":\"%s\",%s,%s,%s,%s,%s,%s}", CONFIG_SENSOR_STATUS, getStatusString(), 
-                    _json_value1, _json_value2, _json_value3, _json_value4, _json_value5, _json_custom);
-                } else {
-                  // {"status":"OK","value1":{...},"value2":{...},"value3":{...},"value4":{...},"value5":{...}}
-                  ret = malloc_stringf("{\"%s\":\"%s\",%s,%s,%s,%s,%s}", CONFIG_SENSOR_STATUS, getStatusString(), 
-                    _json_value1, _json_value2, _json_value3, _json_value4, _json_value5);
-                };
-              #else
-                if (_json_custom) {
-                  // {"value1":{...},"value2":{...},"value3":{...},"value4":{...},"value5":{...},"mixed":"0.00°С 33.33%"}
-                  ret = malloc_stringf("{%s,%s,%s,%s,%s,%s}", 
-                    _json_value1, _json_value2, _json_value3, _json_value4, _json_value5, _json_custom);
-                } else {
-                  // {"value1":{...},"value2":{...},"value3":{...},"value4":{...},"value5":{...}}
-                  ret = malloc_stringf("{%s,%s,%s,%s,%s}", 
-                    _json_value1, _json_value2, _json_value3, _json_value4, _json_value5);
-                };
-              #endif //CONFIG_SENSOR_STATUS_ENABLE
-              if (_json_custom) free (_json_custom);
-              free(_json_value5);
-            };
-            free(_json_value4);
-          };
-          free(_json_value3);
-        };
-        free(_json_value2);
-      };
-      free(_json_value1);
-    };
+  char* _json_values = nullptr;
+  if (_item1) { _json_values = _item1->jsonNamedValues(); };
+  if (_item2) { _json_values = concat_strings_div(_json_values, _item2->jsonNamedValues(), ","); };
+  if (_item3) { _json_values = concat_strings_div(_json_values, _item3->jsonNamedValues(), ","); };
+  if (_item4) { _json_values = concat_strings_div(_json_values, _item4->jsonNamedValues(), ","); };
+  if (_item5) { _json_values = concat_strings_div(_json_values, _item5->jsonNamedValues(), ","); };
+  // Add mixed content line
+  _json_values = concat_strings_div(_json_values, jsonDisplayAndCustomValues(), ",");
+  // Generating full JSON
+  if (_json_values) {
+    #if CONFIG_SENSOR_STATUS_ENABLE
+      ret = malloc_stringf("{\"%s\":\"%s\",%s}", CONFIG_SENSOR_STATUS, getStatusString(), _json_values);
+    #else
+      ret = malloc_stringf("{%s}", _json_values);
+    #endif //CONFIG_SENSOR_STATUS_ENABLE
+    free(_json_values);
   };
   return ret;
 }
