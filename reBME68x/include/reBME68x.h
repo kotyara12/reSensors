@@ -40,12 +40,12 @@ typedef enum {
 
 // Oversampling setting (alias for BME680 existing examples)
 typedef enum {
-  BME68X_OS_OFF   = BME68X_OS_NONE,              // Switch off measurement
-  BME68X_OS_X1    = BME68X_OS_1X,                // Perform 1 measurement
-  BME68X_OS_X2    = BME68X_OS_2X,                // Perform 2 measurements
-  BME68X_OS_X4    = BME68X_OS_4X,                // Perform 4 measurements
-  BME68X_OS_X8    = BME68X_OS_8X,                // Perform 8 measurements
-  BME68X_OS_X16   = BME68X_OS_16X                // Perform 16 measurements
+  BME68x_OS_OFF   = BME68X_OS_NONE,              // Switch off measurement
+  BME68x_OS_X1    = BME68X_OS_1X,                // Perform 1 measurement
+  BME68x_OS_X2    = BME68X_OS_2X,                // Perform 2 measurements
+  BME68x_OS_X4    = BME68X_OS_4X,                // Perform 4 measurements
+  BME68x_OS_X8    = BME68X_OS_8X,                // Perform 8 measurements
+  BME68x_OS_X16   = BME68X_OS_16X                // Perform 16 measurements
 } BME68x_OVERSAMPLING;
 
 // IIR Filter settings (alias for BME680 existing examples)
@@ -110,7 +110,7 @@ class BME68x : public rSensorX4 {
       // hardware properties
       const int numI2C, const uint8_t addrI2C, 
       BME68x_STANDBYTIME odr = BME68x_STANDBY_NONE, BME68x_IIR_FILTER filter = BME68x_FILTER_OFF,
-      BME68x_OVERSAMPLING osPress = BME68X_OS_X1, BME68x_OVERSAMPLING osTemp = BME68X_OS_X1, BME68x_OVERSAMPLING osHum = BME68X_OS_X1,
+      BME68x_OVERSAMPLING osPress = BME68x_OS_X1, BME68x_OVERSAMPLING osTemp = BME68x_OS_X1, BME68x_OVERSAMPLING osHum = BME68x_OS_X1,
       // pressure filter
       sensor_filter_t filterMode1 = SENSOR_FILTER_RAW, uint16_t filterSize1 = 0, 
       // temperature filter
@@ -129,7 +129,7 @@ class BME68x : public rSensorX4 {
       // hardware properties
       const int numI2C, const uint8_t addrI2C, 
       BME68x_STANDBYTIME odr = BME68x_STANDBY_NONE, BME68x_IIR_FILTER filter = BME68x_FILTER_OFF,
-      BME68x_OVERSAMPLING osPress = BME68X_OS_X1, BME68x_OVERSAMPLING osTemp = BME68X_OS_X1, BME68x_OVERSAMPLING osHum = BME68X_OS_X1,
+      BME68x_OVERSAMPLING osPress = BME68x_OS_X1, BME68x_OVERSAMPLING osTemp = BME68x_OS_X1, BME68x_OVERSAMPLING osHum = BME68x_OS_X1,
       // pressure filter
       rSensorItem* item1 = nullptr, 
       // temperature filter
@@ -149,17 +149,20 @@ class BME68x : public rSensorX4 {
     // Get I2C parameters
     int getI2CNum();
     uint8_t getI2CAddress();
+
+    // Soft reset
+    bool sensorReset() override;
+    bool softReset();
+
     // Setting parameters
     bool sendConfiguration();
     bool sendHeaterMode();
     bool setConfiguration(BME68x_STANDBYTIME odr = BME68x_STANDBY_NONE, BME68x_IIR_FILTER filter = BME68x_FILTER_OFF,
-      BME68x_OVERSAMPLING osPress = BME68X_OS_X1, BME68x_OVERSAMPLING osTemp = BME68X_OS_X1, BME68x_OVERSAMPLING osHum = BME68X_OS_X1);
-    bool setOversampling(BME68x_OVERSAMPLING osPress = BME68X_OS_X1, BME68x_OVERSAMPLING osTemp = BME68X_OS_X1, BME68x_OVERSAMPLING osHum = BME68X_OS_X1);
+      BME68x_OVERSAMPLING osPress = BME68x_OS_X1, BME68x_OVERSAMPLING osTemp = BME68x_OS_X1, BME68x_OVERSAMPLING osHum = BME68x_OS_X1);
+    bool setOversampling(BME68x_OVERSAMPLING osPress = BME68x_OS_X1, BME68x_OVERSAMPLING osTemp = BME68x_OS_X1, BME68x_OVERSAMPLING osHum = BME68x_OS_X1);
     bool setIIRFilterSize(BME68x_IIR_FILTER filter);
     bool setGasHeater(uint16_t heaterTemp, uint16_t heaterTime);
     bool setODR(BME68x_STANDBYTIME odr);
-    // Soft reset
-    bool softReset();
   protected:
     void createSensorItems(
       // pressure value
@@ -187,14 +190,12 @@ class BME68x : public rSensorX4 {
     struct bme68x_dev        _dev;
     struct bme68x_conf       _conf;
     struct bme68x_heatr_conf _heatr_conf;
-    BME280_MODE              _mode = BME280_MODE_SLEEP;
     paramsGroupHandle_t      _prm_heater = nullptr;
     paramsEntryHandle_t      _prm_heatr_temp = nullptr;
     paramsEntryHandle_t      _prm_heatr_dur = nullptr;
     rBME68xHeaterHandler*    _heatr_hndl = nullptr;
 
     bool checkApiCode(const char* api_name, int8_t rslt);
-    bool initHardware(const int numI2C, const uint8_t addrI2C);
 };
 
 #endif // __RE_BME68x_H__

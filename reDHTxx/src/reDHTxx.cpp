@@ -36,15 +36,15 @@ bool DHTxx::initIntItems(const char* sensorName, const char* topicName, const bo
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
 {
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   _sensorType = sensorType;
   _sensorGPIO = (gpio_num_t)gpioNum;
   _gpioPullup = gpioPullup;
+  // Initialize properties
+  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   // Initialize internal items
   if (this->rSensorX2::initSensorItems(filterMode1, filterSize1, filterMode2, filterSize2)) {
     // Start device
-    return initHardware();
+    return sensorStart();
   };
   return false;
 }
@@ -56,19 +56,19 @@ bool DHTxx::initExtItems(const char* sensorName, const char* topicName, const bo
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
 {
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   _sensorType = sensorType;
   _sensorGPIO = (gpio_num_t)gpioNum;
   _gpioPullup = gpioPullup;
+  // Initialize properties
+  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   // Assign items
   this->rSensorX2::setSensorItems(item1, item2);
   // Start device
-  return initHardware();
+  return sensorStart();
 }
 
 // Sensor initialization and start
-bool DHTxx::initHardware()
+bool DHTxx::sensorReset()
 {
   // Initialize GPIO
   gpio_pad_select_gpio(_sensorGPIO);
@@ -79,7 +79,6 @@ bool DHTxx::initHardware()
   } else {
     gpio_pullup_dis(_sensorGPIO);
   };
-  rlog_d(logTAG, RSENSOR_LOG_MSG_INIT_OK, _name);
   return true;
 }
 
@@ -103,7 +102,7 @@ sensor_status_t DHTxx::readRawData()
   // Send start signal to DHT sensor, pull down ~ 2ms to wake up
   DHT_CHECK(gpio_set_direction(_sensorGPIO, GPIO_MODE_OUTPUT), "Failed to change port mode");
 	DHT_CHECK(gpio_set_level(_sensorGPIO, 0), "Failed to send start signal");
-  if ((_sensorType == DHT_DHT11) || (getStatus() == SENSOR_STATUS_TIMEOUT)) {
+  if ((_sensorType == DHT_DHT11) || (getStatus() == SENSOR_STATUS_CONN_ERROR)) {
     ets_delay_us(20000);
   } else {
   	ets_delay_us(2000);
@@ -124,14 +123,14 @@ sensor_status_t DHTxx::readRawData()
     if (expectPulse(0) == DHT_TIMEOUT) {
       xTaskResumeAll();
       rlog_e(logTAG, "%s timeout waiting for start signal low pulse!", _name);
-      this->rSensor::setRawStatus(SENSOR_STATUS_TIMEOUT, false);
-      return SENSOR_STATUS_TIMEOUT;
+      this->rSensor::setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
+      return SENSOR_STATUS_CONN_ERROR;
     };
     if (expectPulse(1) == DHT_TIMEOUT) {
       xTaskResumeAll();
       rlog_e(logTAG, "%s timeout waiting for start signal high pulse!", _name);
-      this->rSensor::setRawStatus(SENSOR_STATUS_TIMEOUT, false);
-      return SENSOR_STATUS_TIMEOUT;
+      this->rSensor::setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
+      return SENSOR_STATUS_CONN_ERROR;
     };
 
     // Now read the 40 bits sent by the sensor. Each bit is sent as a 50 µs
@@ -158,8 +157,8 @@ sensor_status_t DHTxx::readRawData()
     uint32_t highCycles = cycles[2 * i + 1];  
     if ((lowCycles == DHT_TIMEOUT) || (highCycles == DHT_TIMEOUT)) {
       rlog_e(logTAG, "%s timeout waiting for pulse %d!", _name, i + 1);
-      this->rSensor::setRawStatus(SENSOR_STATUS_TIMEOUT, false);
-      return SENSOR_STATUS_TIMEOUT;
+      this->rSensor::setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
+      return SENSOR_STATUS_CONN_ERROR;
     };
     data[i / 8] <<= 1;
     // Now compare the low and high cycle times to see if the bit is a 0 or 1.

@@ -100,6 +100,10 @@ class BME280 : public rSensorX3 {
     // Get I2C parameters
     int getI2CNum();
     uint8_t getI2CAddress();
+
+    // Sensor reset
+    bool sensorReset() override;
+
     // Setting parameters
     bool sendPowerMode(BME280_MODE mode);
     bool setConfiguration(BME280_MODE mode = BME280_MODE_FORCED, 
@@ -108,8 +112,6 @@ class BME280 : public rSensorX3 {
     bool setOversampling(BME280_OVERSAMPLING osPress = BME280_OSM_X1, BME280_OVERSAMPLING osTemp = BME280_OSM_X1, BME280_OVERSAMPLING osHumd = BME280_OSM_X1);
     bool setIIRFilterSize(BME280_IIR_FILTER filter);
     bool setODR(BME280_STANDBYTIME odr);
-    // Soft reset
-    bool softReset();
   protected:
     void createSensorItems(
       // pressure value
@@ -136,7 +138,6 @@ class BME280 : public rSensorX3 {
     BME280_MODE              _mode = BME280_MODE_SLEEP;
 
     bool checkApiCode(const char* api_name, int8_t rslt);
-    bool initHardware(const int numI2C, const uint8_t addrI2C);
     bool sendConfiguration(uint8_t settings_sel);
 };
 

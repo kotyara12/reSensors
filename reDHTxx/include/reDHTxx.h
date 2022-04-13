@@ -56,6 +56,8 @@ class DHTxx : public rSensorHT {
       const uint32_t minReadInterval = 2000, const uint16_t errorLimit = 0,
       // callbacks
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
+
+    bool sensorReset() override;
   protected:
     sensor_status_t readRawData() override;  
   private:
@@ -64,7 +66,6 @@ class DHTxx : public rSensorHT {
     bool             _gpioPullup;
     uint32_t         _maxCycles;
 
-    bool initHardware();
     uint32_t expectPulse(bool level);
 };
 

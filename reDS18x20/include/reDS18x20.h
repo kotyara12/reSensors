@@ -63,7 +63,8 @@ class DS18x20 : public rSensorX1 {
       const uint32_t minReadInterval = 2000, const uint16_t errorLimit = 0,
       // callbacks
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
-
+    
+    bool sensorReset() override;
     DS18x20_RESOLUTION getResolution();
     bool setResolution(DS18x20_RESOLUTION resolution);
   protected:
@@ -79,8 +80,6 @@ class DS18x20 : public rSensorX1 {
     bool _parasitePower = false;            // Parasite power flag
     bool _saveScratchPad = false;           // Values will be saved from scratchpad to EEPROM on every scratchpad write
     DS18x20_RESOLUTION _resolution = DS18x20_RESOLUTION_INVALID; // Current resulution
-
-    bool initHardware(gpio_num_t pin, onewire_addr_t address, uint8_t index, DS18x20_RESOLUTION resolution, bool saveScratchPad);
 
     bool addressSelect();
     bool readPowerSupply();

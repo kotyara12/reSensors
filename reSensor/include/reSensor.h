@@ -18,6 +18,7 @@
 #include "reEvents.h"
 
 #define RSENSOR_LOG_MSG_INIT_OK                    "Sensor [%s] initialization completed successfully"
+#define RSENSOR_LOG_MSG_NO_INIT                    "Sensor [%s] not initializated"
 #define RSENSOR_LOG_MSG_CREATE_ITEM                "Created item \"%s\" for sensor [%s]"
 #define RSENSOR_LOG_MSG_CMD_NOT_SUPPORTED          "Command not supported by sensor [%s]!"
 #define RSENSOR_LOG_MSG_WAKEUP_FAILED              "Failed to wakeup sensor [%s]: %d %s!"
@@ -47,6 +48,18 @@
 #define RSENSOR_LOG_MSG_READ_TEMP_FAILED_NAMED     "Failed to read temperature value from sensor [%s]: %d %s!"
 #define RSENSOR_LOG_MSG_BAD_VALUE                  "Failed to read data from sensor [%s]: incorrect data"
 
+#define LOGI_SENSOR_BOOL(a, msg_ok, msg_failed) if (a) { \
+  rlog_i(logTAG, "%s: %s", _name, msg_ok); \
+} else { \
+  rlog_e(logTAG, "%s: %s", _name, msg_failed); \
+  return false; \
+};
+
+#define CHECK_SENSOR_BOOL(a, msg) if (!(a)) { \
+  rlog_e(logTAG, "%s: %s", _name, msg); \
+  return false; \
+};
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -54,13 +67,14 @@ extern "C" {
 class rSensor;
 
 typedef enum {
-  SENSOR_STATUS_NAN           = 0,
-  SENSOR_STATUS_OK            = 1,
-  SENSOR_STATUS_TIMEOUT       = 2,
-  SENSOR_STATUS_CAL_ERROR     = 3,
-  SENSOR_STATUS_CRC_ERROR     = 4,
-  SENSOR_STATUS_ERROR         = 5,
-  SENSOR_STATUS_NOT_SUPPORTED = 6
+  SENSOR_STATUS_NO_INIT       = 0,   // Sensor not initialized
+  SENSOR_STATUS_NO_DATA       = 1,   // Failed to read data
+  SENSOR_STATUS_OK            = 2,   // Everything is wonderful
+  SENSOR_STATUS_NOT_SUPPORTED = 3,   // Requested operation is not supported
+  SENSOR_STATUS_CONN_ERROR    = 4,   // Sensor not connected or communication error
+  SENSOR_STATUS_CAL_ERROR     = 5,   // Calibration data not loaded
+  SENSOR_STATUS_CRC_ERROR     = 6,   // Checksum error during data transfer
+  SENSOR_STATUS_ERROR         = 7    // Any other error
 } sensor_status_t;
 
 typedef enum {
@@ -328,6 +342,8 @@ class rSensor {
     void initProperties(const char* sensorName, const char* topicName, const bool topicLocal, 
       const uint32_t minReadInterval = 2000, const uint16_t errorLimit = 0,
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
+    bool sensorStart();
+    virtual bool sensorReset() = 0;
 
     // Properties
     const char* getName();
@@ -367,6 +383,7 @@ class rSensor {
     sensor_status_t _lastStatus;
     virtual sensor_status_t readRawData() = 0;
     void setRawStatus(sensor_status_t newStatus, bool forced);
+    void setErrorStatus(sensor_status_t newStatus, bool forced);
     sensor_status_t convertEspError(const uint32_t error);
     sensor_status_t setEspError(uint32_t error, bool forced);
 
@@ -427,6 +444,7 @@ class rSensorX1: public rSensor {
     void setSensorItems(rSensorItem* item);
     bool initSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize);
     virtual void createSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize) = 0;
+    bool checkRawValues(const value_t newValue);
     void setRawValues(const value_t newValue);
     #if CONFIG_SENSOR_DISPLAY_ENABLED
     char* getDisplayValue() override;
@@ -443,6 +461,8 @@ class rSensorStub: public rSensorX1 {
     bool initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
       rSensorItem* item, const uint32_t minReadInterval = 0, const uint16_t errorLimit = 0,
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
+    // Sensor reset
+    bool sensorReset() override;
     // Reading data in rSensorItem itself
     virtual sensor_status_t readRawData() override;
   protected:
@@ -485,9 +505,9 @@ class rSensorX2: public rSensor {
                          const sensor_filter_t filterMode2, const uint16_t filterSize2);
     virtual void createSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1,
                                    const sensor_filter_t filterMode2, const uint16_t filterSize2) = 0;
+    
+    bool checkRawValues(const value_t newValue1, const value_t newValue2);
     void setRawValues(const value_t newValue1, const value_t newValue2);
-    void setRawValue1(const value_t newValue);
-    void setRawValue2(const value_t newValue);
     #if CONFIG_SENSOR_DISPLAY_ENABLED
     char* getDisplayValue() override;
     #endif // CONFIG_SENSOR_DISPLAY_ENABLED
@@ -562,10 +582,8 @@ class rSensorX3: public rSensor {
     virtual void createSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1,
                                    const sensor_filter_t filterMode2, const uint16_t filterSize2,
                                    const sensor_filter_t filterMode3, const uint16_t filterSize3) = 0;
+    bool checkRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3);
     void setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3);
-    void setRawValue1(const value_t newValue);
-    void setRawValue2(const value_t newValue);
-    void setRawValue3(const value_t newValue);
     #if CONFIG_SENSOR_DISPLAY_ENABLED
     char* getDisplayValue() override;
     #endif // CONFIG_SENSOR_DISPLAY_ENABLED
@@ -630,11 +648,8 @@ class rSensorX4: public rSensor {
                                    const sensor_filter_t filterMode2, const uint16_t filterSize2,
                                    const sensor_filter_t filterMode3, const uint16_t filterSize3,
                                    const sensor_filter_t filterMode4, const uint16_t filterSize4) = 0;
+    bool checkRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4);
     void setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4);
-    void setRawValue1(const value_t newValue);
-    void setRawValue2(const value_t newValue);
-    void setRawValue3(const value_t newValue);
-    void setRawValue4(const value_t newValue);
     #if CONFIG_SENSOR_DISPLAY_ENABLED
     char* getDisplayValue() override;
     #endif // CONFIG_SENSOR_DISPLAY_ENABLED
@@ -710,12 +725,8 @@ class rSensorX5: public rSensor {
                                    const sensor_filter_t filterMode3, const uint16_t filterSize3,
                                    const sensor_filter_t filterMode4, const uint16_t filterSize4,
                                    const sensor_filter_t filterMode5, const uint16_t filterSize5) = 0;
+    bool checkRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4, const value_t newValue5);
     void setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4, const value_t newValue5);
-    void setRawValue1(const value_t newValue);
-    void setRawValue2(const value_t newValue);
-    void setRawValue3(const value_t newValue);
-    void setRawValue4(const value_t newValue);
-    void setRawValue5(const value_t newValue);
     #if CONFIG_SENSOR_DISPLAY_ENABLED
     char* getDisplayValue() override;
     #endif // CONFIG_SENSOR_DISPLAY_ENABLED

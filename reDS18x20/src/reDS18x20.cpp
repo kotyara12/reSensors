@@ -70,15 +70,9 @@ void DS18x20::registerItemsParameters(paramsGroupHandle_t parent_group)
   };
 }
 
-bool DS18x20::initHardware(gpio_num_t pin, onewire_addr_t address, uint8_t index, DS18x20_RESOLUTION resolution, bool saveScratchPad)
+bool DS18x20::sensorReset()
 {
-  _pin = pin;
-  _saveScratchPad = saveScratchPad;
-  if (address == ONEWIRE_NONE) {
-    return scanDevices(index) && readPowerSupply() && setResolution(resolution);
-  } else {
-    return readROM(true) && readPowerSupply() && setResolution(resolution);
-  };
+  return readPowerSupply() && setResolution(_resolution);
 }
 
 // Dynamically creating internal items on the heap
@@ -88,12 +82,20 @@ bool DS18x20::initIntItems(const char* sensorName, const char* topicName, const 
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
 {
+  _pin = pin;
+  _address = address;
+  _resolution = resolution;
+  _saveScratchPad = saveScratchPad;
   // Initialize properties
   initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   // Initialize internal items
   if (this->rSensorX1::initSensorItems(filterMode, filterSize)) {
     // Start device
-    return initHardware(pin, address, index, resolution, saveScratchPad);
+    if (_address == ONEWIRE_NONE) {
+      return scanDevices(index) && sensorStart();
+    } else {
+      return readROM(true) && sensorStart();
+    };
   };
   return false;
 }
@@ -105,12 +107,20 @@ bool DS18x20::initExtItems(const char* sensorName, const char* topicName, const 
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
 {
+  _pin = pin;
+  _address = address;
+  _resolution = resolution;
+  _saveScratchPad = saveScratchPad;
   // Initialize properties
   initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   // Assign items
   this->rSensorX1::setSensorItems(item);
   // Start device
-  return initHardware(pin, address, index, resolution, saveScratchPad);
+  if (_address == ONEWIRE_NONE) {
+    return scanDevices(index) && sensorStart();
+  } else {
+    return readROM(true) && sensorStart();
+  };
 }
 
 sensor_status_t DS18x20::readRawData()
@@ -125,7 +135,7 @@ sensor_status_t DS18x20::readRawData()
       setRawValues(value);
     };
   };
-  return getStatus();
+  return _lastStatus;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------
@@ -147,11 +157,11 @@ bool DS18x20::addressSelect()
     };
     if (!result) {
       rlog_e(logTAG, "Failed to select sensor");
-      setRawStatus(SENSOR_STATUS_TIMEOUT, false);
+      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
     };
   } else {
     rlog_e(logTAG, "Failed to reset 1-Wire bus");
-    setRawStatus(SENSOR_STATUS_TIMEOUT, false);
+    setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
   };
   return result;
 }
@@ -238,7 +248,7 @@ bool DS18x20::readPowerSupply()
       int power = onewire_read_bit(_pin);
       if (power < 0) {
         rlog_e(logTAG, "Failed to read power supply mode");
-        setRawStatus(SENSOR_STATUS_TIMEOUT, false);
+        setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
       } else {
         _parasitePower = power == 0;
         if (_parasitePower) {
@@ -250,7 +260,7 @@ bool DS18x20::readPowerSupply()
       };
     } else {
       rlog_e(logTAG, "Failed to read power supply mode");
-      setRawStatus(SENSOR_STATUS_TIMEOUT, false);
+      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
     };
   };
   return false;
@@ -282,7 +292,7 @@ bool DS18x20::readScratchpad(uint8_t *buffer)
       };
     } else {
       rlog_e(logTAG, "Failed to read scratchpad");
-      setRawStatus(SENSOR_STATUS_TIMEOUT, false);
+      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
     };
   };
   return false;
@@ -295,7 +305,7 @@ bool DS18x20::writeScratchpad(uint8_t *buffer)
       for (int i = 0; i < 3; i++) {
         if (!onewire_write(_pin, buffer[i+SP_HIGH_ALARM_TEMP])) {
           rlog_e(logTAG, "Failed to write scratchpad");
-          setRawStatus(SENSOR_STATUS_TIMEOUT, false);
+          setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
           return false;
         };
       };
@@ -307,7 +317,7 @@ bool DS18x20::writeScratchpad(uint8_t *buffer)
       };
     } else {
       rlog_e(logTAG, "Failed to write scratchpad");
-      setRawStatus(SENSOR_STATUS_TIMEOUT, false);
+      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
     };
   };
   return false;
@@ -325,7 +335,7 @@ bool DS18x20::saveScratchpad()
       if (_parasitePower) onewire_depower(_pin); 
     } else {
       rlog_e(logTAG, "Failed to copy scratchpad");
-      setRawStatus(SENSOR_STATUS_TIMEOUT, false);
+      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
     };
   };
   return false;

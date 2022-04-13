@@ -49,6 +49,7 @@ static const char* HTU2X_TYPES [] = {"NULL", "SHT20", "HTU2x / SHT21", "Si7013",
 
 HTU2x::HTU2x():rSensorHT()
 {
+  _resolution = HTU2X_RES_RH12_TEMP14;
   _compensated = false;
   _deviceType = HTU2X_NULL;
   _serialB = 0;
@@ -62,12 +63,15 @@ bool HTU2x::initIntItems(const char* sensorName, const char* topicName, const bo
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
 {
+  _I2C_num = numI2C;
+  _resolution = resolution;
+  _compensated = compensated_humidity;
   // Initialize properties
   initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   // Initialize internal items
   if (this->rSensorX2::initSensorItems(filterMode1, filterSize1, filterMode2, filterSize2)) {
     // Start device
-    return initHardware(numI2C, resolution, compensated_humidity);
+    return sensorStart();
   };
   return false;
 }
@@ -79,25 +83,24 @@ bool HTU2x::initExtItems(const char* sensorName, const char* topicName, const bo
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
 {
+  _I2C_num = numI2C;
+  _resolution = resolution;
+  _compensated = compensated_humidity;
   // Initialize properties
   initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   // Assign items
   this->rSensorX2::setSensorItems(item1, item2);
   // Start device
-  return initHardware(numI2C, resolution, compensated_humidity);
+  return sensorStart();
 }
 
 // Start device
-bool HTU2x::initHardware(const int numI2C, const HTU2X_RESOLUTION resolution, bool compensated_humidity)
+bool HTU2x::sensorReset()
 {
-  _I2C_num = numI2C;
-  _compensated = compensated_humidity;
-  // if (softReset() != SENSOR_STATUS_OK) return false;
+  if (softReset() != SENSOR_STATUS_OK) return false;
   if (readDeviceID() != SENSOR_STATUS_OK) return false;
-  if (setResolution(resolution) != SENSOR_STATUS_OK) return false;
+  if (setResolution(_resolution) != SENSOR_STATUS_OK) return false;
   if (setHeater(false) != SENSOR_STATUS_OK) return false;
-  this->rSensor::setRawStatus(SENSOR_STATUS_OK, true);
-  rlog_i(logTAG, RSENSOR_LOG_MSG_INIT_OK, _name);
   return true;
 };
 
@@ -410,7 +413,7 @@ sensor_status_t HTU2x::readRawData()
     cmd = SI70xx_TEMP_READ_AFTER_RH_MEASURMENT;
     err = readI2C(_I2C_num, HTU2X_ADDRESS, &cmd, 1, data, 3, 0, HTU2X_TIMEOUT);
     if (err != ESP_OK) {
-      rlog_e(logTAG, RSENSOR_LOG_MSG_READ_TEMP_FAILED, _name, err, esp_err_to_name(err));
+      rlog_e(logTAG, RSENSOR_LOG_MSG_READ_TEMP_FAILED_NAMED, _name, err, esp_err_to_name(err));
       return this->rSensor::setEspError(err, false);
     };
   };

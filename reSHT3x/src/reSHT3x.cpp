@@ -85,12 +85,17 @@ bool SHT3xD::initIntItems(const char* sensorName, const char* topicName, const b
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
 {
+  _I2C_num = numI2C;
+  _I2C_address = addrI2C;
+	_frequency = frequency;
+	_mode = mode;
+	_repeatability = repeatability;
   // Initialize properties
   initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   // Initialize internal items
   if (this->rSensorX2::initSensorItems(filterMode1, filterSize1, filterMode2, filterSize2)) {
     // Start device
-    return initHardware(numI2C, addrI2C, frequency, mode, repeatability);
+    return sensorStart();
   };
   return false;
 }
@@ -104,30 +109,35 @@ bool SHT3xD::initExtItems(const char* sensorName, const char* topicName, const b
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
 {
+  _I2C_num = numI2C;
+  _I2C_address = addrI2C;
+	_frequency = frequency;
+	_mode = mode;
+	_repeatability = repeatability;
   // Initialize properties
   initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   // Assign items
   this->rSensorX2::setSensorItems(item1, item2);
   // Start device
-  return initHardware(numI2C, addrI2C, frequency, mode, repeatability);
+  return sensorStart();
 }
 
 /**
  * Start device
  * */
-bool SHT3xD::initHardware(const int numI2C, const uint8_t addrI2C, const SHT3xD_FREQUENCY frequency, const SHT3xD_MODE mode, const SHT3xD_REPEATABILITY repeatability)
+bool SHT3xD::sensorReset()
 {
-  _I2C_num = numI2C;
-  _I2C_address = addrI2C;
 	readSerialNumber();
-	sensor_status_t err = setMode(frequency, mode, repeatability);
+	sensor_status_t err = softReset();
+	if (err != SENSOR_STATUS_OK) return false;
+ 	err = setMode(_frequency, _mode, _repeatability);
 	if (err != SENSOR_STATUS_OK) return false;
 	err = clearStatusRegister();
 	if (err != SENSOR_STATUS_OK) return false;
 	err = setHeater(false);
 	if (err != SENSOR_STATUS_OK) return false;
 	return true;
-};
+}
 
 /**
  * Soft reset

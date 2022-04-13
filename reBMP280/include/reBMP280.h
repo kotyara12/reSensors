@@ -93,9 +93,8 @@ class BMP280 : public rSensorX2 {
       // callbacks
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
 
-    // Get I2C parameters
-    int getI2CNum();
-    uint8_t getI2CAddress();
+    // Reset hardware
+    bool sensorReset() override;
     // Setting parameters
     bool sendConfiguration();
     bool sendPowerMode(BMP280_MODE mode);
@@ -105,8 +104,6 @@ class BMP280 : public rSensorX2 {
     bool setOversampling(BMP280_OVERSAMPLING osPress = BMP280_OSM_X1, BMP280_OVERSAMPLING osTemp = BMP280_OSM_X1);
     bool setIIRFilterSize(BMP280_IIR_FILTER filter);
     bool setODR(BMP280_STANDBYTIME odr);
-    // Soft reset
-    bool softReset();
   protected:
     void createSensorItems(
       // pressure value
@@ -119,12 +116,13 @@ class BMP280 : public rSensorX2 {
     char* getDisplayValue() override;
     #endif // CONFIG_SENSOR_DISPLAY_ENABLED
   private:
+    int                      _I2C_num;
+    uint8_t                  _I2C_address;
     struct bmp280_dev        _dev;
     struct bmp280_config     _conf;
     BMP280_MODE              _mode = BMP280_MODE_SLEEP;
 
     bool checkApiCode(const char* api_name, int8_t rslt);
-    bool initHardware(const int numI2C, const uint8_t addrI2C);
 };
 
 #endif // __RE_BMP280_H__

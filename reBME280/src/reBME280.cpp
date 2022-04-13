@@ -58,10 +58,18 @@ BME280::BME280():rSensorX3()
 {
   _I2C_num = 0;
   _I2C_address = 0;
+
   memset(&_dev, 0, sizeof(_dev));
+  _dev.chip_id = 0;
+  _dev.intf_ptr = this;
+  _dev.intf = BME280_I2C_INTF;
+  _dev.read = &BME280_i2c_read;
+  _dev.write = &BME280_i2c_write;
+  _dev.delay_us = &BME280_delay_us;
+
+  _mode = BME280_MODE_SLEEP;
 }
 
-// Destructor
 BME280::~BME280()
 {
 }
@@ -79,14 +87,49 @@ bool BME280::initIntItems(const char* sensorName, const char* topicName, const b
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
 {
+  _I2C_num = numI2C;
+  _I2C_address = addrI2C;
+  _mode = mode;
+  _dev.settings.standby_time = odr;
+  _dev.settings.filter = filter;
+  _dev.settings.osr_p = osPress;
+  _dev.settings.osr_t = osTemp;
+  _dev.settings.osr_h = osHumd;
   // Initialize properties
   initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   // Initialize internal items
   if (this->rSensorX3::initSensorItems(filterMode1, filterSize1, filterMode2, filterSize2, filterMode3, filterSize3)) {
     // Start device
-    return (initHardware(numI2C, addrI2C) && setConfiguration(mode, odr, filter, osPress, osTemp, osHumd));
+    return sensorStart();
   };
   return false;
+}
+
+/**
+ * Connecting external previously created items, for example statically declared
+ * */
+bool BME280::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal, 
+  const int numI2C, const uint8_t addrI2C, 
+  BME280_MODE mode, BME280_STANDBYTIME odr, BME280_IIR_FILTER filter,
+  BME280_OVERSAMPLING osPress, BME280_OVERSAMPLING osTemp, BME280_OVERSAMPLING osHumd,
+  rSensorItem* item1, rSensorItem* item2, rSensorItem* item3,
+  const uint32_t minReadInterval, const uint16_t errorLimit,
+  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+{
+  _I2C_num = numI2C;
+  _I2C_address = addrI2C;
+  _mode = mode;
+  _dev.settings.standby_time = odr;
+  _dev.settings.filter = filter;
+  _dev.settings.osr_p = osPress;
+  _dev.settings.osr_t = osTemp;
+  _dev.settings.osr_h = osHumd;
+  // Initialize properties
+  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
+  // Assign items
+  this->rSensorX3::setSensorItems(item1, item2, item3);
+  // Start device
+  return sensorStart();
 }
 
 void BME280::createSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1,
@@ -153,25 +196,6 @@ void BME280::registerItemsParameters(paramsGroupHandle_t parent_group)
   if (_item3) {
     _item3->registerParameters(parent_group, CONFIG_SENSOR_HUMIDITY_KEY, CONFIG_SENSOR_HUMIDITY_NAME, CONFIG_SENSOR_HUMIDITY_FRIENDLY);
   };
-}
-
-/**
- * Connecting external previously created items, for example statically declared
- * */
-bool BME280::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-  const int numI2C, const uint8_t addrI2C, 
-  BME280_MODE mode, BME280_STANDBYTIME odr, BME280_IIR_FILTER filter,
-  BME280_OVERSAMPLING osPress, BME280_OVERSAMPLING osTemp, BME280_OVERSAMPLING osHumd,
-  rSensorItem* item1, rSensorItem* item2, rSensorItem* item3,
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
-{
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Assign items
-  this->rSensorX3::setSensorItems(item1, item2, item3);
-  // Start device
-  return (initHardware(numI2C, addrI2C) && setConfiguration(mode, odr, filter, osPress, osTemp, osHumd));
 }
 
 /**
@@ -251,7 +275,7 @@ bool BME280::checkApiCode(const char* api_name, int8_t rslt)
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Null pointer", _name, api_name, rslt);
       return false;
     case BME280_E_COMM_FAIL:
-      setRawStatus(SENSOR_STATUS_TIMEOUT, false);
+      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Communication failure\r\n", _name, api_name, rslt);
       return false;
     case BME280_E_INVALID_LEN:
@@ -259,7 +283,7 @@ bool BME280::checkApiCode(const char* api_name, int8_t rslt)
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Incorrect length parameter\r\n", _name, api_name, rslt);
       return false;
     case BME280_E_DEV_NOT_FOUND:
-      setRawStatus(SENSOR_STATUS_TIMEOUT, false);
+      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Device not found\r\n", _name, api_name, rslt);
       return false;
     case BME280_E_NVM_COPY_FAILED:
@@ -276,20 +300,13 @@ bool BME280::checkApiCode(const char* api_name, int8_t rslt)
 /**
  * Start device
  * */
-bool BME280::initHardware(const int numI2C, const uint8_t addrI2C)
+bool BME280::sensorReset()
 {
-  int8_t rslt;
-
-  _dev.chip_id = 0;
-  _dev.intf_ptr = this;
-  _dev.intf = BME280_I2C_INTF;
-  _dev.read = &BME280_i2c_read;
-  _dev.write = &BME280_i2c_write;
-  _dev.delay_us = &BME280_delay_us;
-  _mode = BME280_MODE_SLEEP;
-
-  rslt = bme280_init(&_dev);
-  return checkApiCode("bme280_init", rslt);
+  int8_t rslt = bme280_init(&_dev); // bme280_soft_reset() inline
+  if (checkApiCode("bme280_init", rslt)) {
+    return sendConfiguration(BME280_ALL_SETTINGS_SEL) && sendPowerMode(_mode);
+  };
+  return false;
 }
 
 /**
@@ -341,15 +358,6 @@ bool BME280::setODR(BME280_STANDBYTIME odr)
 {
   _dev.settings.standby_time = odr;
   return sendConfiguration(BME280_STANDBY_SEL);
-};
-
-/**
- * Soft reset
- * */
-bool BME280::softReset()
-{
-  int8_t rslt = bme280_soft_reset(&_dev);
-  return checkApiCode("bme280_soft_reset", rslt);
 };
 
 /**

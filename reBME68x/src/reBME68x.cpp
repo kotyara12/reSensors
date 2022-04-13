@@ -15,7 +15,7 @@
 // ------------------------------------------------------ Callbacks ------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
 
-int8_t BME68X_INTF_RET_TYPE BME68x_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr)
+static BME68X_INTF_RET_TYPE BME68x_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr)
 {
   BME68x* sensor = (BME68x*)intf_ptr;
   if (sensor) {
@@ -212,8 +212,18 @@ BME68x::BME68x():rSensorX4()
 {
   _I2C_num = 0;
   _I2C_address = 0;
+
   memset(&_dev, 0, sizeof(_dev));
+  _dev.chip_id = 0;
+  _dev.amb_temp = 25;
+  _dev.intf_ptr = this;
+  _dev.intf = BME68X_I2C_INTF;
+  _dev.read = &BME68x_i2c_read;
+  _dev.write = &BME68x_i2c_write;
+  _dev.delay_us = &BME68x_delay_us;
+
   memset(&_conf, 0, sizeof(_conf));
+
   memset(&_heatr_conf, 0, sizeof(_heatr_conf));
   _heatr_conf.heatr_temp = 320;
   _heatr_conf.heatr_dur = 150;
@@ -295,12 +305,19 @@ bool BME68x::initIntItems(const char* sensorName, const char* topicName, const b
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
 {
-  // Initialize properties
+  _I2C_num = numI2C;
+  _I2C_address = addrI2C;
+  _conf.odr = odr;
+  _conf.filter = filter;
+  _conf.os_pres = osPress;
+  _conf.os_temp = osTemp;
+  _conf.os_hum = osHum;
+   // Initialize properties
   initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   // Initialize internal items
   if (this->rSensorX4::initSensorItems(filterMode1, filterSize1, filterMode2, filterSize2, filterMode3, filterSize3, filterMode4, filterSize4)) {
     // Start device
-    return (initHardware(numI2C, addrI2C) && setConfiguration(odr, filter, osPress, osTemp, osHum));
+    return sensorStart();
   };
   return false;
 }
@@ -425,12 +442,19 @@ bool BME68x::initExtItems(const char* sensorName, const char* topicName, const b
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
 {
+  _I2C_num = numI2C;
+  _I2C_address = addrI2C;
+  _conf.odr = odr;
+  _conf.filter = filter;
+  _conf.os_pres = osPress;
+  _conf.os_temp = osTemp;
+  _conf.os_hum = osHum;
   // Initialize properties
   initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   // Assign items
   this->rSensorX4::setSensorItems(item1, item2, item3, item4);
   // Start device
-  return (initHardware(numI2C, addrI2C) && setConfiguration(odr, filter, osPress, osTemp, osHum));
+  return sensorStart();
 }
 
 /**
@@ -458,7 +482,7 @@ bool BME68x::checkApiCode(const char* api_name, int8_t rslt)
       rlog_e(_name, "API name [%s] error [%d]: Null pointer", api_name, rslt);
       return false;
     case BME68X_E_COM_FAIL:
-      setRawStatus(SENSOR_STATUS_TIMEOUT, false);
+      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
       rlog_e(_name, "API name [%s] error [%d]: Communication failure\r\n", api_name, rslt);
       return false;
     case BME68X_E_INVALID_LENGTH:
@@ -466,7 +490,7 @@ bool BME68x::checkApiCode(const char* api_name, int8_t rslt)
       rlog_e(_name, "API name [%s] error [%d]: Incorrect length parameter\r\n", api_name, rslt);
       return false;
     case BME68X_E_DEV_NOT_FOUND:
-      setRawStatus(SENSOR_STATUS_TIMEOUT, false);
+      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
       rlog_e(_name, "API name [%s] error [%d]: Device not found\r\n", api_name, rslt);
       return false;
     case BME68X_E_SELF_TEST:
@@ -474,6 +498,7 @@ bool BME68x::checkApiCode(const char* api_name, int8_t rslt)
       rlog_e(_name, "API name [%s] error [%d]: Self test error\r\n", api_name, rslt);
       return false;
     case BME68X_W_NO_NEW_DATA:
+      setRawStatus(SENSOR_STATUS_NO_DATA, false);
       rlog_w(_name, "API name [%s] earning [%d]: No new data found\r\n", api_name, rslt);
       return false;
     default:
@@ -486,22 +511,13 @@ bool BME68x::checkApiCode(const char* api_name, int8_t rslt)
 /**
  * Start device
  * */
-bool BME68x::initHardware(const int numI2C, const uint8_t addrI2C)
+bool BME68x::sensorReset()
 {
-  int8_t rslt;
-  _I2C_num = numI2C;
-  _I2C_address = addrI2C;
-  
-  _dev.chip_id = 0;
-  _dev.amb_temp = 25;
-  _dev.intf_ptr = this;
-  _dev.intf = BME68X_I2C_INTF;
-  _dev.read = &BME68x_i2c_read;
-  _dev.write = &BME68x_i2c_write;
-  _dev.delay_us = &BME68x_delay_us;
-
-  rslt = bme68x_init(&_dev);
-  return checkApiCode("bme68x_init", rslt);
+  int8_t rslt = bme68x_init(&_dev); // bme68x_soft_reset() inline
+  if (checkApiCode("bme68x_init", rslt)) {
+    return sendConfiguration() && sendHeaterMode();
+  };
+  return false;
 }
 
 /**
@@ -539,7 +555,7 @@ bool BME68x::setConfiguration(BME68x_STANDBYTIME odr, BME68x_IIR_FILTER filter,
   _conf.os_hum = osHum;
   _conf.filter = filter;
   _conf.odr = odr;
-  return sendConfiguration() && sendHeaterMode();
+  return sendConfiguration();
 }
 
 bool BME68x::setOversampling(BME68x_OVERSAMPLING osPress, BME68x_OVERSAMPLING osTemp, BME68x_OVERSAMPLING osHum)

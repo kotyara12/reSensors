@@ -83,6 +83,8 @@ class SHT3xD : public rSensorHT {
       // callbacks
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
 
+    // Reset hardware
+    bool sensorReset() override;
     // Soft reset
     sensor_status_t softReset();
     // Reading serial number
@@ -121,7 +123,6 @@ class SHT3xD : public rSensorHT {
     uint8_t          _bufCmd[2] = {0};
     uint8_t          _bufData[6] = {0};
 
-    bool initHardware(const int numI2C, const uint8_t addrI2C, const SHT3xD_FREQUENCY frequency, const SHT3xD_MODE mode, const SHT3xD_REPEATABILITY repeatability);
     esp_err_t sendCommand(const uint16_t command);
     esp_err_t readBuffer(const uint16_t command, const uint32_t usWaitData, const uint8_t bytes);
     sensor_status_t startPeriodicMode(const SHT3xD_FREQUENCY frequency, const SHT3xD_REPEATABILITY repeatability);

@@ -47,9 +47,9 @@ reADC1::reADC1(rSensor *sensor, const char* itemName,
 bool reADC1::initItem()
 {
   _cal_enable = false;
-  RE_OK_CHECK_FIRST(logTAG, adc1_config_width((adc_bits_width_t)ADC_WIDTH_BIT_DEFAULT), return false);
-  RE_OK_CHECK(logTAG, adc1_config_channel_atten(_channel, _atten), return false);
-  RE_OK_CHECK(logTAG, esp_adc_cal_check_efuse(ADC_CALI_SCHEME), return true);
+  RE_OK_CHECK(adc1_config_width((adc_bits_width_t)ADC_WIDTH_BIT_DEFAULT), return false);
+  RE_OK_CHECK(adc1_config_channel_atten(_channel, _atten), return false);
+  RE_OK_CHECK(esp_adc_cal_check_efuse(ADC_CALI_SCHEME), return true);
   _cal_enable = (esp_adc_cal_characterize(ADC_UNIT_1, _atten, (adc_bits_width_t)ADC_WIDTH_BIT_DEFAULT, 0, &_chars) != ESP_ADC_CAL_VAL_NOT_SUPPORTED);
   if (_cal_enable) {
     rlog_i(logTAG, "ADC channel [ %s ] initialized, calibration enabled", getName());

@@ -38,8 +38,16 @@ static void BMP280_delay_ms(uint32_t period_ms)
 
 BMP280::BMP280():rSensorX2()
 {
+  _I2C_num = 0;
+  _I2C_address = 0;
   memset(&_dev, 0, sizeof(_dev));
   memset(&_conf, 0, sizeof(_conf));
+
+  _dev.chip_id = 0;
+  _dev.intf = BMP280_I2C_INTF;
+  _dev.read = &BMP280_i2c_read;
+  _dev.write = &BMP280_i2c_write;
+  _dev.delay_ms = &BMP280_delay_ms;
 }
 
 // Destructor
@@ -59,14 +67,47 @@ bool BMP280::initIntItems(const char* sensorName, const char* topicName, const b
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
 {
+  _I2C_num = numI2C;
+  _I2C_address = addrI2C;
+  _mode = mode;
+  _conf.odr = odr;
+  _conf.filter = filter;
+  _conf.os_pres = osPress;
+  _conf.os_temp = osTemp;
   // Initialize properties
   initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   // Initialize internal items
   if (this->rSensorX2::initSensorItems(filterMode1, filterSize1, filterMode2, filterSize2)) {
     // Start device
-    return (initHardware(numI2C, addrI2C) && setConfiguration(mode, odr, filter, osPress, osTemp));
+    return sensorStart();
   };
   return false;
+}
+
+/**
+ * Connecting external previously created items, for example statically declared
+ * */
+bool BMP280::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal, 
+  const int numI2C, const uint8_t addrI2C, 
+  BMP280_MODE mode, BMP280_STANDBYTIME odr, BMP280_IIR_FILTER filter,
+  BMP280_OVERSAMPLING osPress, BMP280_OVERSAMPLING osTemp,
+  rSensorItem* item1, rSensorItem* item2,
+  const uint32_t minReadInterval, const uint16_t errorLimit,
+  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+{
+  _I2C_num = numI2C;
+  _I2C_address = addrI2C;
+  _mode = mode;
+  _conf.odr = odr;
+  _conf.filter = filter;
+  _conf.os_pres = osPress;
+  _conf.os_temp = osTemp;
+  // Initialize properties
+  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
+  // Assign items
+  this->rSensorX2::setSensorItems(item1, item2);
+  // Start device
+  return sensorStart();
 }
 
 void BMP280::createSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1,
@@ -115,38 +156,6 @@ void BMP280::registerItemsParameters(paramsGroupHandle_t parent_group)
   };
 }
 
-/**
- * Connecting external previously created items, for example statically declared
- * */
-bool BMP280::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-  const int numI2C, const uint8_t addrI2C, 
-  BMP280_MODE mode, BMP280_STANDBYTIME odr, BMP280_IIR_FILTER filter,
-  BMP280_OVERSAMPLING osPress, BMP280_OVERSAMPLING osTemp,
-  rSensorItem* item1, rSensorItem* item2,
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
-{
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Assign items
-  this->rSensorX2::setSensorItems(item1, item2);
-  // Start device
-  return (initHardware(numI2C, addrI2C) && setConfiguration(mode, odr, filter, osPress, osTemp));
-}
-
-/**
- * Get I2C parameters
- * */
-int BMP280::getI2CNum()
-{
-  return _dev.dev_id >> 7;
-}
-
-uint8_t BMP280::getI2CAddress()
-{
-  return _dev.dev_id & 0x7F;
-}
-
 // Displaying multiple values in one topic
 #if CONFIG_SENSOR_DISPLAY_ENABLED
 
@@ -176,7 +185,7 @@ bool BMP280::checkApiCode(const char* api_name, int8_t rslt)
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Null pointer", _name, api_name, rslt);
       return false;
     case BMP280_E_COMM_FAIL:
-      setRawStatus(SENSOR_STATUS_TIMEOUT, false);
+      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Communication failure\r\n", _name, api_name, rslt);
       return false;
     case BMP280_E_INVALID_LEN:
@@ -184,7 +193,7 @@ bool BMP280::checkApiCode(const char* api_name, int8_t rslt)
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Incorrect length parameter\r\n", _name, api_name, rslt);
       return false;
     case BMP280_E_DEV_NOT_FOUND:
-      setRawStatus(SENSOR_STATUS_TIMEOUT, false);
+      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Device not found\r\n", _name, api_name, rslt);
       return false;
     case BMP280_E_INVALID_MODE:
@@ -193,7 +202,7 @@ bool BMP280::checkApiCode(const char* api_name, int8_t rslt)
       return false;
     case BMP280_E_IMPLAUS_TEMP:
     case BMP280_E_IMPLAUS_PRESS:
-      setRawStatus(SENSOR_STATUS_NAN, false);
+      setRawStatus(SENSOR_STATUS_NO_DATA, false);
       rlog_w(_name, "%s: API name [%s] earning [%d]: Invalid temperature\r\n", _name, api_name, rslt);
       return logTAG;
     case BMP280_E_CAL_PARAM_RANGE:
@@ -210,20 +219,18 @@ bool BMP280::checkApiCode(const char* api_name, int8_t rslt)
 /**
  * Start device
  * */
-bool BMP280::initHardware(const int numI2C, const uint8_t addrI2C)
+bool BMP280::sensorReset()
 {
   int8_t rslt;
 
-  _dev.chip_id = 0;
-  _dev.dev_id = (numI2C << 7) | (addrI2C & 0x7F);
-  _dev.intf = BMP280_I2C_INTF;
-  _dev.read = &BMP280_i2c_read;
-  _dev.write = &BMP280_i2c_write;
-  _dev.delay_ms = &BMP280_delay_ms;
+  _dev.dev_id = (_I2C_num << 7) | (_I2C_address & 0x7F);
   _mode = BMP280_MODE_SLEEP;
 
-  rslt = bmp280_init(&_dev);
-  return checkApiCode("bmp280_init", rslt);
+  rslt = bmp280_init(&_dev); // bmp280_soft_reset(dev) inline
+  if (checkApiCode("bmp280_init", rslt)) {
+    return sendConfiguration() && sendPowerMode(_mode);
+  };
+  return false;
 }
 
 /**
@@ -249,10 +256,10 @@ bool BMP280::setConfiguration(BMP280_MODE mode,
   BMP280_STANDBYTIME odr, BMP280_IIR_FILTER filter,
   BMP280_OVERSAMPLING osPress, BMP280_OVERSAMPLING osTemp)
 {
+  _conf.odr = odr;
+  _conf.filter = filter;
   _conf.os_pres = osPress;
   _conf.os_temp = osTemp;
-  _conf.filter = filter;
-  _conf.odr = odr;
   return sendConfiguration() && sendPowerMode(mode);
 }
 
@@ -273,15 +280,6 @@ bool BMP280::setODR(BMP280_STANDBYTIME odr)
 {
   _conf.odr = odr;
   return sendConfiguration();
-};
-
-/**
- * Soft reset
- * */
-bool BMP280::softReset()
-{
-  int8_t rslt = bmp280_soft_reset(&_dev);
-  return checkApiCode("bmp280_soft_reset", rslt);
 };
 
 /**
