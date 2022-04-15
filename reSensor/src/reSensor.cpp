@@ -4,6 +4,7 @@
 #include <math.h>
 #include "rLog.h"
 #include "rStrings.h"
+#include "reNvs.h"
 #include "esp_task_wdt.h"
 #include "def_consts.h"
 #ifdef ADRUINO
@@ -933,6 +934,89 @@ value_t rSensorItem::getFilteredValue(const value_t rawValue)
   };
 }
 
+// -----------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------- NVS ---------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------
+
+void rSensorItem::nvsStoreExtremums(const char* nvs_space)
+{
+  nvs_handle_t nvs_handle;
+  if (nvsOpen(nvs_space, NVS_READWRITE, &nvs_handle)) {
+    // daily
+    nvs_set_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_DAY_MIN_TIME, &_data.extremumsDaily.minValue.timestamp, sizeof(time_t));
+    nvs_set_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_DAY_MIN_RAW, &_data.extremumsDaily.minValue.rawValue, sizeof(value_t));
+    nvs_set_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_DAY_MIN_FLT, &_data.extremumsDaily.minValue.filteredValue, sizeof(value_t));
+    nvs_set_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_DAY_MAX_TIME, &_data.extremumsDaily.maxValue.timestamp, sizeof(time_t));
+    nvs_set_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_DAY_MAX_RAW, &_data.extremumsDaily.maxValue.rawValue, sizeof(value_t));
+    nvs_set_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_DAY_MAX_FLT, &_data.extremumsDaily.maxValue.filteredValue, sizeof(value_t));
+    // weeky
+    nvs_set_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_WEEK_MIN_TIME, &_data.extremumsWeekly.minValue.timestamp, sizeof(time_t));
+    nvs_set_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_WEEK_MIN_RAW, &_data.extremumsWeekly.minValue.rawValue, sizeof(value_t));
+    nvs_set_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_WEEK_MIN_FLT, &_data.extremumsWeekly.minValue.filteredValue, sizeof(value_t));
+    nvs_set_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_WEEK_MAX_TIME, &_data.extremumsWeekly.maxValue.timestamp, sizeof(time_t));
+    nvs_set_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_WEEK_MAX_RAW, &_data.extremumsWeekly.maxValue.rawValue, sizeof(value_t));
+    nvs_set_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_WEEK_MAX_FLT, &_data.extremumsWeekly.maxValue.filteredValue, sizeof(value_t));
+    // entirely
+    nvs_set_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_ALL_MIN_TIME, &_data.extremumsEntirely.minValue.timestamp, sizeof(time_t));
+    nvs_set_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_ALL_MIN_RAW, &_data.extremumsEntirely.minValue.rawValue, sizeof(value_t));
+    nvs_set_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_ALL_MIN_FLT, &_data.extremumsEntirely.minValue.filteredValue, sizeof(value_t));
+    nvs_set_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_ALL_MAX_TIME, &_data.extremumsEntirely.maxValue.timestamp, sizeof(time_t));
+    nvs_set_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_ALL_MAX_RAW, &_data.extremumsEntirely.maxValue.rawValue, sizeof(value_t));
+    nvs_set_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_ALL_MAX_FLT, &_data.extremumsEntirely.maxValue.filteredValue, sizeof(value_t));
+    nvs_commit(nvs_handle);
+    nvs_close(nvs_handle);
+  };
+}
+
+void rSensorItem::nvsRestoreExtremums(const char* nvs_space)
+{
+  nvs_handle_t nvs_handle;
+  if (nvsOpen(nvs_space, NVS_READWRITE, &nvs_handle)) {
+    size_t data;
+    // daily
+    data = sizeof(time_t);
+    nvs_get_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_DAY_MIN_TIME, &_data.extremumsDaily.minValue.timestamp, &data);
+    data = sizeof(value_t);
+    nvs_get_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_DAY_MIN_RAW, &_data.extremumsDaily.minValue.rawValue, &data);
+    data = sizeof(value_t);
+    nvs_get_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_DAY_MIN_FLT, &_data.extremumsDaily.minValue.filteredValue, &data);
+    data = sizeof(value_t);
+    nvs_get_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_DAY_MAX_TIME, &_data.extremumsDaily.maxValue.timestamp, &data);
+    data = sizeof(value_t);
+    nvs_get_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_DAY_MAX_RAW, &_data.extremumsDaily.maxValue.rawValue, &data);
+    data = sizeof(value_t);
+    nvs_get_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_DAY_MAX_FLT, &_data.extremumsDaily.maxValue.filteredValue, &data);
+    // weeky
+    data = sizeof(time_t);
+    nvs_get_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_WEEK_MIN_TIME, &_data.extremumsWeekly.minValue.timestamp, &data);
+    data = sizeof(value_t);
+    nvs_get_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_WEEK_MIN_RAW, &_data.extremumsWeekly.minValue.rawValue, &data);
+    data = sizeof(value_t);
+    nvs_get_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_WEEK_MIN_FLT, &_data.extremumsWeekly.minValue.filteredValue, &data);
+    data = sizeof(value_t);
+    nvs_get_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_WEEK_MAX_TIME, &_data.extremumsWeekly.maxValue.timestamp, &data);
+    data = sizeof(value_t);
+    nvs_get_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_WEEK_MAX_RAW, &_data.extremumsWeekly.maxValue.rawValue, &data);
+    data = sizeof(value_t);
+    nvs_get_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_WEEK_MAX_FLT, &_data.extremumsWeekly.maxValue.filteredValue, &data);
+    data = sizeof(time_t);
+    // entirely
+    nvs_get_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_ALL_MIN_TIME, &_data.extremumsEntirely.minValue.timestamp, &data);
+    data = sizeof(value_t);
+    nvs_get_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_ALL_MIN_RAW, &_data.extremumsEntirely.minValue.rawValue, &data);
+    data = sizeof(value_t);
+    nvs_get_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_ALL_MIN_FLT, &_data.extremumsEntirely.minValue.filteredValue, &data);
+    data = sizeof(value_t);
+    nvs_get_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_ALL_MAX_TIME, &_data.extremumsEntirely.maxValue.timestamp, &data);
+    data = sizeof(value_t);
+    nvs_get_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_ALL_MAX_RAW, &_data.extremumsEntirely.maxValue.rawValue, &data);
+    data = sizeof(value_t);
+    nvs_get_blob(nvs_handle, CONFIG_SENSOR_NVS_EXTREMUM_ALL_MAX_FLT, &_data.extremumsEntirely.maxValue.filteredValue, &data);
+
+    nvs_close(nvs_handle);
+  };
+}
+
 // =======================================================================================================================
 // =======================================================================================================================
 // =================================================== rTemperatureItem ==================================================
@@ -1595,6 +1679,30 @@ char* rSensorX1::getJSON()
 
 #endif // CONFIG_SENSOR_AS_JSON
 
+void rSensorX1::nvsStoreExtremums(const char* nvs_space)
+{
+  char* nvs_space_item = nullptr;
+  if (_item) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
+    if (nvs_space_item) {
+      _item->nvsStoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+}
+
+void rSensorX1::nvsRestoreExtremums(const char* nvs_space)
+{
+  char* nvs_space_item = nullptr;
+  if (_item) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
+    if (nvs_space_item) {
+      _item->nvsRestoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+}
+
 // =======================================================================================================================
 // =======================================================================================================================
 // ===================================================== rSensorStub =====================================================
@@ -1891,6 +1999,44 @@ char* rSensorX2::getJSON()
 }
 
 #endif // CONFIG_SENSOR_AS_JSON
+
+void rSensorX2::nvsStoreExtremums(const char* nvs_space)
+{
+  char* nvs_space_item = nullptr;
+  if (_item1) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
+    if (nvs_space_item) {
+      _item1->nvsStoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item2) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 2);
+    if (nvs_space_item) {
+      _item2->nvsStoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+}
+
+void rSensorX2::nvsRestoreExtremums(const char* nvs_space)
+{
+  char* nvs_space_item = nullptr;
+  if (_item1) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
+    if (nvs_space_item) {
+      _item1->nvsRestoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item2) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 2);
+    if (nvs_space_item) {
+      _item2->nvsRestoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+}
 
 // =======================================================================================================================
 // =======================================================================================================================
@@ -2315,6 +2461,58 @@ char* rSensorX3::getJSON()
 
 #endif // CONFIG_SENSOR_AS_JSON
 
+void rSensorX3::nvsStoreExtremums(const char* nvs_space)
+{
+  char* nvs_space_item = nullptr;
+  if (_item1) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
+    if (nvs_space_item) {
+      _item1->nvsStoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item2) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 2);
+    if (nvs_space_item) {
+      _item2->nvsStoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item3) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 3);
+    if (nvs_space_item) {
+      _item3->nvsStoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+}
+
+void rSensorX3::nvsRestoreExtremums(const char* nvs_space)
+{
+  char* nvs_space_item = nullptr;
+  if (_item1) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
+    if (nvs_space_item) {
+      _item1->nvsRestoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item2) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 2);
+    if (nvs_space_item) {
+      _item2->nvsRestoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item3) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 3);
+    if (nvs_space_item) {
+      _item3->nvsRestoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+}
+
 // =======================================================================================================================
 // =======================================================================================================================
 // ====================================================== rSensorX4 ======================================================
@@ -2701,6 +2899,72 @@ char* rSensorX4::getJSON()
 }
 
 #endif // CONFIG_SENSOR_AS_JSON
+
+void rSensorX4::nvsStoreExtremums(const char* nvs_space)
+{
+  char* nvs_space_item = nullptr;
+  if (_item1) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
+    if (nvs_space_item) {
+      _item1->nvsStoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item2) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 2);
+    if (nvs_space_item) {
+      _item2->nvsStoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item3) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 3);
+    if (nvs_space_item) {
+      _item3->nvsStoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item4) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 4);
+    if (nvs_space_item) {
+      _item4->nvsStoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+}
+
+void rSensorX4::nvsRestoreExtremums(const char* nvs_space)
+{
+  char* nvs_space_item = nullptr;
+  if (_item1) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
+    if (nvs_space_item) {
+      _item1->nvsRestoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item2) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 2);
+    if (nvs_space_item) {
+      _item2->nvsRestoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item3) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 3);
+    if (nvs_space_item) {
+      _item3->nvsRestoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item4) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 4);
+    if (nvs_space_item) {
+      _item4->nvsRestoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+}
 
 // =======================================================================================================================
 // =======================================================================================================================
@@ -3166,3 +3430,84 @@ char* rSensorX5::getJSON()
 }
 
 #endif // CONFIG_SENSOR_AS_JSON
+
+void rSensorX5::nvsStoreExtremums(const char* nvs_space)
+{
+  char* nvs_space_item = nullptr;
+  if (_item1) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
+    if (nvs_space_item) {
+      _item1->nvsStoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item2) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 2);
+    if (nvs_space_item) {
+      _item2->nvsStoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item3) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 3);
+    if (nvs_space_item) {
+      _item3->nvsStoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item4) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 4);
+    if (nvs_space_item) {
+      _item4->nvsStoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item5) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 5);
+    if (nvs_space_item) {
+      _item5->nvsStoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+}
+
+void rSensorX5::nvsRestoreExtremums(const char* nvs_space)
+{
+  char* nvs_space_item = nullptr;
+  if (_item1) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
+    if (nvs_space_item) {
+      _item1->nvsRestoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item2) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 2);
+    if (nvs_space_item) {
+      _item2->nvsRestoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item3) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 3);
+    if (nvs_space_item) {
+      _item3->nvsRestoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item4) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 4);
+    if (nvs_space_item) {
+      _item4->nvsRestoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+  if (_item5) {
+    nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 5);
+    if (nvs_space_item) {
+      _item5->nvsRestoreExtremums(nvs_space_item);
+      free(nvs_space_item);
+    };
+  };
+}
+

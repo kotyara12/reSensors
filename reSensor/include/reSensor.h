@@ -266,6 +266,10 @@ class rSensorItem {
     char* jsonValues();
     char* jsonNamedValues();
     #endif // CONFIG_SENSOR_AS_JSON
+
+    // NVS
+    void nvsStoreExtremums(const char* nvs_space);
+    void nvsRestoreExtremums(const char* nvs_space);
   protected:
     bool _forcedRawPublish = false;
     virtual void registerItemParameters(paramsGroup_t * group);
@@ -372,6 +376,10 @@ class rSensor {
     #if CONFIG_SENSOR_AS_JSON
     virtual char* getJSON() = 0;
     #endif // CONFIG_SENSOR_AS_JSON
+
+    // NVS
+    virtual void nvsStoreExtremums(const char* nvs_space) = 0;
+    virtual void nvsRestoreExtremums(const char* nvs_space) = 0;
   protected:
     const char *   _name;
     const char *   _topicName;
@@ -438,6 +446,9 @@ class rSensorX1: public rSensor {
     #if CONFIG_SENSOR_AS_JSON
     char*  getJSON() override;
     #endif // CONFIG_SENSOR_AS_JSON
+
+    void nvsStoreExtremums(const char* nvs_space) override;
+    void nvsRestoreExtremums(const char* nvs_space) override;
   protected:
     rSensorItem *_item;
 
@@ -496,6 +507,9 @@ class rSensorX2: public rSensor {
     #if CONFIG_SENSOR_AS_JSON
     char*  getJSON() override;
     #endif // CONFIG_SENSOR_AS_JSON
+
+    void nvsStoreExtremums(const char* nvs_space) override;
+    void nvsRestoreExtremums(const char* nvs_space) override;
   protected:
     rSensorItem *_item1;
     rSensorItem *_item2;
@@ -571,6 +585,9 @@ class rSensorX3: public rSensor {
     #if CONFIG_SENSOR_AS_JSON
     char*  getJSON() override;
     #endif // CONFIG_SENSOR_AS_JSON
+
+    void nvsStoreExtremums(const char* nvs_space) override;
+    void nvsRestoreExtremums(const char* nvs_space) override;
   protected:
     rSensorItem *_item1;
     rSensorItem *_item2;
@@ -634,6 +651,9 @@ class rSensorX4: public rSensor {
     #if CONFIG_SENSOR_AS_JSON
     char*  getJSON() override;
     #endif // CONFIG_SENSOR_AS_JSON
+
+    void nvsStoreExtremums(const char* nvs_space) override;
+    void nvsRestoreExtremums(const char* nvs_space) override;
   protected:
     rSensorItem *_item1;
     rSensorItem *_item2;
@@ -708,6 +728,9 @@ class rSensorX5: public rSensor {
     #if CONFIG_SENSOR_AS_JSON
     char*  getJSON() override;
     #endif // CONFIG_SENSOR_AS_JSON
+
+    void nvsStoreExtremums(const char* nvs_space) override;
+    void nvsRestoreExtremums(const char* nvs_space) override;
   protected:
     rSensorItem *_item1;
     rSensorItem *_item2;
