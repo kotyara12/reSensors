@@ -285,6 +285,56 @@ sensor_extremums_t rSensorItem::getExtremumsDaily()
   return _data.extremumsDaily;
 }
 
+void rSensorItem::resetExtremumsEntirely()
+{
+  _data.extremumsEntirely.minValue.timestamp = 0;
+  _data.extremumsEntirely.minValue.rawValue = 0.0;
+  _data.extremumsEntirely.minValue.filteredValue = 0.0;
+  _data.extremumsEntirely.maxValue.timestamp = 0;
+  _data.extremumsEntirely.maxValue.rawValue = 0.0;
+  _data.extremumsEntirely.maxValue.filteredValue = 0.0;
+  #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+    _data.extremumsEntirely.minValueChanged = true;
+    _data.extremumsEntirely.maxValueChanged = true;
+  #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+};
+  
+
+void rSensorItem::resetExtremumsWeekly()
+{
+  _data.extremumsWeekly.minValue.timestamp = 0;
+  _data.extremumsWeekly.minValue.rawValue = 0.0;
+  _data.extremumsWeekly.minValue.filteredValue = 0.0;
+  _data.extremumsWeekly.maxValue.timestamp = 0;
+  _data.extremumsWeekly.maxValue.rawValue = 0.0;
+  _data.extremumsWeekly.maxValue.filteredValue = 0.0;
+  #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+    _data.extremumsWeekly.minValueChanged = true;
+    _data.extremumsWeekly.maxValueChanged = true;
+  #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+}
+
+void rSensorItem::resetExtremumsDaily()
+{
+  _data.extremumsDaily.minValue.timestamp = 0;
+  _data.extremumsDaily.minValue.rawValue = 0.0;
+  _data.extremumsDaily.minValue.filteredValue = 0.0;
+  _data.extremumsDaily.maxValue.timestamp = 0;
+  _data.extremumsDaily.maxValue.rawValue = 0.0;
+  _data.extremumsDaily.maxValue.filteredValue = 0.0;
+  #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+    _data.extremumsDaily.minValueChanged = true;
+    _data.extremumsDaily.maxValueChanged = true;
+  #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+}
+
+void rSensorItem::resetExtremumsTotal()
+{
+  resetExtremumsEntirely();
+  resetExtremumsWeekly();
+  resetExtremumsDaily();
+}
+
 // -----------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------- Register internal parameters --------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
@@ -293,7 +343,8 @@ void rSensorItem::registerParameters(paramsGroupHandle_t parent_group, const cha
 {
   if ((key_name) && (topic_name) && (friendly_name)) {
     if (!_pgItem) {
-      _pgItem = paramsRegisterGroup(parent_group, key_name, topic_name, friendly_name);
+      _pgItem = paramsRegisterGroup(parent_group,
+       key_name, topic_name, friendly_name);
     };
 
     if (_pgItem) {
@@ -1679,6 +1730,34 @@ char* rSensorX1::getJSON()
 
 #endif // CONFIG_SENSOR_AS_JSON
 
+void rSensorX1::resetExtremumsEntirely()
+{
+  if (_item) {
+    _item->resetExtremumsEntirely();
+  };
+}
+
+void rSensorX1::resetExtremumsWeekly()
+{
+  if (_item) {
+    _item->resetExtremumsWeekly();
+  };
+}
+
+void rSensorX1::resetExtremumsDaily()
+{
+  if (_item) {
+    _item->resetExtremumsDaily();
+  };
+}
+
+void rSensorX1::resetExtremumsTotal()
+{
+  if (_item) {
+    _item->resetExtremumsTotal();
+  };
+}
+
 void rSensorX1::nvsStoreExtremums(const char* nvs_space)
 {
   char* nvs_space_item = nullptr;
@@ -1999,6 +2078,46 @@ char* rSensorX2::getJSON()
 }
 
 #endif // CONFIG_SENSOR_AS_JSON
+
+void rSensorX2::resetExtremumsEntirely()
+{
+  if (_item1) {
+    _item1->resetExtremumsEntirely();
+  };
+  if (_item2) {
+    _item2->resetExtremumsEntirely();
+  };
+}
+
+void rSensorX2::resetExtremumsWeekly()
+{
+  if (_item1) {
+    _item1->resetExtremumsWeekly();
+  };
+  if (_item2) {
+    _item2->resetExtremumsWeekly();
+  };
+}
+
+void rSensorX2::resetExtremumsDaily()
+{
+  if (_item1) {
+    _item1->resetExtremumsDaily();
+  };
+  if (_item2) {
+    _item2->resetExtremumsDaily();
+  };
+}
+
+void rSensorX2::resetExtremumsTotal()
+{
+  if (_item1) {
+    _item1->resetExtremumsTotal();
+  };
+  if (_item2) {
+    _item2->resetExtremumsTotal();
+  };
+}
 
 void rSensorX2::nvsStoreExtremums(const char* nvs_space)
 {
@@ -2461,6 +2580,58 @@ char* rSensorX3::getJSON()
 
 #endif // CONFIG_SENSOR_AS_JSON
 
+void rSensorX3::resetExtremumsEntirely()
+{
+  if (_item1) {
+    _item1->resetExtremumsEntirely();
+  };
+  if (_item2) {
+    _item2->resetExtremumsEntirely();
+  };
+  if (_item3) {
+    _item3->resetExtremumsEntirely();
+  };
+}
+
+void rSensorX3::resetExtremumsWeekly()
+{
+  if (_item1) {
+    _item1->resetExtremumsWeekly();
+  };
+  if (_item2) {
+    _item2->resetExtremumsWeekly();
+  };
+  if (_item3) {
+    _item3->resetExtremumsWeekly();
+  };
+}
+
+void rSensorX3::resetExtremumsDaily()
+{
+  if (_item1) {
+    _item1->resetExtremumsDaily();
+  };
+  if (_item2) {
+    _item2->resetExtremumsDaily();
+  };
+  if (_item3) {
+    _item3->resetExtremumsDaily();
+  };
+}
+
+void rSensorX3::resetExtremumsTotal()
+{
+  if (_item1) {
+    _item1->resetExtremumsTotal();
+  };
+  if (_item2) {
+    _item2->resetExtremumsTotal();
+  };
+  if (_item3) {
+    _item3->resetExtremumsTotal();
+  };
+}
+
 void rSensorX3::nvsStoreExtremums(const char* nvs_space)
 {
   char* nvs_space_item = nullptr;
@@ -2899,6 +3070,70 @@ char* rSensorX4::getJSON()
 }
 
 #endif // CONFIG_SENSOR_AS_JSON
+
+void rSensorX4::resetExtremumsEntirely()
+{
+  if (_item1) {
+    _item1->resetExtremumsEntirely();
+  };
+  if (_item2) {
+    _item2->resetExtremumsEntirely();
+  };
+  if (_item3) {
+    _item3->resetExtremumsEntirely();
+  };
+  if (_item4) {
+    _item4->resetExtremumsEntirely();
+  };
+}
+
+void rSensorX4::resetExtremumsWeekly()
+{
+  if (_item1) {
+    _item1->resetExtremumsWeekly();
+  };
+  if (_item2) {
+    _item2->resetExtremumsWeekly();
+  };
+  if (_item3) {
+    _item3->resetExtremumsWeekly();
+  };
+  if (_item4) {
+    _item4->resetExtremumsWeekly();
+  };
+}
+
+void rSensorX4::resetExtremumsDaily()
+{
+  if (_item1) {
+    _item1->resetExtremumsDaily();
+  };
+  if (_item2) {
+    _item2->resetExtremumsDaily();
+  };
+  if (_item3) {
+    _item3->resetExtremumsDaily();
+  };
+  if (_item4) {
+    _item4->resetExtremumsDaily();
+  };
+}
+
+void rSensorX4::resetExtremumsTotal()
+{
+  if (_item1) {
+    _item1->resetExtremumsTotal();
+  };
+  if (_item2) {
+    _item2->resetExtremumsTotal();
+  };
+  if (_item3) {
+    _item3->resetExtremumsTotal();
+  };
+  if (_item4) {
+    _item4->resetExtremumsTotal();
+  };
+}
 
 void rSensorX4::nvsStoreExtremums(const char* nvs_space)
 {
@@ -3430,6 +3665,82 @@ char* rSensorX5::getJSON()
 }
 
 #endif // CONFIG_SENSOR_AS_JSON
+
+void rSensorX5::resetExtremumsEntirely()
+{
+  if (_item1) {
+    _item1->resetExtremumsEntirely();
+  };
+  if (_item2) {
+    _item2->resetExtremumsEntirely();
+  };
+  if (_item3) {
+    _item3->resetExtremumsEntirely();
+  };
+  if (_item4) {
+    _item4->resetExtremumsEntirely();
+  };
+  if (_item5) {
+    _item5->resetExtremumsEntirely();
+  };
+}
+
+void rSensorX5::resetExtremumsWeekly()
+{
+  if (_item1) {
+    _item1->resetExtremumsWeekly();
+  };
+  if (_item2) {
+    _item2->resetExtremumsWeekly();
+  };
+  if (_item3) {
+    _item3->resetExtremumsWeekly();
+  };
+  if (_item4) {
+    _item4->resetExtremumsWeekly();
+  };
+  if (_item5) {
+    _item5->resetExtremumsWeekly();
+  };
+}
+
+void rSensorX5::resetExtremumsDaily()
+{
+  if (_item1) {
+    _item1->resetExtremumsDaily();
+  };
+  if (_item2) {
+    _item2->resetExtremumsDaily();
+  };
+  if (_item3) {
+    _item3->resetExtremumsDaily();
+  };
+  if (_item4) {
+    _item4->resetExtremumsDaily();
+  };
+  if (_item5) {
+    _item5->resetExtremumsDaily();
+  };
+}
+
+void rSensorX5::resetExtremumsTotal()
+{
+  if (_item1) {
+    _item1->resetExtremumsTotal();
+  };
+  if (_item2) {
+    _item2->resetExtremumsTotal();
+  };
+  if (_item3) {
+    _item3->resetExtremumsTotal();
+  };
+  if (_item4) {
+    _item4->resetExtremumsTotal();
+  };
+  if (_item5) {
+    _item5->resetExtremumsTotal();
+  };
+}
 
 void rSensorX5::nvsStoreExtremums(const char* nvs_space)
 {

@@ -188,6 +188,10 @@ class rSensorItem {
     sensor_value_t getValue();
     char* getStringRaw();
     char* getStringFiltered();
+    void resetExtremumsEntirely();
+    void resetExtremumsWeekly();
+    void resetExtremumsDaily();
+    void resetExtremumsTotal();
     sensor_extremums_t getExtremumsEntirely();
     sensor_extremums_t getExtremumsWeekly();
     sensor_extremums_t getExtremumsDaily();
@@ -377,7 +381,13 @@ class rSensor {
     virtual char* getJSON() = 0;
     #endif // CONFIG_SENSOR_AS_JSON
 
-    // NVS
+    // Reset extremums
+    virtual void resetExtremumsEntirely() = 0;
+    virtual void resetExtremumsWeekly() = 0;
+    virtual void resetExtremumsDaily() = 0;
+    virtual void resetExtremumsTotal() = 0;
+
+    // Store extremums
     virtual void nvsStoreExtremums(const char* nvs_space) = 0;
     virtual void nvsRestoreExtremums(const char* nvs_space) = 0;
   protected:
@@ -447,6 +457,13 @@ class rSensorX1: public rSensor {
     char*  getJSON() override;
     #endif // CONFIG_SENSOR_AS_JSON
 
+    // Reset extremums
+    void resetExtremumsEntirely() override;
+    void resetExtremumsWeekly() override;
+    void resetExtremumsDaily() override;
+    void resetExtremumsTotal() override;
+
+    // Store extremums
     void nvsStoreExtremums(const char* nvs_space) override;
     void nvsRestoreExtremums(const char* nvs_space) override;
   protected:
@@ -508,6 +525,13 @@ class rSensorX2: public rSensor {
     char*  getJSON() override;
     #endif // CONFIG_SENSOR_AS_JSON
 
+    // Reset extremums
+    void resetExtremumsEntirely() override;
+    void resetExtremumsWeekly() override;
+    void resetExtremumsDaily() override;
+    void resetExtremumsTotal() override;
+
+    // Store extremums
     void nvsStoreExtremums(const char* nvs_space) override;
     void nvsRestoreExtremums(const char* nvs_space) override;
   protected:
@@ -586,6 +610,13 @@ class rSensorX3: public rSensor {
     char*  getJSON() override;
     #endif // CONFIG_SENSOR_AS_JSON
 
+    // Reset extremums
+    void resetExtremumsEntirely() override;
+    void resetExtremumsWeekly() override;
+    void resetExtremumsDaily() override;
+    void resetExtremumsTotal() override;
+
+    // Store extremums
     void nvsStoreExtremums(const char* nvs_space) override;
     void nvsRestoreExtremums(const char* nvs_space) override;
   protected:
@@ -652,6 +683,13 @@ class rSensorX4: public rSensor {
     char*  getJSON() override;
     #endif // CONFIG_SENSOR_AS_JSON
 
+    // Reset extremums
+    void resetExtremumsEntirely() override;
+    void resetExtremumsWeekly() override;
+    void resetExtremumsDaily() override;
+    void resetExtremumsTotal() override;
+
+    // Store extremums
     void nvsStoreExtremums(const char* nvs_space) override;
     void nvsRestoreExtremums(const char* nvs_space) override;
   protected:
@@ -729,6 +767,13 @@ class rSensorX5: public rSensor {
     char*  getJSON() override;
     #endif // CONFIG_SENSOR_AS_JSON
 
+    // Reset extremums
+    void resetExtremumsEntirely() override;
+    void resetExtremumsWeekly() override;
+    void resetExtremumsDaily() override;
+    void resetExtremumsTotal() override;
+
+    // Store extremums
     void nvsStoreExtremums(const char* nvs_space) override;
     void nvsRestoreExtremums(const char* nvs_space) override;
   protected:
