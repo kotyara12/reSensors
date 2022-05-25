@@ -70,11 +70,6 @@ void DS18x20::registerItemsParameters(paramsGroupHandle_t parent_group)
   };
 }
 
-bool DS18x20::sensorReset()
-{
-  return readPowerSupply() && setResolution(_resolution);
-}
-
 // Dynamically creating internal items on the heap
 bool DS18x20::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,  
   gpio_num_t pin, onewire_addr_t address, int8_t index, DS18x20_RESOLUTION resolution, bool saveScratchPad,
@@ -91,12 +86,14 @@ bool DS18x20::initIntItems(const char* sensorName, const char* topicName, const 
   // Initialize internal items
   if (this->rSensorX1::initSensorItems(filterMode, filterSize)) {
     // Start device
-    if (_address == ONEWIRE_NONE) {
-      return scanDevices(index) && sensorStart();
-    } else {
-      return readROM(true) && sensorStart();
+    if (onewire_reset(_pin)) {
+      if (_address == ONEWIRE_NONE) {
+        return scanDevices(index) && sensorStart();
+      } else {
+        return readROM(true) && sensorStart();
+      };
     };
-  };
+  } else rlog_e(logTAG, "Failed to reset 1-Wire bus");
   return false;
 }
 
@@ -116,26 +113,46 @@ bool DS18x20::initExtItems(const char* sensorName, const char* topicName, const 
   // Assign items
   this->rSensorX1::setSensorItems(item);
   // Start device
-  if (_address == ONEWIRE_NONE) {
-    return scanDevices(index) && sensorStart();
-  } else {
-    return readROM(true) && sensorStart();
+  if (onewire_reset(_pin)) {
+    if (_address == ONEWIRE_NONE) {
+      return scanDevices(index) && sensorStart();
+    } else {
+      return readROM(true) && sensorStart();
+    };
+  } else rlog_e(logTAG, "Failed to reset 1-Wire bus");
+  return false;
+}
+
+sensor_status_t DS18x20::sensorReset()
+{
+  sensor_status_t rslt = readPowerSupply();
+  if (rslt == SENSOR_STATUS_OK) {
+    rslt = setResolution(_resolution);
   };
+  return rslt;
 }
 
 sensor_status_t DS18x20::readRawData()
 {
+  sensor_status_t rslt = SENSOR_STATUS_OK;
   if (!_check_resolution(_resolution)) {
-    getResolution();
+    rslt = getResolution(nullptr);
   };
-  if (startConvert()) {
-    waitForConversion();
-    float value = NAN;
-    if (readTemperature(&value)) {
-      setRawValues(value);
+
+  if (rslt == SENSOR_STATUS_OK) {
+    rslt = startConvert();
+    if (rslt == SENSOR_STATUS_OK) {
+      rslt = waitForConversion();
+      if (rslt == SENSOR_STATUS_OK) {
+        float value = NAN;
+        rslt = readTemperature(&value);
+        if (rslt == SENSOR_STATUS_OK) {
+          rslt = setRawValues(value);
+        };
+      };
     };
   };
-  return _lastStatus;
+  return rslt;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------
@@ -156,12 +173,10 @@ bool DS18x20::addressSelect()
       result = onewire_select(_pin, _address);
     };
     if (!result) {
-      rlog_e(logTAG, "Failed to select sensor");
-      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
+      rlog_e(logTAG, "Sensor [%s]: failed to select sensor", _name);
     };
   } else {
-    rlog_e(logTAG, "Failed to reset 1-Wire bus");
-    setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
+    rlog_e(logTAG, "Sensor [%s]: failed to reset 1-Wire bus on GPIO %d", _name, _pin);
   };
   return result;
 }
@@ -201,7 +216,7 @@ bool DS18x20::readROM(bool storeAddress)
         _address = (onewire_addr_t)rom_code[0];
       };
     } else {
-      rlog_e(logTAG, "Invalid address: %16X");
+      rlog_e(logTAG, "Invalid address: %16X", *rom_code);
     };
   };
   return false;
@@ -241,89 +256,77 @@ bool DS18x20::scanDevices(uint8_t index)
 // --------------------------------------------------- Parasite power ----------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
 
-bool DS18x20::readPowerSupply()
+sensor_status_t DS18x20::readPowerSupply()
 {
   if (addressSelect()) {
     if (onewire_write(_pin, ds18x20_READ_PWRSUPPLY)) {
       int power = onewire_read_bit(_pin);
-      if (power < 0) {
-        rlog_e(logTAG, "Failed to read power supply mode");
-        setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
-      } else {
+      if (power >= 0) {
         _parasitePower = power == 0;
         if (_parasitePower) {
           rlog_i(logTAG, "Parasite power detected for GPIO=%d", _pin);
         } else {
           rlog_i(logTAG, "Normal power detected for GPIO=%d", _pin);
         };
-        return true;
+        return SENSOR_STATUS_OK;
       };
-    } else {
-      rlog_e(logTAG, "Failed to read power supply mode");
-      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
     };
+    rlog_e(logTAG, "Sensor [%s]: failed to read power supply mode", _name);
   };
-  return false;
+  return SENSOR_STATUS_CONN_ERROR;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------
 // ----------------------------------------------------- ScratchPad ------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
 
-bool DS18x20::readScratchpad(uint8_t *buffer)
+sensor_status_t DS18x20::readScratchpad(uint8_t *buffer)
 {
   if (addressSelect()) {
     if (onewire_write(_pin, DS18x20_SCRATCHPAD_READ)) {
       uint8_t crc;
       uint8_t expected_crc; 
-
       for (int i = 0; i < 8; i++)
         buffer[i] = onewire_read(_pin);
       crc = onewire_read(_pin);
       expected_crc = onewire_crc8(buffer, 8);     
-
       if (crc == expected_crc) {
-        return true;
+        return SENSOR_STATUS_OK;
       } else {
-        rlog_e(logTAG, "Failed to read scratchpad: CRC failed "
+        rlog_e(logTAG, "Sensor [%s]: failed to read scratchpad: CRC failed "
           "(temp: %02X %02X, alarm: %02X %02X, config: %02X, reserved: %02X %02X %02X, crc: %02X (expected: %02X))", 
-          buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6], buffer[7], crc, expected_crc);
-        setRawStatus(SENSOR_STATUS_CRC_ERROR, false);
+          _name, buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6], buffer[7], crc, expected_crc);
+        return SENSOR_STATUS_CRC_ERROR;
       };
-    } else {
-      rlog_e(logTAG, "Failed to read scratchpad");
-      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
     };
+    rlog_e(logTAG, "Sensor [%s]: failed to read scratchpad", _name);
   };
-  return false;
+  return SENSOR_STATUS_CONN_ERROR;
 }
 
-bool DS18x20::writeScratchpad(uint8_t *buffer)
+sensor_status_t DS18x20::writeScratchpad(uint8_t *buffer)
 {
   if (addressSelect()) {
     if (onewire_write(_pin, DS18x20_SCRATCHPAD_WRITE)) {
       for (int i = 0; i < 3; i++) {
         if (!onewire_write(_pin, buffer[i+SP_HIGH_ALARM_TEMP])) {
-          rlog_e(logTAG, "Failed to write scratchpad");
-          setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
-          return false;
+          rlog_e(logTAG, "Sensor [%s]: failed to write scratchpad", _name);
+          return SENSOR_STATUS_CONN_ERROR;
         };
       };
       // Autosave scratchpad
       if (_saveScratchPad) {
         return saveScratchpad();
       } else {
-        return true;
+        return SENSOR_STATUS_OK;
       };
-    } else {
-      rlog_e(logTAG, "Failed to write scratchpad");
-      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
     };
+    rlog_e(logTAG, "Sensor [%s]: failed to write scratchpad", _name);
   };
-  return false;
+  return SENSOR_STATUS_CONN_ERROR;
 }
 
-bool DS18x20::saveScratchpad() 
+sensor_status_t DS18x20::saveScratchpad() 
 {
   if (addressSelect()) {
     if (onewire_write(_pin, DS18x20_SCRATCHPAD_COPY)) {
@@ -333,72 +336,76 @@ bool DS18x20::saveScratchpad()
       if (_parasitePower) onewire_power(_pin);
       vTaskDelay(pdMS_TO_TICKS(20));
       if (_parasitePower) onewire_depower(_pin); 
-    } else {
-      rlog_e(logTAG, "Failed to copy scratchpad");
-      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
+      return SENSOR_STATUS_OK;
     };
+    rlog_e(logTAG, "Sensor [%s]: failed to copy scratchpad", _name);
   };
-  return false;
+  return SENSOR_STATUS_CONN_ERROR;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------
 // ------------------------------------------------------ Resolution -----------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
 
-DS18x20_RESOLUTION DS18x20::getResolution() 
+sensor_status_t DS18x20::getResolution(DS18x20_RESOLUTION *resolution) 
 {
   // DS1820 and DS18S20 have no resolution configuration register
 	if (_model == MODEL_DS18S20) {
     _resolution = DS18x20_RESOLUTION_12_BIT;
-		return DS18x20_RESOLUTION_12_BIT;
+    if (resolution) *resolution = _resolution;
+		return SENSOR_STATUS_NOT_SUPPORTED;
   };
 
 	_resolution = DS18x20_RESOLUTION_INVALID;
   uint8_t scratchpad[9];
-	if (readScratchpad(scratchpad)) {
+  sensor_status_t rslt = readScratchpad(scratchpad);
+	if (rslt == SENSOR_STATUS_OK) {
     _resolution = (DS18x20_RESOLUTION)(((scratchpad[SP_CONFIGURATION] >> 5) & 0x03) + (uint8_t)DS18x20_RESOLUTION_9_BIT);
     if (_check_resolution(_resolution)) {
-      rlog_d(logTAG, "Resolution read as %d", _resolution);
+      rlog_d(logTAG, "Sensor [%s]: resolution read as %d", _name, _resolution);
     } else {
       _resolution = DS18x20_RESOLUTION_INVALID;
-      setRawStatus(SENSOR_STATUS_ERROR, false);
-      rlog_e(logTAG, "Invalid resolution read from device: 0x%02x", scratchpad[SP_CONFIGURATION]);
+      rlog_e(logTAG, "Sensor [%s]: invalid resolution read from device: 0x%02x", _name, scratchpad[SP_CONFIGURATION]);
     };
+    if (resolution) *resolution = _resolution;
 	};
-	return _resolution;
+	return rslt;
 }
 
-bool DS18x20::setResolution(DS18x20_RESOLUTION resolution)
+sensor_status_t DS18x20::setResolution(DS18x20_RESOLUTION resolution)
 {
-  bool result = false;
   if (_check_resolution(resolution)) {
     // DS1820 and DS18S20 have no resolution configuration register
     if (_model == MODEL_DS18S20) {
-      return true;
+      return SENSOR_STATUS_NOT_SUPPORTED;
     };
 
     // Read scratchpad up to and including configuration register
     uint8_t scratchpad[9];
-    if (readScratchpad(scratchpad)) {
+    sensor_status_t rslt = readScratchpad(scratchpad);
+    if (rslt == SENSOR_STATUS_OK) {
       // Modify configuration register to set resolution
       scratchpad[SP_CONFIGURATION] = ((((uint8_t)resolution - 1) & 0x03) << 5) | 0x1f;
       // Write bytes 2, 3 and 4 of scratchpad
-      writeScratchpad(scratchpad);
-      // Verify changes
-      _resolution = getResolution();
-      if (_resolution == resolution) {
-        rlog_i(logTAG, "Resolution set to %d bits", (int)_resolution);
-        result = true;
-      } else {
-        // Resolution change failed - update the info resolution with the value read from configuration
-        rlog_w(logTAG, "Resolution consistency lost - refreshed from device: %d", (int)_resolution);
-        result = false;
+      rslt = writeScratchpad(scratchpad);
+      if (rslt == SENSOR_STATUS_OK) {
+        // Verify changes
+        rslt = getResolution(nullptr);
+        if (rslt == SENSOR_STATUS_OK) {
+          if (_resolution == resolution) {
+            rlog_i(logTAG, "Sensor [%s]: resolution set to %d bits", _name, (int)_resolution);
+            return SENSOR_STATUS_OK;
+          } else {
+            // Resolution change failed - update the info resolution with the value read from configuration
+            rlog_w(logTAG, "Sensor [%s]: resolution consistency lost - refreshed from device: %d", _name, (int)_resolution);
+            return SENSOR_STATUS_ERROR;
+          };
+        };
       };
     };
-  } else {
-    rlog_e(logTAG, "Unsupported resolution %d", resolution);
   };
-  return result;
+  rlog_e(logTAG, "Sensor [%s]: unsupported resolution %d", _name, resolution);
+  return SENSOR_STATUS_ERROR;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------
@@ -423,7 +430,7 @@ void DS18x20::waitForDuration()
   };
 }
 
-void DS18x20::waitForDeviceSignal()
+sensor_status_t DS18x20::waitForDeviceSignal()
 {
   // wait for conversion to complete - all devices will pull bus low once complete
   TickType_t max_conversion_ticks = CONVERSION_TIMEOUT_12_BIT / portTICK_PERIOD_MS;
@@ -437,18 +444,24 @@ void DS18x20::waitForDeviceSignal()
   } while (status == 0 && duration_ticks < max_conversion_ticks);
 
   if (duration_ticks >= max_conversion_ticks) {
-    rlog_v(logTAG, "Conversion timed out");
+    rlog_v(logTAG, "Sensor [%s]: conversion timed out", _name);
+    return SENSOR_STATUS_CONN_ERROR;
   };
+
+  return SENSOR_STATUS_OK;
 }
 
-void DS18x20::waitForConversion()
+sensor_status_t DS18x20::waitForConversion()
 {
   if (_parasitePower) {
-    onewire_power(_pin);
-    waitForDuration();
-    onewire_depower(_pin);
+    if (onewire_power(_pin)) {
+      waitForDuration();
+      onewire_depower(_pin);
+      return SENSOR_STATUS_OK;
+    };
+    return SENSOR_STATUS_CONN_ERROR;
   } else {
-    waitForDeviceSignal();
+    return waitForDeviceSignal();
   };
 }
 
@@ -456,31 +469,27 @@ void DS18x20::waitForConversion()
 // --------------------------------------------------- Read temperature --------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
 
-bool DS18x20::startConvert()
+sensor_status_t DS18x20::startConvert()
 {
   if (addressSelect()) {
-    rlog_v(logTAG, "Initiate a temperature measurement...");
     // initiate a temperature measurement
     if (onewire_write(_pin, DS18x20_TEMP_CONVERT)) {
-      return true;
-    } else {
-      rlog_e(logTAG, "Failed to initiate a temperature measurement");
-    }
+      return SENSOR_STATUS_OK;
+    };
+    rlog_e(logTAG, "Sensor [%s]: failed to initiate a temperature measurement", _name);
   };
-  return false;
+  return SENSOR_STATUS_CONN_ERROR;
 }
 
-bool DS18x20::readTemperature(float * value)
+sensor_status_t DS18x20::readTemperature(float * value)
 {
   if (addressSelect()) {
-    rlog_v(logTAG, "Reading temperature...");
     uint8_t scratchpad[9];
-    if (readScratchpad(scratchpad)) {
+    if (readScratchpad(scratchpad) == SENSOR_STATUS_OK) {
       // https://github.com/cpetrich/counterfeit_DS18x20#solution-to-the-85-c-problem
       if (scratchpad[SP_COUNT_REMAIN] == 0x0c && scratchpad[SP_TEMP_MSB] == 0x05 && scratchpad[SP_TEMP_LSB] == 0x50) {
-        rlog_e(logTAG, "Read power-on value (85.0)");
-        setRawStatus(SENSOR_STATUS_ERROR, true);
-        return false;
+        rlog_e(logTAG, "Sensor [%s]: read power-on value (85.0)", _name);
+        return SENSOR_STATUS_ERROR;
       };
 
       rlog_v(logTAG, "Read data: %02X %02X, resolution %02X (%d)", scratchpad[SP_TEMP_LSB], scratchpad[SP_TEMP_MSB], scratchpad[SP_CONFIGURATION], _resolution);
@@ -512,8 +521,8 @@ bool DS18x20::readTemperature(float * value)
         // Convert from raw to Celsius: C = RAW/128
         *value = (float)temp_raw * 0.0078125f; 
       };
-      return true;
+      return SENSOR_STATUS_OK;
     };
   };
-  return false;
+  return SENSOR_STATUS_CONN_ERROR;
 }

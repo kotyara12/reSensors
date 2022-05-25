@@ -1,8 +1,8 @@
 /* 
-   EN: A unified base sensor class used by the sensor libraries.
-   RU: Унифицированный базовый класс сенсора, используемый библиотеками сенсоров.
+   EN: A unified base sensor class used by the sensor libraries
+   RU: Унифицированный базовый класс сенсора, используемый библиотеками сенсоров
    --------------------------
-   (с) 2021 Разживин Александр | Razzhivin Alexander
+   (с) 2021-2022 Разживин Александр | Razzhivin Alexander
    kotyara12@yandex.ru | https://kotyara12.ru | tg: @kotyara1971
 */
 
@@ -17,48 +17,100 @@
 #include "reParams.h"
 #include "reEvents.h"
 
+// -----------------------------------------------------------------------------------------------------------------------
+// ------------------------------------------------ Sensors log messages -------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------
+
 #define RSENSOR_LOG_MSG_INIT_OK                    "Sensor [%s] initialization completed successfully"
 #define RSENSOR_LOG_MSG_NO_INIT                    "Sensor [%s] not initializated"
+#define RSENSOR_LOG_MSG_NO_DATA                    "Sensor [%s]: no new data"
+#define RSENSOR_LOG_MSG_BAD_VALUE                  "Sensor [%s]: incorrect data"
 #define RSENSOR_LOG_MSG_CREATE_ITEM                "Created item \"%s\" for sensor [%s]"
-#define RSENSOR_LOG_MSG_CMD_NOT_SUPPORTED          "Command not supported by sensor [%s]!"
+#define RSENSOR_LOG_MSG_CMD_NOT_SUPPORTED          "Command not supported by sensor [%s]"
 #define RSENSOR_LOG_MSG_WAKEUP_FAILED              "Failed to wakeup sensor [%s]: %d %s!"
-#define RSENSOR_LOG_MSG_SET_MODE_FAILED            "Failed to set mode for sensor [%s]: %d %s!"
-#define RSENSOR_LOG_MSG_CAL_FAILED                 "Failed to load factory calibration data for sensor [%s]!"
-#define RSENSOR_LOG_MSG_CRC_FAILED                 "Failed to check CRC for sensor [%s]!"
-#define RSENSOR_LOG_MSG_SOFT_RESET                 "Sensor [%s] has been reset!"
-#define RSENSOR_LOG_MSG_SOFT_RESET_FAILED          "Soft reset failed: %d %s!"
-#define RSENSOR_LOG_MSG_SOFT_RESET_FAILED_N        "Soft reset [%s] failed: %d %s!"
-#define RSENSOR_LOG_MSG_HEATER_TMPL                "Heater is %s"
-#define RSENSOR_LOG_MSG_HEATER_NAMED               "Sensor [%s]: heater is %s"
+#define RSENSOR_LOG_MSG_CAL_FAILED                 "Failed to load factory calibration data for sensor [%s]"
+#define RSENSOR_LOG_MSG_CRC_FAILED                 "Failed to check CRC for sensor [%s]"
+#define RSENSOR_LOG_MSG_INIT_FAILED                "Failed to initialize sensor [%s]: %d %s"
+
+#define RSENSOR_LOG_MSG_RESET                      "Sensor [%s] has been reset"
+#define RSENSOR_LOG_MSG_RESET_FAILED               "Soft reset [%s] failed: %d %s"
+
+#define RSENSOR_LOG_MSG_SEND_CONFIG                "Sensor [%s]: send configuration"
+
+#define RSENSOR_LOG_MSG_SET_MODE_HEADER            "Sensor [%s]: set mode 0x%.2x"
+#define RSENSOR_LOG_MSG_SET_MODE_OK                "Sensor [%s]: mode 0x%.2x installed"
+#define RSENSOR_LOG_MSG_SET_MODE_UNCONFIRMED       "Sensor [%s]: could not set mode to 0x%.2x"
+#define RSENSOR_LOG_MSG_SET_MODE_FAILED            "Failed to set mode for sensor [%s]: %d %s"
+
+#define RSENSOR_LOG_MSG_SET_RESOLUTION_HEADER      "Sensor [%s]: set resolution 0x%.2x"
+#define RSENSOR_LOG_MSG_SET_RESOLUTION_OK          "Sensor [%s]: resolution 0x%.2x installed"
+#define RSENSOR_LOG_MSG_SET_RESOLUTION_FAILED      "Failed to set resolution for sensor [%s]: %d %s"
+
+#define RSENSOR_LOG_MSG_SEND_MEASURMENT            "Failed to send measurment command for sensor [%s]: %d %s"
+#define RSENSOR_LOG_MSG_READ_HADRWARE_ID           "Failed to read hardware ID from sensor [%s]: %d %s"
+#define RSENSOR_LOG_MSG_READ_HADRWARE_VERSION      "Failed to read hardware version from sensor [%s]: %d %s"
+#define RSENSOR_LOG_MSG_READ_STATUS_FAILED         "Failed to read status from sensor [%s]: %d %s"
+#define RSENSOR_LOG_MSG_READ_MODE_FAILED           "Failed to read mode from sensor [%s]: %d %s"
+#define RSENSOR_LOG_MSG_READ_RESOLUTION_FAILED     "Failed to read resolution from sensor [%s]: %d %s"
+#define RSENSOR_LOG_MSG_READ_DATA_FAILED           "Failed to read data from sensor [%s]: %d %s"
+#define RSENSOR_LOG_MSG_READ_HUMD_FAILED           "Failed to read humidity value from sensor [%s]: %d %s"
+#define RSENSOR_LOG_MSG_READ_TEMP_FAILED           "Failed to read temperature value from sensor [%s]: %d %s"
+#define RSENSOR_LOG_MSG_READ_USER_REGISTER_FAILED  "Failed to read user register from sensor [%s]: %d %s"
+#define RSENSOR_LOG_MSG_WRITE_USER_REGISTER_FAILED "Failed to write user register for sensor [%s]: %d %s"
+
+#define RSENSOR_LOG_MSG_HEATER_STATE               "Sensor [%s]: heater is %s"
 #define RSENSOR_LOG_MSG_HEATER_ON                  "ON"
 #define RSENSOR_LOG_MSG_HEATER_OFF                 "OFF"
-#define RSENSOR_LOG_MSG_HEATER_FAILED              "Heating control failed: %d %s!"
-#define RSENSOR_LOG_MSG_SET_RESOLUTION             "Sensor [%s]: resolution 0x%.2x installed"
-#define RSENSOR_LOG_MSG_SEND_MEASURMENT            "Failed to send measurment command for sensor [%s]: %d %s!"
-#define RSENSOR_LOG_MSG_READ_FAILED                "Failed to read values: %d %s!"
-#define RSENSOR_LOG_MSG_READ_DEVICEID              "Failed to read device information: %d %s!"
-#define RSENSOR_LOG_MSG_READ_DATA_FAILED           "Failed to read data from sensor [%s]: %d %s!"
-#define RSENSOR_LOG_MSG_READ_USER_REGISTER_FAILED  "Failed to read user register for sensor [%s]: %d %s!"
-#define RSENSOR_LOG_MSG_WRITE_USER_REGISTER_FAILED "Failed to write user register for sensor [%s]: %d %s!"
-#define RSENSOR_LOG_MSG_READ_HEAT_REGISTER_FAILED  "Failed to read heater register for sensor [%s]: %d %s!"
-#define RSENSOR_LOG_MSG_WRITE_HEAT_REGISTER_FAILED "Failed to write heater register for sensor [%s]: %d %s!"
-#define RSENSOR_LOG_MSG_READ_HUMD_FAILED           "Failed to read humidity value: %d %s!"
-#define RSENSOR_LOG_MSG_READ_TEMP_FAILED           "Failed to read temperature value: %d %s!"
-#define RSENSOR_LOG_MSG_READ_HUMD_FAILED_NAMED     "Failed to read humidity value from sensor [%s]: %d %s!"
-#define RSENSOR_LOG_MSG_READ_TEMP_FAILED_NAMED     "Failed to read temperature value from sensor [%s]: %d %s!"
-#define RSENSOR_LOG_MSG_BAD_VALUE                  "Failed to read data from sensor [%s]: incorrect data"
+#define RSENSOR_LOG_MSG_HEATER_GET_FAILED          "Failed to read heater status for sensor [%s]: %d %s"
+#define RSENSOR_LOG_MSG_HEATER_SET_FAILED          "Failed to write heater status for sensor [%s]: %d %s"
+#define RSENSOR_LOG_MSG_HEATER_UNCONFIRMED         "Failed to change heater status for sensor [%s]: UNCONFIRMED"
 
-#define LOGI_SENSOR_BOOL(a, msg_ok, msg_failed) if (a) { \
-  rlog_i(logTAG, "%s: %s", _name, msg_ok); \
-} else { \
-  rlog_e(logTAG, "%s: %s", _name, msg_failed); \
-  return false; \
-};
+#define RSENSOR_LOG_MSG_INTERRUPT_STATE            "Sensor [%s]: interrupt is %s"
+#define RSENSOR_LOG_MSG_INTERRUPT_ON               "ENABLED"
+#define RSENSOR_LOG_MSG_INTERRUPT_OFF              "DISABLED"
+#define RSENSOR_LOG_MSG_INTERRUPT_GET_FAILED       "Failed to read interrupt mode from sensor [%s]: %d %s"
+#define RSENSOR_LOG_MSG_INTERRUPT_SET_FAILED       "Failed to write interrupt mode for sensor [%s]: %d %s"
 
-#define CHECK_SENSOR_BOOL(a, msg) if (!(a)) { \
-  rlog_e(logTAG, "%s: %s", _name, msg); \
-  return false; \
-};
+#define RSENSOR_LOG_MSG_THRESHOLD_STATE            "Sensor [%s]: threshold is %s"
+#define RSENSOR_LOG_MSG_THRESHOLD_ON               "ENABLED"
+#define RSENSOR_LOG_MSG_THRESHOLD_OFF              "DISABLED"
+#define RSENSOR_LOG_MSG_THRESHOLD_GET_FAILED       "Failed to read threshold mode from sensor [%s]: %d %s"
+#define RSENSOR_LOG_MSG_THRESHOLD_SET_FAILED       "Failed to write threshold mode for sensor [%s]: %d %s"
+
+// -----------------------------------------------------------------------------------------------------------------------
+// -------------------------------------- Check operation result by sensor_status_t --------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------
+
+// If failed, print msg_failed and exit, returning the status
+#define SENSOR_STATUS_CHECK(a, msg_failed) do { \
+  sensor_status_t res = a; \
+  if (res != SENSOR_STATUS_OK) { \
+    rlog_e(logTAG, msg_failed, _name); \
+    return res; \
+  }; \
+} while (0);
+
+// -----------------------------------------------------------------------------------------------------------------------
+// ----------------------------------------- Check operation result by esp_err_t -----------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------
+
+// If failed, print msg_failed and exit, returning the status
+#define SENSOR_ERR_CHECK(a, msg_failed) do { \
+  esp_err_t err = a; \
+  if (err != ESP_OK) { \
+    rlog_e(logTAG, msg_failed, _name, err, esp_err_to_name(err)); \
+    return convertEspError(err); \
+  }; \
+} while (0);
+
+// If failed, print msg_failed and exit, returning FALSE
+#define SENSOR_ERR_CHECK_BOOL(a, msg_failed) do { \
+  esp_err_t err = a; \
+  if (err != ESP_OK) { \
+    rlog_e(logTAG, msg_failed, _name, err, esp_err_to_name(err)); \
+    return false; \
+  }; \
+} while (0);
 
 #ifdef __cplusplus
 extern "C" {
@@ -74,7 +126,8 @@ typedef enum {
   SENSOR_STATUS_CONN_ERROR    = 4,   // Sensor not connected or communication error
   SENSOR_STATUS_CAL_ERROR     = 5,   // Calibration data not loaded
   SENSOR_STATUS_CRC_ERROR     = 6,   // Checksum error during data transfer
-  SENSOR_STATUS_ERROR         = 7    // Any other error
+  SENSOR_STATUS_BAD_DATA      = 7,   // Bad values (too different from last measured)
+  SENSOR_STATUS_ERROR         = 8    // Any other error
 } sensor_status_t;
 
 typedef enum {
@@ -180,7 +233,9 @@ class rSensorItem {
     bool  setFilterMode(const sensor_filter_t filterMode, const uint16_t filterSize);
     bool  doChangeFilterMode();
     void  setOffsetValue(float offsetValue);
+    void  setValidRange(value_t validMin, value_t validMax);
     void  setRawValue(const value_t rawValue, const time_t rawTime);
+    virtual sensor_status_t checkValue(const value_t rawValue);
     virtual value_t convertValue(const value_t rawValue);
     const char* getName();
     sensor_handle_t getHandle();
@@ -290,9 +345,13 @@ class rSensorItem {
     const char * _fmtStringTimeValue;
     #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
     sensor_data_t _data;
+    value_t _limitMin = 0.0;
+    value_t _limitMax = 0.0;
     paramsGroup_t * _pgItem = nullptr;
     float _offsetValue = 0.0;
     paramsEntryHandle_t _prm_offsetValue = nullptr;
+    float _deltaMax = 0.0;
+    paramsEntryHandle_t _prm_deltaMax = nullptr;
     sensor_filter_t _filterMode = SENSOR_FILTER_RAW;
     paramsEntryHandle_t _prm_filterMode = nullptr;
     uint16_t _filterSize = 0;
@@ -351,7 +410,7 @@ class rSensor {
       const uint32_t minReadInterval = 2000, const uint16_t errorLimit = 0,
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
     bool sensorStart();
-    virtual bool sensorReset() = 0;
+    virtual sensor_status_t sensorReset() = 0;
 
     // Properties
     const char* getName();
@@ -397,8 +456,6 @@ class rSensor {
     char *         _topicPub;
     paramsGroup_t * _pgSensor = nullptr;
 
-    // Sensor status
-    sensor_status_t _lastStatus;
     virtual sensor_status_t readRawData() = 0;
     void setRawStatus(sensor_status_t newStatus, bool forced);
     void setErrorStatus(sensor_status_t newStatus, bool forced);
@@ -427,12 +484,13 @@ class rSensor {
     char* jsonDisplayAndCustomValues();
     #endif // CONFIG_SENSOR_AS_JSON
   private:
-    uint8_t        _eventId = 0;
-    uint32_t       _readInterval;
-    unsigned long  _readLast;
-    sensor_status_t _sendStatus;
-    uint16_t       _errLimit;
-    unsigned long  _errCount;
+    uint8_t         _eventId = 0;
+    uint32_t        _readInterval;
+    unsigned long   _readLast;
+    sensor_status_t _lstStatus;
+    sensor_status_t _errStatus;
+    uint16_t        _errLimit;
+    unsigned long   _errCount;
     cb_status_changed_t _cbOnChangeStatus;
     cb_publish_data_t _cbOnPublishData;
     void postEventStatus(const sensor_status_t oldStatus, const sensor_status_t newStatus);
@@ -472,8 +530,7 @@ class rSensorX1: public rSensor {
     void setSensorItems(rSensorItem* item);
     bool initSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize);
     virtual void createSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize) = 0;
-    bool checkRawValues(const value_t newValue);
-    void setRawValues(const value_t newValue);
+    sensor_status_t setRawValues(const value_t newValue);
     #if CONFIG_SENSOR_DISPLAY_ENABLED
     char* getDisplayValue() override;
     #endif // CONFIG_SENSOR_DISPLAY_ENABLED
@@ -490,7 +547,7 @@ class rSensorStub: public rSensorX1 {
       rSensorItem* item, const uint32_t minReadInterval = 0, const uint16_t errorLimit = 0,
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
     // Sensor reset
-    bool sensorReset() override;
+    sensor_status_t sensorReset() override;
     // Reading data in rSensorItem itself
     virtual sensor_status_t readRawData() override;
   protected:
@@ -544,8 +601,7 @@ class rSensorX2: public rSensor {
     virtual void createSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1,
                                    const sensor_filter_t filterMode2, const uint16_t filterSize2) = 0;
     
-    bool checkRawValues(const value_t newValue1, const value_t newValue2);
-    void setRawValues(const value_t newValue1, const value_t newValue2);
+    sensor_status_t setRawValues(const value_t newValue1, const value_t newValue2);
     #if CONFIG_SENSOR_DISPLAY_ENABLED
     char* getDisplayValue() override;
     #endif // CONFIG_SENSOR_DISPLAY_ENABLED
@@ -630,8 +686,7 @@ class rSensorX3: public rSensor {
     virtual void createSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1,
                                    const sensor_filter_t filterMode2, const uint16_t filterSize2,
                                    const sensor_filter_t filterMode3, const uint16_t filterSize3) = 0;
-    bool checkRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3);
-    void setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3);
+    sensor_status_t setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3);
     #if CONFIG_SENSOR_DISPLAY_ENABLED
     char* getDisplayValue() override;
     #endif // CONFIG_SENSOR_DISPLAY_ENABLED
@@ -706,8 +761,7 @@ class rSensorX4: public rSensor {
                                    const sensor_filter_t filterMode2, const uint16_t filterSize2,
                                    const sensor_filter_t filterMode3, const uint16_t filterSize3,
                                    const sensor_filter_t filterMode4, const uint16_t filterSize4) = 0;
-    bool checkRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4);
-    void setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4);
+    sensor_status_t setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4);
     #if CONFIG_SENSOR_DISPLAY_ENABLED
     char* getDisplayValue() override;
     #endif // CONFIG_SENSOR_DISPLAY_ENABLED
@@ -793,8 +847,7 @@ class rSensorX5: public rSensor {
                                    const sensor_filter_t filterMode3, const uint16_t filterSize3,
                                    const sensor_filter_t filterMode4, const uint16_t filterSize4,
                                    const sensor_filter_t filterMode5, const uint16_t filterSize5) = 0;
-    bool checkRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4, const value_t newValue5);
-    void setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4, const value_t newValue5);
+    sensor_status_t setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4, const value_t newValue5);
     #if CONFIG_SENSOR_DISPLAY_ENABLED
     char* getDisplayValue() override;
     #endif // CONFIG_SENSOR_DISPLAY_ENABLED

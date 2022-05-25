@@ -57,7 +57,7 @@ class DHTxx : public rSensorHT {
       // callbacks
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
 
-    bool sensorReset() override;
+    sensor_status_t sensorReset() override;
   protected:
     sensor_status_t readRawData() override;  
   private:

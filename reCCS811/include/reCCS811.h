@@ -60,7 +60,7 @@ class CCS811 : public rSensorX2 {
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
 
     // Initialize sensor
-    bool sensorReset() override;
+    sensor_status_t sensorReset() override;
 
     // Set mode
     bool setMode(ccs811_mode_t mode);
@@ -94,11 +94,11 @@ class CCS811 : public rSensorX2 {
 
     bool wakeUp();
     bool wakeDown();
-    bool readReg(uint8_t reg, uint8_t *data, uint32_t len);
-    bool writeReg(uint8_t reg, uint8_t *data, uint32_t len);
-    bool checkSensorStatus();
-    bool checkErrorStatus();
-    bool sendMode(ccs811_mode_t mode); 
+    esp_err_t readReg(uint8_t reg, uint8_t *data, uint32_t len);
+    esp_err_t writeReg(uint8_t reg, uint8_t *data, uint32_t len);
+    sensor_status_t checkErrorStatus();
+    sensor_status_t sendMode(ccs811_mode_t mode); 
+    sensor_status_t sensorResetEx(ccs811_mode_t mode);
 
 };
 

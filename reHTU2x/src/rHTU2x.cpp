@@ -51,6 +51,7 @@ HTU2x::HTU2x():rSensorHT()
 {
   _resolution = HTU2X_RES_RH12_TEMP14;
   _compensated = false;
+  _heater = false;
   _deviceType = HTU2X_NULL;
   _serialB = 0;
 }
@@ -95,13 +96,19 @@ bool HTU2x::initExtItems(const char* sensorName, const char* topicName, const bo
 }
 
 // Start device
-bool HTU2x::sensorReset()
+sensor_status_t HTU2x::sensorReset()
 {
-  if (softReset() != SENSOR_STATUS_OK) return false;
-  if (readDeviceID() != SENSOR_STATUS_OK) return false;
-  if (setResolution(_resolution) != SENSOR_STATUS_OK) return false;
-  if (setHeater(false) != SENSOR_STATUS_OK) return false;
-  return true;
+  sensor_status_t ret = softReset();
+  if (ret == SENSOR_STATUS_OK) {
+    ret = readDeviceID();
+    if (ret == SENSOR_STATUS_OK) {
+      ret = setResolution(_resolution);
+      if (ret == SENSOR_STATUS_OK) {
+        ret = setHeater(false);
+      };
+    };
+  };
+  return ret;
 };
 
 // Send command 1 byte
@@ -130,14 +137,10 @@ esp_err_t HTU2x::readU8(uint8_t command, const uint32_t usWaitData, uint8_t* val
  * */
 sensor_status_t HTU2x::softReset()
 {
-  esp_err_t err = sendCommand(HTU2X_SOFT_RESET);
-	if (err != ESP_OK) {
-    rlog_e(logTAG, RSENSOR_LOG_MSG_SOFT_RESET_FAILED_N, _name, err, esp_err_to_name(err));
-    return this->rSensor::setEspError(err, true);
-  };
+  SENSOR_ERR_CHECK(sendCommand(HTU2X_SOFT_RESET), RSENSOR_LOG_MSG_RESET_FAILED);
+  rlog_i(logTAG, RSENSOR_LOG_MSG_RESET, _name);
   vTaskDelay(HTU2X_SOFT_RESET_DELAY / portTICK_RATE_MS);
-  rlog_i(logTAG, RSENSOR_LOG_MSG_SOFT_RESET, _name);
-	return this->rSensor::setEspError(err, true);
+	return SENSOR_STATUS_OK;
 }
 
 /**
@@ -145,22 +148,14 @@ sensor_status_t HTU2x::softReset()
  * */
 sensor_status_t HTU2x::setResolution(HTU2X_RESOLUTION sensorResolution)
 {
+  rlog_i(logTAG, RSENSOR_LOG_MSG_SET_RESOLUTION_HEADER, _name, sensorResolution);
   uint8_t data = 0;
-  esp_err_t err = readU8(HTU2X_USER_REGISTER_READ, 0, &data);
-  if (err != ESP_OK) {
-    rlog_e(logTAG, RSENSOR_LOG_MSG_READ_USER_REGISTER_FAILED, _name, err, esp_err_to_name(err));
-    return this->rSensor::setEspError(err, true);
-  };
+  SENSOR_ERR_CHECK(readU8(HTU2X_USER_REGISTER_READ, 0, &data), RSENSOR_LOG_MSG_READ_RESOLUTION_FAILED);
   data &= 0x7E; // 01111110, clear D7;D0                            
   data |= sensorResolution;            
-  err = sendU8(HTU2X_USER_REGISTER_WRITE, data);
-  if (err != ESP_OK) {
-    rlog_e(logTAG, RSENSOR_LOG_MSG_WRITE_USER_REGISTER_FAILED, _name, err, esp_err_to_name(err));
-    return this->rSensor::setEspError(err, true);
-  };
+  SENSOR_ERR_CHECK(sendU8(HTU2X_USER_REGISTER_WRITE, data), RSENSOR_LOG_MSG_SET_RESOLUTION_FAILED);
   _resolution = sensorResolution;
-  rlog_i(logTAG, RSENSOR_LOG_MSG_SET_RESOLUTION, _name, _resolution);
-	return this->rSensor::setEspError(err, true);
+  return SENSOR_STATUS_OK;
 }
 
 /**
@@ -174,19 +169,18 @@ sensor_status_t HTU2x::setResolution(HTU2X_RESOLUTION sensorResolution)
 sensor_status_t HTU2x::setHeater(const bool heaterMode)
 {
   uint8_t data = 0;
-  esp_err_t err = readU8(HTU2X_USER_REGISTER_READ, 0, &data);
-  if (err != ESP_OK) {
-    rlog_e(logTAG, RSENSOR_LOG_MSG_READ_USER_REGISTER_FAILED, _name, err, esp_err_to_name(err));
-    return this->rSensor::setEspError(err, true);
-  };
+  SENSOR_ERR_CHECK(readU8(HTU2X_USER_REGISTER_READ, 0, &data), RSENSOR_LOG_MSG_HEATER_GET_FAILED);
   heaterMode ? data |= HTU2X_HEATER_ON : data &= HTU2X_HEATER_OFF;
-  err = sendU8(HTU2X_USER_REGISTER_WRITE, data);
-  if (err != ESP_OK) {
-    rlog_e(logTAG, RSENSOR_LOG_MSG_WRITE_USER_REGISTER_FAILED, _name, err, esp_err_to_name(err));
-    return this->rSensor::setEspError(err, true);
+  _heater = data & HTU2X_HEATER_ON;
+  SENSOR_ERR_CHECK(sendU8(HTU2X_USER_REGISTER_WRITE, data), RSENSOR_LOG_MSG_HEATER_SET_FAILED);
+  _heater = data & HTU2X_HEATER_ON;
+  if (_heater == heaterMode) {
+    rlog_i(logTAG, RSENSOR_LOG_MSG_HEATER_STATE, _name, _heater ? RSENSOR_LOG_MSG_HEATER_ON : RSENSOR_LOG_MSG_HEATER_OFF);
+    return SENSOR_STATUS_OK;
+  } else {
+    rlog_i(logTAG, RSENSOR_LOG_MSG_HEATER_UNCONFIRMED, _name);
+    return SENSOR_STATUS_ERROR;
   };
-  rlog_i(logTAG, RSENSOR_LOG_MSG_HEATER_NAMED, _name, heaterMode ? RSENSOR_LOG_MSG_HEATER_ON : RSENSOR_LOG_MSG_HEATER_OFF);
-	return this->rSensor::setEspError(err, true);
 }
 
 /**
@@ -206,20 +200,12 @@ sensor_status_t HTU2x::setHeaterPower(const uint8_t heaterPower)
     return SENSOR_STATUS_NOT_SUPPORTED;
   };
   uint8_t data = 0;
-  esp_err_t err = readU8(HTU2X_HEATER_REGISTER_READ, 0, &data);
-  if (err != ESP_OK) {
-    rlog_e(logTAG, RSENSOR_LOG_MSG_READ_HEAT_REGISTER_FAILED, _name, err, esp_err_to_name(err));
-    return this->rSensor::setEspError(err, true);
-  };
+  SENSOR_ERR_CHECK(readU8(HTU2X_HEATER_REGISTER_READ, 0, &data), RSENSOR_LOG_MSG_HEATER_GET_FAILED);
   data &= 0xF0;  // 11110000, clear D3-D0
-  data |= heaterPower;
-  err = sendU8(HTU2X_HEATER_REGISTER_WRITE, data);
-  if (err != ESP_OK) {
-    rlog_e(logTAG, RSENSOR_LOG_MSG_WRITE_HEAT_REGISTER_FAILED, _name, err, esp_err_to_name(err));
-    return this->rSensor::setEspError(err, true);
-  };
-  rlog_i(logTAG, "Built-in heater power is set to %d", heaterPower);
-	return this->rSensor::setEspError(err, true);
+  data |= (heaterPower & 0x0F);
+  SENSOR_ERR_CHECK(sendU8(HTU2X_HEATER_REGISTER_WRITE, data), RSENSOR_LOG_MSG_HEATER_SET_FAILED);
+  rlog_i(logTAG, "Sensor [%s]: built-in heater power is set to %d", _name, heaterPower & 0x0F);
+	return SENSOR_STATUS_OK;
 }
 
 /**
@@ -235,12 +221,7 @@ sensor_status_t HTU2x::setHeaterPower(const uint8_t heaterPower)
 bool HTU2x::batteryStatus(void)
 {
   uint8_t data = 0;
-  esp_err_t err = readU8(HTU2X_USER_REGISTER_READ, 0, &data);
-  if (err != ESP_OK) {
-    rlog_e(logTAG, RSENSOR_LOG_MSG_READ_USER_REGISTER_FAILED, _name, err, esp_err_to_name(err));
-    this->rSensor::setEspError(err, true);
-    return false;
-  };
+  SENSOR_ERR_CHECK_BOOL(readU8(HTU2X_USER_REGISTER_READ, 0, &data), RSENSOR_LOG_MSG_READ_USER_REGISTER_FAILED);
   data &= 0x40;
   return data == 0x00;
 }
@@ -263,14 +244,10 @@ sensor_status_t HTU2x::readDeviceID(void)
   bool _crcIsBad = false;
   uint8_t cmds[2];
   uint8_t data[6];
-  /* request serialB -> SNAB**, SNB2, SNB1, SNB0 */
+  // request serialB -> SNAB**, SNB2, SNB1, SNB0
   cmds[0] = HTU2X_SERIAL2_READ1;
   cmds[1] = HTU2X_SERIAL2_READ2;
-  esp_err_t err = readI2C(_I2C_num, HTU2X_ADDRESS, cmds, 2, data, 6, 0, HTU2X_TIMEOUT);
-  if (err != ESP_OK) {
-    rlog_e(logTAG, "Failed to read device id from sensor [%s]: %d %s!", _name, err, esp_err_to_name(err));
-    return this->rSensor::setEspError(err, true);
-  };
+  SENSOR_ERR_CHECK(readI2C(_I2C_num, HTU2X_ADDRESS, cmds, 2, data, 6, 0, HTU2X_TIMEOUT), RSENSOR_LOG_MSG_READ_HADRWARE_ID);
   // error handler, checksum verification
   if ((CRC8(0x00, data[0], data[1]) != data[2]) || (CRC8(0x00, data[3], data[4]) != data[5])) {
     // For some reason, CRC8 returns incorrect on some instances. Probably fake sensors
@@ -301,8 +278,7 @@ sensor_status_t HTU2x::readDeviceID(void)
       break;
   };
   // show log
-  rlog_w(logTAG, "Detected sensor %s on bus %d at address 0x%.2X, serial number: 0x%.8x", HTU2X_TYPES[_deviceType], _I2C_num, HTU2X_ADDRESS, _serialB);
-  this->rSensor::setRawStatus(SENSOR_STATUS_OK, true);
+  rlog_i(logTAG, "Detected sensor %s on bus %d at address 0x%.2X, serial number: 0x%.8x", HTU2X_TYPES[_deviceType], _I2C_num, HTU2X_ADDRESS, _serialB);
   return SENSOR_STATUS_OK;
 }
 
@@ -334,6 +310,12 @@ sensor_status_t HTU2x::readRawData()
   uint8_t data[3];
   uint32_t meas_delay;
   esp_err_t err;
+
+  // It is pointless to take measurements while the heater is operating.
+  if (_heater) {
+    rlog_w(logTAG, RSENSOR_LOG_MSG_HEATER_STATE, _name, RSENSOR_LOG_MSG_HEATER_ON);
+    return SENSOR_STATUS_NO_DATA;
+  };
 
   // Request humidity measurement
   cmd = HTU2X_HUMD_MEASURE_NOHOLD;
@@ -370,11 +352,7 @@ sensor_status_t HTU2x::readRawData()
   };
 
   // Read humidity measurement to buffer
-  err = readI2C_CRC8(_I2C_num, HTU2X_ADDRESS, &cmd, 1, data, 3, meas_delay, 0x00, HTU2X_TIMEOUT);
-  if (err != ESP_OK) {
-    rlog_e(logTAG, RSENSOR_LOG_MSG_READ_HUMD_FAILED_NAMED, _name, err, esp_err_to_name(err));
-    return this->rSensor::setEspError(err, false);
-  };
+  SENSOR_ERR_CHECK(readI2C_CRC8(_I2C_num, HTU2X_ADDRESS, &cmd, 1, data, 3, meas_delay, 0x00, HTU2X_TIMEOUT), RSENSOR_LOG_MSG_READ_HUMD_FAILED);
   // Calculate humidity value
   value_t humdValue = 125.0 * (float)(((data[0] << 8) | data[1]) ^ 0x02) / 65536 - 6;
   if (humdValue < 0) humdValue = 0;
@@ -403,19 +381,11 @@ sensor_status_t HTU2x::readRawData()
         break;
     };
     // Read temperature measurement to buffer
-    err = readI2C_CRC8(_I2C_num, HTU2X_ADDRESS, &cmd, 1, data, 3, meas_delay, 0x00, HTU2X_TIMEOUT);
-    if (err != ESP_OK) {
-      rlog_e(logTAG, RSENSOR_LOG_MSG_READ_TEMP_FAILED_NAMED, _name, err, esp_err_to_name(err));
-      return this->rSensor::setEspError(err, false);
-    };
+    SENSOR_ERR_CHECK(readI2C_CRC8(_I2C_num, HTU2X_ADDRESS, &cmd, 1, data, 3, meas_delay, 0x00, HTU2X_TIMEOUT), RSENSOR_LOG_MSG_READ_TEMP_FAILED);
   } else {
     // Read temperature measurement to buffer without checksum
     cmd = SI70xx_TEMP_READ_AFTER_RH_MEASURMENT;
-    err = readI2C(_I2C_num, HTU2X_ADDRESS, &cmd, 1, data, 3, 0, HTU2X_TIMEOUT);
-    if (err != ESP_OK) {
-      rlog_e(logTAG, RSENSOR_LOG_MSG_READ_TEMP_FAILED_NAMED, _name, err, esp_err_to_name(err));
-      return this->rSensor::setEspError(err, false);
-    };
+    SENSOR_ERR_CHECK(readI2C(_I2C_num, HTU2X_ADDRESS, &cmd, 1, data, 3, 0, HTU2X_TIMEOUT), RSENSOR_LOG_MSG_READ_TEMP_FAILED);
   };
   // Calculate temperature value
   value_t tempValue = 175.72 * (float)((data[0] << 8) | data[1]) / 65536 - 46.85;
@@ -427,6 +397,5 @@ sensor_status_t HTU2x::readRawData()
   };
 
   // Store values in sensors
-  this->rSensorX2::setRawValues(humdValue, tempValue);
-  return SENSOR_STATUS_OK;
+  return setRawValues(humdValue, tempValue);
 };

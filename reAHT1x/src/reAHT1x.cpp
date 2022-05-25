@@ -94,10 +94,10 @@ bool AHT1x::initExtItems(const char* sensorName, const char* topicName, const bo
 }
 
 // Start device
-bool AHT1x::sensorReset()
+sensor_status_t AHT1x::sensorReset()
 {
   // Wait for sensor to initialize 
-  if (_lastStatus == SENSOR_STATUS_NO_INIT) {
+  if (getStatus() == SENSOR_STATUS_NO_INIT) {
     if (_sensorType == AHT2X_SENSOR) {
       vTaskDelay(AHT2X_POWER_ON_DELAY / portTICK_PERIOD_MS);
     } else {
@@ -105,9 +105,7 @@ bool AHT1x::sensorReset()
     };
   };
   // Soft reset and set mode
-  if (softReset(_sensorMode) != SENSOR_STATUS_OK) return false;
-
-  return true;
+  return softReset(_sensorMode);
 }
 
 uint8_t AHT1x::readStatus() 
@@ -115,11 +113,10 @@ uint8_t AHT1x::readStatus()
   uint8_t status;
   i2c_cmd_handle_t cmd = prepareI2C(_I2C_addr, false);
   i2c_master_read_byte(cmd, &status, I2C_MASTER_NACK);
-  if (execI2C(_I2C_num, cmd, AHTXX_TIMEOUT) != ESP_OK) {
-    this->rSensor::setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
-    return AHTXX_ERROR;
+  if (execI2C(_I2C_num, cmd, AHTXX_TIMEOUT) == ESP_OK) {
+    return status;
   };
-  return status;
+  return AHTXX_ERROR;
 } 
 
 uint8_t AHT1x::waitBusy(uint32_t delay)
@@ -135,6 +132,7 @@ uint8_t AHT1x::waitBusy(uint32_t delay)
 
 sensor_status_t AHT1x::setMode(const AHT1x_MODE newMode) 
 {
+  rlog_i(logTAG, RSENSOR_LOG_MSG_SET_MODE_HEADER, _name, newMode);
   if (_sensorType == AHT2X_SENSOR) {
     // First command: init sensor
     _rawCmdBuffer[0] = AHT2X_CMD_INIT;
@@ -149,22 +147,15 @@ sensor_status_t AHT1x::setMode(const AHT1x_MODE newMode)
   // Third command: NOP
   _rawCmdBuffer[2] = AHTXX_INIT_CTRL_NOP;
   // Send commands
-  esp_err_t err = writeI2C(_I2C_num, _I2C_addr, _rawCmdBuffer, 3, nullptr, 0, AHTXX_TIMEOUT);
-  if (err != ESP_OK) {
-    rlog_e(logTAG, RSENSOR_LOG_MSG_SET_MODE_FAILED, _name, err, esp_err_to_name(err));
-    return this->rSensor::setEspError(err, true);
-  };
+  SENSOR_ERR_CHECK(writeI2C(_I2C_num, _I2C_addr, _rawCmdBuffer, 3, nullptr, 0, AHTXX_TIMEOUT), RSENSOR_LOG_MSG_SET_MODE_FAILED);
+  _sensorMode = newMode;
   // Wait for a response from the sensor
   waitBusy(AHTXX_CMD_DELAY);
   // Check calibration enable
   if (!(readStatus() & AHTXX_STATUS_CTRL_CAL_ON)) {
     rlog_e(logTAG, RSENSOR_LOG_MSG_CAL_FAILED, _name);
-    this->rSensor::setRawStatus(SENSOR_STATUS_CAL_ERROR, false);
     return SENSOR_STATUS_CAL_ERROR;
   };
-  _sensorMode = newMode;
-  this->rSensor::setRawStatus(SENSOR_STATUS_OK, true);
-  rlog_i(logTAG, "For sensor [%s] has been set mode 0x%.2X", _name, newMode);
   return SENSOR_STATUS_OK;
 }
 
@@ -172,14 +163,10 @@ sensor_status_t AHT1x::softReset(const AHT1x_MODE sensorMode)
 {
   // Send reset command
   _rawCmdBuffer[0] = AHTXX_CMD_SOFTRESET;
-  esp_err_t err = writeI2C(_I2C_num, _I2C_addr, _rawCmdBuffer, 1, nullptr, 0, AHTXX_TIMEOUT);
-	if (err != ESP_OK) {
-    rlog_e(logTAG, RSENSOR_LOG_MSG_SOFT_RESET_FAILED_N, _name, err, esp_err_to_name(err));
-    return this->rSensor::setEspError(err, true);
-  };
+  SENSOR_ERR_CHECK(writeI2C(_I2C_num, _I2C_addr, _rawCmdBuffer, 1, nullptr, 0, AHTXX_TIMEOUT), RSENSOR_LOG_MSG_RESET_FAILED);
+  rlog_i(logTAG, RSENSOR_LOG_MSG_RESET, _name);
   // Wait for sensor to initialize 
   vTaskDelay(AHTXX_SOFT_RESET_DELAY / portTICK_RATE_MS);
-  rlog_i(logTAG, RSENSOR_LOG_MSG_SOFT_RESET, _name);
   // Set operation mode
   return setMode(_sensorMode);
 }
@@ -207,21 +194,16 @@ bool AHT1x::checkCRC8()
   return true;
 }
 
-sensor_status_t AHT1x::readRawDataEx()
+sensor_status_t AHT1x::readRawData()
 {
   uint32_t hData, tData;
   float hValue, tValue;
-  esp_err_t err = ESP_OK;
 
   // Send measurment command
   _rawCmdBuffer[0] = AHTXX_CMD_MEASURMENT;
   _rawCmdBuffer[1] = AHTXX_START_MEASUREMENT_CTRL;
   _rawCmdBuffer[2] = AHTXX_MEASUREMENT_CTRL_NOP;
-  err = writeI2C(_I2C_num, _I2C_addr, _rawCmdBuffer, 3, nullptr, 0, AHTXX_TIMEOUT);
-	if (err != ESP_OK) {
-    rlog_e(logTAG, RSENSOR_LOG_MSG_SEND_MEASURMENT, _name, err, esp_err_to_name(err));
-    return this->rSensor::convertEspError(err);
-  };
+  SENSOR_ERR_CHECK(writeI2C(_I2C_num, _I2C_addr, _rawCmdBuffer, 3, nullptr, 0, AHTXX_TIMEOUT), RSENSOR_LOG_MSG_SEND_MEASURMENT);
   
   // Measurement delay
   uint8_t status = waitBusy(AHTXX_MEASURMENT_DELAY);
@@ -235,14 +217,10 @@ sensor_status_t AHT1x::readRawDataEx()
     // Read data from sensor
     if (_sensorType == AHT2X_SENSOR) {
       // Read 7-bytes from sensor {status, RH, RH, RH+T, T, T, CRC}, CRC for AHT2x only
-      err = readI2C(_I2C_num, _I2C_addr, nullptr, 0, _rawDataBuffer, 7, 0, AHTXX_TIMEOUT);
+      SENSOR_ERR_CHECK(readI2C(_I2C_num, _I2C_addr, nullptr, 0, _rawDataBuffer, 7, 0, AHTXX_TIMEOUT), RSENSOR_LOG_MSG_READ_DATA_FAILED);
     } else {
       // Read 6-bytes from sensor {status, RH, RH, RH+T, T, T}
-      err = readI2C(_I2C_num, _I2C_addr, nullptr, 0, _rawDataBuffer, 6, 0, AHTXX_TIMEOUT);
-    };
-    if (err != ESP_OK) {
-      rlog_e(logTAG, RSENSOR_LOG_MSG_READ_DATA_FAILED, _name, err, esp_err_to_name(err));
-      return this->rSensor::convertEspError(err);
+      SENSOR_ERR_CHECK(readI2C(_I2C_num, _I2C_addr, nullptr, 0, _rawDataBuffer, 6, 0, AHTXX_TIMEOUT), RSENSOR_LOG_MSG_READ_DATA_FAILED);
     };
 
     // Check CRC8
@@ -261,26 +239,14 @@ sensor_status_t AHT1x::readRawDataEx()
     // Check values
     if ((_sensorType != AHT2X_SENSOR) && ((hData == 0x0) || (tData = 0x0))) {
       rlog_e(logTAG, RSENSOR_LOG_MSG_BAD_VALUE, _name);
-      return SENSOR_STATUS_NO_DATA;
+      return SENSOR_STATUS_BAD_DATA;
     };
     
     // Set raw values
-    this->rSensorX2::setRawValues(hValue, tValue);
-    return SENSOR_STATUS_OK;
+    return setRawValues(hValue, tValue);
   };
   return SENSOR_STATUS_ERROR;
 }
 
-sensor_status_t AHT1x::readRawData()
-{
-  sensor_status_t statusRead = readRawDataEx();
-  if (statusRead != SENSOR_STATUS_OK) {
-    generalCallResetI2C(_I2C_num);
-    sensorReset();
-    statusRead = readRawDataEx();
-  };
-  this->rSensor::setRawStatus(statusRead, false);
-  return statusRead;
-}
 
 

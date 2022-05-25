@@ -94,6 +94,22 @@ static const char* logTAG = "CCS811";
 #define CCS811_ALG_DATA_RAW_HB     6
 #define CCS811_ALG_DATA_RAW_LB     7
 
+#define CCS811_EXEC(a, msg_failed) if (wakeUp()) { \
+  esp_err_t err = a; \
+  if (err == ESP_OK) { \
+    setRawStatus(SENSOR_STATUS_OK, false); \
+    wakeDown(); \
+  } else { \
+    setEspError(err, false); \
+    wakeDown(); \
+    rlog_e(logTAG, msg_failed, _name, err, esp_err_to_name(err)); \
+    return false; \
+  }; \
+} else { \
+  setRawStatus(SENSOR_STATUS_ERROR, false); \
+  return false; \
+}; 
+
 CCS811::CCS811():rSensorX2()
 {
   _I2C_num = 0;
@@ -239,136 +255,124 @@ char* CCS811::getDisplayValue()
 /**
  * I2C
  * */
-bool CCS811::readReg(uint8_t reg, uint8_t *data, uint32_t len)
+esp_err_t CCS811::readReg(uint8_t reg, uint8_t *data, uint32_t len)
 {
-  esp_err_t err = readI2C(_I2C_num, _I2C_address, &reg, 1, data, len, 0, CCS811_I2C_TIMEOUT);
-  if (err != ESP_OK) {
-    setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
-    return false;
-  };
-  return true;
+  return readI2C(_I2C_num, _I2C_address, &reg, 1, data, len, 0, CCS811_I2C_TIMEOUT);
 }
 
-bool CCS811::writeReg(uint8_t reg, uint8_t *data, uint32_t len)
+esp_err_t CCS811::writeReg(uint8_t reg, uint8_t *data, uint32_t len)
 {
-  esp_err_t err = writeI2C(_I2C_num, _I2C_address, &reg, 1, data, len, CCS811_I2C_TIMEOUT);
-  if (err != ESP_OK) {
-    setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
-    return false;
-  };
-  return true;
+  return writeI2C(_I2C_num, _I2C_address, &reg, 1, data, len, CCS811_I2C_TIMEOUT);
 }
 
 /**
  * Start device
  * */
-bool CCS811::sensorReset()
+sensor_status_t CCS811::sendMode(ccs811_mode_t mode) 
 {
-  // Init wakeup GPIO
-  if (_wakePin != GPIO_NUM_NC) {
-    gpio_pad_select_gpio(_wakePin);
-    CHECK_SENSOR_BOOL(gpio_set_direction(_wakePin, GPIO_MODE_OUTPUT), "failed to set wakeup GPIO mode");
-  };
-
-  if (wakeUp()) {
-    // Invoke a SW reset (bring CCS811 in a know state)
-    const static uint8_t sw_reset[4] = { 0x11, 0xe5, 0x72, 0x8a };
-    LOGI_SENSOR_BOOL(writeReg(CCS811_REG_SW_RESET, (uint8_t *)sw_reset, 4), "sensor reset", "could not reset the sensor");
-    // Wait 100 ms after the reset
-    vTaskDelay(pdMS_TO_TICKS(CCS811_WAIT_RESET_MS));
-    
-    // Check that HW_ID is 0x81
-    uint8_t hw_id;
-    uint8_t hw_version;
-    uint8_t boot_version;
-    uint16_t app_version;
-    uint8_t status;
-    CHECK_SENSOR_BOOL(readReg(CCS811_REG_HW_ID, &hw_id, 1), "failed to read hardware ID");
-    if (hw_id != 0x81) {
-      rlog_e(logTAG, "Wrong hardware ID %02x, should be 0x81", hw_id);
-      setRawStatus(SENSOR_STATUS_ERROR, true);
-      return false;
-    };
-
-    // Check that HW_VERSION is 0x1X
-    CHECK_SENSOR_BOOL(readReg(CCS811_REG_HW_VER, &hw_version, 1), "failed to read hardware version");
-    if ((hw_version & 0xF0) != 0x10) {
-      rlog_w(logTAG, "Wrong hardware version %02x", hw_version);
-      setRawStatus(SENSOR_STATUS_ERROR, true);
-      return false;
-    };
-
-    // Check status (after reset, CCS811 should be in boot mode with valid app)
-    CHECK_SENSOR_BOOL(readReg(CCS811_REG_STATUS, &status, 1), "failed to read status");
-    if (!(status & CCS811_STATUS_APP_VALID)) {
-      rlog_e(logTAG, "Sensor is in boot mode, but has no valid application");
-      setRawStatus(SENSOR_STATUS_ERROR, true);
-      return false;
-    };
-
-    // Read the application version
-    CHECK_SENSOR_BOOL(readReg(CCS811_REG_FW_BOOT_VER, &boot_version, 1), "failed to read application boot version");
-    CHECK_SENSOR_BOOL(readReg(CCS811_REG_FW_APP_VER, (uint8_t*)&app_version, 2), "failed to read application version");
-    rlog_i(logTAG, "Found CSS811, hardware version: %02x, firmware boot version: %02x, firmware app version: %04x", 
-      hw_version, boot_version, app_version);
-
-    // If the application is not running, you need to start it
-    if (!(status & CCS811_STATUS_FW_MODE)) {
-      // Switch CCS811 from boot mode into app mode
-      CHECK_SENSOR_BOOL(writeReg(CCS811_REG_APP_START, nullptr, 0), "could not start application");
-      // Wait 100 ms after starting the app
-      vTaskDelay(pdMS_TO_TICKS(CCS811_WAIT_APPSTART_MS));
-      // Get the status to check whether sensor switched to application mode
-      CHECK_SENSOR_BOOL(readReg(CCS811_REG_STATUS, &status, 1), "failed to read status");
-      if ((status & CCS811_STATUS_FW_MODE)) {
-        rlog_i(logTAG, "Application started");
-      } else {
-        rlog_e(logTAG, "Could not start application, invalid status 0x%02x.", status);
-        setRawStatus(SENSOR_STATUS_ERROR, true);
-        return false;
-      };
-    };
-
-    // Set measurement mode
-    bool retMode = sendMode(_mode);
-
-    wakeDown();
-    return retMode;
-  };
-  return false;
-}
-
-bool CCS811::sendMode(ccs811_mode_t mode) 
-{
-  rlog_i(logTAG, "Set measurement mode to %d", mode);
+  rlog_i(logTAG, RSENSOR_LOG_MSG_SET_MODE_HEADER, _name, mode);
   uint8_t reg;
   // Read measurement mode register value
-  CHECK_SENSOR_BOOL(readReg(CCS811_REG_MEAS_MODE, &reg, 1), "failed to read current measurement mode");
+  SENSOR_ERR_CHECK(readReg(CCS811_REG_MEAS_MODE, &reg, 1), RSENSOR_LOG_MSG_READ_MODE_FAILED);
   // Clear mode bits (4-6) // 1xxx1111 
   reg = reg & 0x8F; 
   // Set new bits
   reg = reg | (uint8_t)mode << 4;
   // Write back measurement mode register
-  CHECK_SENSOR_BOOL(writeReg(CCS811_REG_MEAS_MODE, &reg, 1), "failed to write measurement mode");
+  SENSOR_ERR_CHECK(writeReg(CCS811_REG_MEAS_MODE, &reg, 1), RSENSOR_LOG_MSG_SET_MODE_FAILED);
   // Check whether setting measurement mode were succesfull
   vTaskDelay(pdMS_TO_TICKS(CCS811_WAIT_MODE_MS));
-  CHECK_SENSOR_BOOL(readReg(CCS811_REG_MEAS_MODE, &reg, 1), "failed to check measurement mode");
+  SENSOR_ERR_CHECK(readReg(CCS811_REG_MEAS_MODE, &reg, 1), RSENSOR_LOG_MSG_READ_MODE_FAILED);
   if (((reg & 0x70) >> 4) == mode) {
     _mode = mode;
-    setRawStatus(SENSOR_STATUS_OK, true);
-    return true;
+    return SENSOR_STATUS_OK;
   } else {
-    rlog_e(logTAG, "Could not set measurement mode to %d", mode);
-    setRawStatus(SENSOR_STATUS_ERROR, true);
-    return false;
+    rlog_e(logTAG, RSENSOR_LOG_MSG_SET_MODE_UNCONFIRMED, _name, mode);
+    return SENSOR_STATUS_ERROR;
   };
+}
+
+sensor_status_t CCS811::sensorResetEx(ccs811_mode_t mode)
+{
+  // Invoke a SW reset (bring CCS811 in a know state)
+  const static uint8_t sw_reset[4] = { 0x11, 0xe5, 0x72, 0x8a };
+  SENSOR_ERR_CHECK(writeReg(CCS811_REG_SW_RESET, (uint8_t *)sw_reset, 4), RSENSOR_LOG_MSG_RESET_FAILED);
+  rlog_i(logTAG, RSENSOR_LOG_MSG_RESET, _name);
+  // Wait 100 ms after the reset
+  vTaskDelay(pdMS_TO_TICKS(CCS811_WAIT_RESET_MS));
+  
+  // Check that HW_ID is 0x81
+  uint8_t hw_id;
+  uint8_t hw_version;
+  uint8_t boot_version;
+  uint16_t app_version;
+  uint8_t status;
+  SENSOR_ERR_CHECK(readReg(CCS811_REG_HW_ID, &hw_id, 1), RSENSOR_LOG_MSG_READ_HADRWARE_ID);
+  if (hw_id != 0x81) {
+    rlog_e(logTAG, "Wrong hardware ID %02x, should be 0x81", hw_id);
+    return SENSOR_STATUS_ERROR;
+  };
+
+  // Check that HW_VERSION is 0x1X
+  SENSOR_ERR_CHECK(readReg(CCS811_REG_HW_VER, &hw_version, 1), RSENSOR_LOG_MSG_READ_HADRWARE_VERSION);
+  if ((hw_version & 0xF0) != 0x10) {
+    rlog_w(logTAG, "Wrong hardware version %02x", hw_version);
+    return SENSOR_STATUS_ERROR;
+  };
+
+  // Check status (after reset, CCS811 should be in boot mode with valid app)
+  SENSOR_ERR_CHECK(readReg(CCS811_REG_STATUS, &status, 1), RSENSOR_LOG_MSG_READ_STATUS_FAILED);
+  if (!(status & CCS811_STATUS_APP_VALID)) {
+    rlog_e(logTAG, "Sensor is in boot mode, but has no valid application");
+    return SENSOR_STATUS_ERROR;
+  };
+
+  // Read the application version
+  SENSOR_ERR_CHECK(readReg(CCS811_REG_FW_BOOT_VER, &boot_version, 1), "Failed to read application boot version from sensor [%s]: %d %s");
+  SENSOR_ERR_CHECK(readReg(CCS811_REG_FW_APP_VER, (uint8_t*)&app_version, 2), "Failed to read application version from sensor [%s]: %d %s");
+  rlog_i(logTAG, "Found CSS811, hardware version: %02x, firmware boot version: %02x, firmware app version: %04x", 
+    hw_version, boot_version, app_version);
+
+  // If the application is not running, you need to start it
+  if (!(status & CCS811_STATUS_FW_MODE)) {
+    // Switch CCS811 from boot mode into app mode
+    SENSOR_ERR_CHECK(writeReg(CCS811_REG_APP_START, nullptr, 0), "Could not start application on [%s]: %d %s");
+    // Wait 100 ms after starting the app
+    vTaskDelay(pdMS_TO_TICKS(CCS811_WAIT_APPSTART_MS));
+    // Get the status to check whether sensor switched to application mode
+    SENSOR_ERR_CHECK(readReg(CCS811_REG_STATUS, &status, 1), RSENSOR_LOG_MSG_READ_STATUS_FAILED);
+    if ((status & CCS811_STATUS_FW_MODE)) {
+      rlog_i(logTAG, "Application started");
+    } else {
+      rlog_e(logTAG, "Could not start application, invalid status 0x%02x.", status);
+      return SENSOR_STATUS_ERROR;
+    };
+  };
+
+  return sendMode(mode);
 }
 
 bool CCS811::setMode(ccs811_mode_t mode) 
 {
   bool ret = false;
   if (wakeUp()) {
-    ret = sendMode(mode);
+    ret = (sendMode(mode) == SENSOR_STATUS_OK);
+    wakeDown();
+  };
+  return ret;
+}
+
+sensor_status_t CCS811::sensorReset()
+{
+  // Init wakeup GPIO
+  if (_wakePin != GPIO_NUM_NC) {
+    gpio_pad_select_gpio(_wakePin);
+    SENSOR_ERR_CHECK(gpio_set_direction(_wakePin, GPIO_MODE_OUTPUT), "Failed to set wakeup GPIO mode for sensor [%s]: %d %s");
+  };
+
+  sensor_status_t ret = SENSOR_STATUS_ERROR;
+  if (wakeUp()) {
+    ret = sensorResetEx(_mode);
     wakeDown();
   };
   return ret;
@@ -379,29 +383,19 @@ bool CCS811::setMode(ccs811_mode_t mode)
  * */
 bool CCS811::getBaseline(uint16_t *baseline)
 {
-  if (wakeUp()) {
-    uint8_t data[2];
-    CHECK_SENSOR_BOOL(readReg(CCS811_REG_BASELINE, data, 2), "failed to read baseline");
-    *baseline = (uint16_t) (data[0]) << 8 | data[1];
-    rlog_i(logTAG, "Read baseline: 0x%04X", *baseline);
-
-    wakeDown();
-    return true;
-  };
-  return false;
+  uint8_t data[2] = {0, 0};
+  CCS811_EXEC(readReg(CCS811_REG_BASELINE, data, 2), "Failed to read baseline from sensor [%s]: %d %s");
+  *baseline = (uint16_t) (data[0]) << 8 | data[1];
+  rlog_i(logTAG, "Sensor [%s]: read baseline = 0x%04X", _name, *baseline);
+  return true;
 }
 
 bool CCS811::setBaseline(uint16_t baseline)
 {
-  rlog_i(logTAG, "Set baseline: 0x%04X", baseline);
-  if (wakeUp()) {
-    uint8_t data[2] = { (uint8_t)(baseline >> 8), (uint8_t)(baseline & 0xff) };
-    CHECK_SENSOR_BOOL(writeReg(CCS811_REG_BASELINE, data, 2), "failed to write baseline");
-    
-    wakeDown();
-    return true;
-  };
-  return false;
+  uint8_t data[2] = { (uint8_t)(baseline >> 8), (uint8_t)(baseline & 0xff) };
+  CCS811_EXEC(writeReg(CCS811_REG_BASELINE, data, 2), "Failed to write baseline for sensor [%s]: %d %s");
+  rlog_i(logTAG, "Sensor [%s]: set baseline: 0x%04X", _name, baseline);
+  return true;
 }
 
 /**
@@ -410,19 +404,15 @@ bool CCS811::setBaseline(uint16_t baseline)
 bool CCS811::setEnvironmentalData(float temperature, float humidity)
 {
   if ((_mode != CCS811_MODE_IDLE) && !isnan(temperature) && !isnan(humidity)) {
-    rlog_i(logTAG, "Set environmental data to sensor [ %s ]", _name);
-    if (wakeUp()) {
-      uint16_t hum_conv = humidity * 512.0f + 0.5f;
-      uint16_t temp_conv = (temperature + 25.0f) * 512.0f + 0.5f;
-      uint8_t data[4] = {
-        (uint8_t)((hum_conv >> 8) & 0xFF), (uint8_t)(hum_conv & 0xFF),
-        (uint8_t)((temp_conv >> 8) & 0xFF), (uint8_t)(temp_conv & 0xFF)
-      };
-      CHECK_SENSOR_BOOL(writeReg(CCS811_REG_ENV_DATA, data, 4), "failed to write environmental data");
-      
-      wakeDown();
-      return true;
+    rlog_i(logTAG, "Send environmental data to sensor [ %s ]", _name);
+    uint16_t hum_conv = humidity * 512.0f + 0.5f;
+    uint16_t temp_conv = (temperature + 25.0f) * 512.0f + 0.5f;
+    uint8_t data[4] = {
+      (uint8_t)((hum_conv >> 8) & 0xFF), (uint8_t)(hum_conv & 0xFF),
+      (uint8_t)((temp_conv >> 8) & 0xFF), (uint8_t)(temp_conv & 0xFF)
     };
+    CCS811_EXEC(writeReg(CCS811_REG_ENV_DATA, data, 4), "Failed to write environmental data for sensor [%s]: %d %s");
+    return true;
   };
   return false;
 }
@@ -432,65 +422,61 @@ bool CCS811::setEnvironmentalData(float temperature, float humidity)
  * */
 bool CCS811::getNtcResistance(uint32_t r_ref, uint32_t *res)
 {
-  if (wakeUp()) {
-    uint8_t data[4];
-    CHECK_SENSOR_BOOL(readReg(CCS811_REG_NTC, data, 4), "failed to read NTC register");
-    // Calculation from application note ams AN000372
-    uint16_t v_ref = (uint16_t) (data[0]) << 8 | data[1];
-    uint16_t v_ntc = (uint16_t) (data[2]) << 8 | data[3];
-    *res = (v_ntc * r_ref / v_ref);
-    
-    wakeDown();
-    return true;
-  };
-  return false;
+  uint8_t data[4] = {0, 0, 0, 0};
+  CCS811_EXEC(readReg(CCS811_REG_NTC, data, 4), "Failed to read NTC register from sensor [%s]: %d %s");
+  // Calculation from application note ams AN000372
+  uint16_t v_ref = (uint16_t) (data[0]) << 8 | data[1];
+  uint16_t v_ntc = (uint16_t) (data[2]) << 8 | data[3];
+  *res = (v_ntc * r_ref / v_ref);
+  return true;
 }
 
 // Error handling
-bool CCS811::checkErrorStatus()
+sensor_status_t CCS811::checkErrorStatus()
 {
   uint8_t status;
   uint8_t err_reg;
   // Check the status register
-  if (readReg(CCS811_REG_STATUS, &status, 1)) {
-    if (!(status & CCS811_STATUS_ERROR)) {
-      // Everything is fine
-      return true;
+  SENSOR_ERR_CHECK(readReg(CCS811_REG_STATUS, &status, 1), RSENSOR_LOG_MSG_READ_STATUS_FAILED);
+  if (!(status & CCS811_STATUS_ERROR)) {
+    // Everything is fine
+    return SENSOR_STATUS_OK;
+  };
+  // Check the error register
+  if (readReg(CCS811_REG_ERROR_ID, &err_reg, 1)) {
+    if (err_reg & CCS811_ERR_WRITE_REG_INV) {
+      rlog_e(logTAG, "Sensor [%s]: received an invalid register for write", _name);
+      return SENSOR_STATUS_ERROR;
     };
-    // Check the error register
-    if (readReg(CCS811_REG_ERROR_ID, &err_reg, 1)) {
-      if (err_reg & CCS811_ERR_WRITE_REG_INV) {
-        rlog_e(logTAG, "Received an invalid register for write");
-        setRawStatus(SENSOR_STATUS_NOT_SUPPORTED, true);
-      };
-      if (err_reg & CCS811_ERR_READ_REG_INV) {
-        rlog_e(logTAG, "Received an invalid register for read");
-        setRawStatus(SENSOR_STATUS_NOT_SUPPORTED, true);
-      };
-      if (err_reg & CCS811_ERR_MEASMODE_INV) {
-        rlog_e(logTAG, "Received an invalid measurement mode request");
-        setRawStatus(SENSOR_STATUS_NOT_SUPPORTED, true);
-      };
-      if (err_reg & CCS811_ERR_MAX_RESISTANCE) {
-        rlog_e(logTAG, "Sensor resistance measurement has reached or exceeded the maximum range");
-        setRawStatus(SENSOR_STATUS_CAL_ERROR, true);
-      };
-      if (err_reg & CCS811_ERR_HEATER_FAULT) {
-        rlog_e(logTAG, "Heater current not in range");
-        setRawStatus(SENSOR_STATUS_CAL_ERROR, true);
-      }
-      if (err_reg & CCS811_ERR_HEATER_SUPPLY) {
-        rlog_e(logTAG, "Heater voltage is not being applied correctly");
-        setRawStatus(SENSOR_STATUS_CAL_ERROR, true);
-      };
+    if (err_reg & CCS811_ERR_READ_REG_INV) {
+      rlog_e(logTAG, "Sensor [%s]: received an invalid register for read", _name);
+      return SENSOR_STATUS_ERROR;
+    };
+    if (err_reg & CCS811_ERR_MEASMODE_INV) {
+      rlog_e(logTAG, "Sensor [%s]: received an invalid measurement mode request", _name);
+      return SENSOR_STATUS_ERROR;
+    };
+    if (err_reg & CCS811_ERR_MAX_RESISTANCE) {
+      rlog_e(logTAG, "Sensor [%s]: sensor resistance measurement has reached or exceeded the maximum range", _name);
+      return SENSOR_STATUS_CAL_ERROR;
+    };
+    if (err_reg & CCS811_ERR_HEATER_FAULT) {
+      rlog_e(logTAG, "Sensor [%s]: heater current not in range", _name);
+      return SENSOR_STATUS_CAL_ERROR;
+    }
+    if (err_reg & CCS811_ERR_HEATER_SUPPLY) {
+      rlog_e(logTAG, "Sensor [%s]: heater voltage is not being applied correctly", _name);
+      return SENSOR_STATUS_CAL_ERROR;
     };
   };
-  return false;
+  rlog_e(logTAG, "Sensor [%s]: unknown error", _name);
+  return SENSOR_STATUS_ERROR;
 }
 
 /**
  * Reading values from sensor
  * */
+/*
 sensor_status_t CCS811::readRawData()
 {
   // Check mode
@@ -536,27 +522,63 @@ sensor_status_t CCS811::readRawData()
   };
   return _lastStatus; 
 }
+*/
+sensor_status_t CCS811::readRawData()
+{
+  // Check mode
+  if (_mode == CCS811_MODE_IDLE) {
+    rlog_e(logTAG, "Sensor [%s] is in idle mode and not performing measurements", _name);
+    return SENSOR_STATUS_NO_DATA; 
+  };
+  if (_mode == CCS811_MODE_250MS) {
+    rlog_e(logTAG, "Sensor [%s] is in constant power mode, only raw data are available every 250ms", _name);
+    return SENSOR_STATUS_NOT_SUPPORTED; 
+  };
+  
+  // Wake up sensor
+  sensor_status_t ret = SENSOR_STATUS_ERROR;
+  if (wakeUp()) {
+    uint8_t data[8];
+    ret = convertEspError(readReg(CCS811_REG_ALG_RESULT_DATA, data, 8));
+    if (ret == SENSOR_STATUS_OK) {
+      // Check for errors
+      if (data[CCS811_ALG_DATA_STATUS] & CCS811_STATUS_ERROR) {
+        ret = checkErrorStatus();
+      };
+      // Check whether new data are ready, if not, latest values are read from sensor
+      if (ret == SENSOR_STATUS_OK) {
+        if (data[CCS811_ALG_DATA_STATUS] & CCS811_STATUS_DATA_RDY) {
+          // Set data
+          uint16_t iaq_tvoc = data[CCS811_ALG_DATA_TVOC_HB] << 8 | data[CCS811_ALG_DATA_TVOC_LB];
+          uint16_t iaq_eco2 = data[CCS811_ALG_DATA_ECO2_HB] << 8 | data[CCS811_ALG_DATA_ECO2_LB];
+          ret = setRawValues((value_t)iaq_tvoc, (value_t)iaq_eco2);
+        } else {
+          rlog_w(logTAG, RSENSOR_LOG_MSG_NO_DATA, _name);
+          ret = SENSOR_STATUS_NO_DATA;
+        };
+      };
+    };
+    wakeDown();
+  };
+  return ret; 
+}
 
 /**
  * eCO2 interrupt
  * */
 bool CCS811::enableInterrupt(bool enabled)
 {
-  if (wakeUp()) {
-    uint8_t reg;
-    // Read measurement mode register value
-    CHECK_SENSOR_BOOL(readReg(CCS811_REG_MEAS_MODE, &reg, 1), "failed to read interrupt mode");
-    // Clear interrupt and threshold bits (2-3) // 1111xx11 
-    reg = reg & 0xF3; 
-    // Set new bits (threshold DISABLED!)
-    reg = reg | enabled << 3;
-    // Write back measurement mode register
-    CHECK_SENSOR_BOOL(writeReg(CCS811_REG_MEAS_MODE, &reg, 1), "failed to write interrupt mode");
-    
-    wakeDown();
-    return true;
-  };
-  return false;
+  uint8_t reg;
+  // Read measurement mode register value
+  CCS811_EXEC(readReg(CCS811_REG_MEAS_MODE, &reg, 1), RSENSOR_LOG_MSG_INTERRUPT_GET_FAILED);
+  // Clear interrupt and threshold bits (2-3) // 1111xx11 
+  reg = reg & 0xF3; 
+  // Set new bits (threshold DISABLED!)
+  reg = reg | enabled << 3;
+  // Write back measurement mode register
+  CCS811_EXEC(writeReg(CCS811_REG_MEAS_MODE, &reg, 1), RSENSOR_LOG_MSG_INTERRUPT_SET_FAILED);
+  rlog_i(logTAG, RSENSOR_LOG_MSG_INTERRUPT_STATE, _name, enabled ? RSENSOR_LOG_MSG_INTERRUPT_ON : RSENSOR_LOG_MSG_INTERRUPT_OFF);
+  return true;
 }
 
 /**
@@ -564,47 +586,37 @@ bool CCS811::enableInterrupt(bool enabled)
  * */
 bool CCS811::enableThreshold(bool enabled) 
 {
-  if (wakeUp()) {
-    uint8_t reg;
-    // Read measurement mode register value
-    CHECK_SENSOR_BOOL(readReg(CCS811_REG_MEAS_MODE, &reg, 1), "failed to read threshold mode");
-    // Clear interrupt and threshold bits (2-3) // 1111xx11 
-    reg = reg & 0xF3; 
-    // Set new bits
-    reg = reg | enabled << 2;
-    reg = reg | enabled << 3;
-    // Write back measurement mode register
-    CHECK_SENSOR_BOOL(writeReg(CCS811_REG_MEAS_MODE, &reg, 1), "failed to write threshold mode");
-    
-    wakeDown();
-    return true;
-  };
-  return false;
+  uint8_t reg;
+  // Read measurement mode register value
+  CCS811_EXEC(readReg(CCS811_REG_MEAS_MODE, &reg, 1), RSENSOR_LOG_MSG_THRESHOLD_GET_FAILED);
+  // Clear interrupt and threshold bits (2-3) // 1111xx11 
+  reg = reg & 0xF3; 
+  // Set new bits
+  reg = reg | enabled << 2;
+  reg = reg | enabled << 3;
+  // Write back measurement mode register
+  CCS811_EXEC(writeReg(CCS811_REG_MEAS_MODE, &reg, 1), RSENSOR_LOG_MSG_THRESHOLD_SET_FAILED);
+  rlog_i(logTAG, RSENSOR_LOG_MSG_THRESHOLD_STATE, _name, enabled ? RSENSOR_LOG_MSG_THRESHOLD_ON : RSENSOR_LOG_MSG_THRESHOLD_OFF);
+  return true;
 }
 
 bool CCS811::setCO2Thresholds(uint16_t low, uint16_t high, uint8_t hysteresis)
 {
-  rlog_i(logTAG, "Set threshold interrupt data: low=%d, high=%d, hysteresis=%d", low, high, hysteresis);
+  rlog_i(logTAG, "Sensor [%s]: set threshold interrupt data: low=%d, high=%d, hysteresis=%d", _name, low, high, hysteresis);
 
   // Check whether interrupt has to be disabled
-  if (!low && !high && !hysteresis) {
-    return enableThreshold(false);
-  };
+  if (!low && !high && !hysteresis) return enableThreshold(false);
 
-  // check parameters
+  // Check parameters
   if (low < CCS811_ECO2_RANGE_MIN || high > CCS811_ECO2_RANGE_MAX || low > high || !hysteresis) {
-    rlog_e(logTAG, "Wrong threshold parameters");
+    rlog_e(logTAG, "Sensor [%s]: wrong threshold parameters");
     enableThreshold(false);
     return false;
   }
 
-  if (wakeUp()) {
-    uint8_t data[5] = { (uint8_t)(low >> 8), (uint8_t)(low & 0xff), (uint8_t)(high >> 8), (uint8_t)(high & 0xff), hysteresis };
-    CHECK_SENSOR_BOOL(writeReg(CCS811_REG_THRESHOLDS, data, 5), "failed to write threshold interrupt data");
-    
-    wakeDown();
-    return true;
-  };
-  return false;
+  // Send threshold parameters and enable threshold
+  uint8_t data[5] = { (uint8_t)(low >> 8), (uint8_t)(low & 0xff), (uint8_t)(high >> 8), (uint8_t)(high & 0xff), hysteresis };
+  CCS811_EXEC(writeReg(CCS811_REG_THRESHOLDS, data, 5), "Failed to write threshold interrupt data for sensor [%s]: %d %s");
+  return enableThreshold(true);
 }
 

@@ -70,7 +70,7 @@ class HTU2x : public rSensorHT {
       // callbacks
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
 
-    bool sensorReset() override;
+    sensor_status_t sensorReset() override;
     sensor_status_t softReset();
     sensor_status_t setResolution(HTU2X_RESOLUTION sensorResolution);
     sensor_status_t setHeater(const bool heaterMode);
@@ -84,6 +84,7 @@ class HTU2x : public rSensorHT {
     int              _I2C_num;
     HTU2X_RESOLUTION _resolution;
     bool             _compensated;
+    bool             _heater;
     uint32_t         _serialB = 0;
     HTU2X_TYPE       _deviceType = HTU2X_NULL;
 

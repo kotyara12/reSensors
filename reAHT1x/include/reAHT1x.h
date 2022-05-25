@@ -60,7 +60,7 @@ class AHT1x : public rSensorHT {
       // callbacks
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
 
-    bool sensorReset() override;
+    sensor_status_t sensorReset() override;
     sensor_status_t softReset(const AHT1x_MODE sensorMode);
   protected:
     sensor_status_t readRawData() override;  
@@ -76,7 +76,6 @@ class AHT1x : public rSensorHT {
     uint8_t waitBusy(uint32_t delay);
     sensor_status_t setMode(const AHT1x_MODE newMode);
     bool checkCRC8();
-    sensor_status_t readRawDataEx();
 };
 
 #ifdef __cplusplus

@@ -102,10 +102,9 @@ class BME280 : public rSensorX3 {
     uint8_t getI2CAddress();
 
     // Sensor reset
-    bool sensorReset() override;
+    sensor_status_t sensorReset() override;
 
     // Setting parameters
-    bool sendPowerMode(BME280_MODE mode);
     bool setConfiguration(BME280_MODE mode = BME280_MODE_FORCED, 
       BME280_STANDBYTIME odr = BME280_STANDBY_1000ms, BME280_IIR_FILTER filter = BME280_FLT_NONE,
       BME280_OVERSAMPLING osPress = BME280_OSM_X1, BME280_OVERSAMPLING osTemp = BME280_OSM_X1, BME280_OVERSAMPLING osHumd = BME280_OSM_X1);
@@ -134,11 +133,14 @@ class BME280 : public rSensorX3 {
   private:
     int                      _I2C_num;
     uint8_t                  _I2C_address;
+    uint8_t                  _meas_wait;
     struct bme280_dev        _dev;
     BME280_MODE              _mode = BME280_MODE_SLEEP;
 
-    bool checkApiCode(const char* api_name, int8_t rslt);
-    bool sendConfiguration(uint8_t settings_sel);
+    uint8_t osr2int(BME280_OVERSAMPLING osr);
+    sensor_status_t checkApiCode(const char* api_name, int8_t rslt);
+    sensor_status_t sendPowerMode(BME280_MODE mode);
+    sensor_status_t sendConfiguration(uint8_t settings_sel);
 };
 
 #endif // __RE_BME280_H__

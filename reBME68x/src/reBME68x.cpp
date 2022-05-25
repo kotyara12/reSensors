@@ -11,6 +11,8 @@
 
 #define BME68X_I2C_TIMEOUT    3000
 
+static const char* logTAG = "BME680";
+
 // -----------------------------------------------------------------------------------------------------------------------
 // ------------------------------------------------------ Callbacks ------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
@@ -212,6 +214,7 @@ BME68x::BME68x():rSensorX4()
 {
   _I2C_num = 0;
   _I2C_address = 0;
+  _meas_wait = 16;
 
   memset(&_dev, 0, sizeof(_dev));
   _dev.chip_id = 0;
@@ -471,80 +474,89 @@ uint8_t BME68x::getI2CAddress()
 }
 
 // API error handling
-bool BME68x::checkApiCode(const char* api_name, int8_t rslt)
+sensor_status_t BME68x::checkApiCode(const char* api_name, int8_t rslt)
 {
   switch (rslt) {
     case BME68X_OK:
-      setRawStatus(SENSOR_STATUS_OK, false);
-      return true;
+      return SENSOR_STATUS_OK;
     case BME68X_E_NULL_PTR:
-      setRawStatus(SENSOR_STATUS_ERROR, false);
-      rlog_e(_name, "API name [%s] error [%d]: Null pointer", api_name, rslt);
-      return false;
+      rlog_e(logTAG, "%s: API name [%s] error [%d]: Null pointer", _name, api_name, rslt);
+      return SENSOR_STATUS_ERROR;
     case BME68X_E_COM_FAIL:
-      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
-      rlog_e(_name, "API name [%s] error [%d]: Communication failure\r\n", api_name, rslt);
-      return false;
+      rlog_e(logTAG, "%s: API name [%s] error [%d]: Communication failure\r\n", _name, api_name, rslt);
+      return SENSOR_STATUS_CONN_ERROR;
     case BME68X_E_INVALID_LENGTH:
-      setRawStatus(SENSOR_STATUS_ERROR, false);
-      rlog_e(_name, "API name [%s] error [%d]: Incorrect length parameter\r\n", api_name, rslt);
-      return false;
+      rlog_e(logTAG, "%s: API name [%s] error [%d]: Incorrect length parameter\r\n", _name, api_name, rslt);
+      return SENSOR_STATUS_ERROR;
     case BME68X_E_DEV_NOT_FOUND:
-      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
-      rlog_e(_name, "API name [%s] error [%d]: Device not found\r\n", api_name, rslt);
-      return false;
+      rlog_e(logTAG, "%s: API name [%s] error [%d]: Device not found\r\n", _name, api_name, rslt);
+      return SENSOR_STATUS_CONN_ERROR;
     case BME68X_E_SELF_TEST:
-      setRawStatus(SENSOR_STATUS_CAL_ERROR, false);
-      rlog_e(_name, "API name [%s] error [%d]: Self test error\r\n", api_name, rslt);
-      return false;
+      rlog_e(logTAG, "%s: API name [%s] error [%d]: Self test error\r\n", _name, api_name, rslt);
+      return SENSOR_STATUS_CAL_ERROR;
     case BME68X_W_NO_NEW_DATA:
-      setRawStatus(SENSOR_STATUS_NO_DATA, false);
-      rlog_w(_name, "API name [%s] earning [%d]: No new data found\r\n", api_name, rslt);
-      return false;
+      rlog_w(logTAG, "%s: API name [%s] earning [%d]: No new data found\r\n", _name, api_name, rslt);
+      return SENSOR_STATUS_NO_DATA;
     default:
-      setRawStatus(SENSOR_STATUS_ERROR, false);
-      rlog_e(_name, "API name [%s] error [%d]: Unknown error code\r\n", api_name, rslt);
-      return false;
+      rlog_e(logTAG, "%s: API name [%s] error [%d]: Unknown error code\r\n", _name, api_name, rslt);
+      return SENSOR_STATUS_ERROR;
   };
 }
 
 /**
  * Start device
  * */
-bool BME68x::sensorReset()
+sensor_status_t BME68x::sensorReset()
 {
-  int8_t rslt = bme68x_init(&_dev); // bme68x_soft_reset() inline
-  if (checkApiCode("bme68x_init", rslt)) {
-    return sendConfiguration() && sendHeaterMode();
+  sensor_status_t rslt = checkApiCode("bme68x_init", bme68x_init(&_dev)); // bme68x_soft_reset() inline
+  if (rslt == SENSOR_STATUS_OK) {
+    rslt = sendConfiguration();
+    if (rslt == SENSOR_STATUS_OK) {
+      rslt = sendHeaterMode();
+    };
   };
-  return false;
+  return rslt;
 }
 
 /**
  * Setting parameters
  * */
-bool BME68x::sendConfiguration()
+uint8_t BME68x::osr2int(BME68x_OVERSAMPLING osr)
 {
-  rlog_i(_name, "Send configuration");
+  switch (osr) {
+    case BME68x_OS_X1:  return 1;
+    case BME68x_OS_X2:  return 2;
+    case BME68x_OS_X4:  return 4;
+    case BME68x_OS_X8:  return 8;
+    case BME68x_OS_X16: return 16;
+    default: return 0;
+  };
+}
+
+sensor_status_t BME68x::sendConfiguration()
+{
+  rlog_i(logTAG, RSENSOR_LOG_MSG_SEND_CONFIG, _name);
+  uint8_t _meas_wait_pres = osr2int((BME68x_OVERSAMPLING)_conf.os_pres);
+  uint8_t _meas_wait_temp = osr2int((BME68x_OVERSAMPLING)_conf.os_temp);
+  uint8_t _meas_wait_humd = osr2int((BME68x_OVERSAMPLING)_conf.os_hum);
+  _meas_wait_pres > _meas_wait_temp ? _meas_wait = _meas_wait_pres : _meas_wait = _meas_wait_temp;
+  if (_meas_wait_humd > _meas_wait) _meas_wait = _meas_wait_humd;
   int8_t rslt = bme68x_set_conf(&_conf, &_dev);
   return checkApiCode("bme68x_set_conf", rslt);
 }
 
-bool BME68x::sendHeaterMode()
+sensor_status_t BME68x::sendHeaterMode()
 {
-  
   if ((_heatr_conf.heatr_temp == 0) || (_heatr_conf.heatr_dur == 0)) {
     _heatr_conf.enable = BME68X_DISABLE;
-    rlog_i(_name, "Send heater mode: off");
+    rlog_i(logTAG, "Sensor [%s]: set heater mode: OFF", _name);
   } else {
     _heatr_conf.enable = BME68X_ENABLE;
     if (_heatr_conf.heatr_temp < BME68X_LOW_TEMP) _heatr_conf.heatr_temp = BME68X_LOW_TEMP;
     if (_heatr_conf.heatr_temp > BME68X_HIGH_TEMP) _heatr_conf.heatr_temp = BME68X_HIGH_TEMP;
-    rlog_i(_name, "Send heater mode: temperature = %d C, duration = %d ms", _heatr_conf.heatr_temp, _heatr_conf.heatr_dur);
+    rlog_i(logTAG, "Sensor [%s]: set heater mode: temperature = %d C, duration = %d ms", _name, _heatr_conf.heatr_temp, _heatr_conf.heatr_dur);
   };
-
-  int8_t rslt = bme68x_set_heatr_conf(BME68X_FORCED_MODE, &_heatr_conf, &_dev);
-  return checkApiCode("bme68x_set_heatr_conf", rslt);
+  return checkApiCode("bme68x_set_heatr_conf", bme68x_set_heatr_conf(BME68X_FORCED_MODE, &_heatr_conf, &_dev));
 }
 
 bool BME68x::setConfiguration(BME68x_STANDBYTIME odr, BME68x_IIR_FILTER filter,
@@ -555,7 +567,7 @@ bool BME68x::setConfiguration(BME68x_STANDBYTIME odr, BME68x_IIR_FILTER filter,
   _conf.os_hum = osHum;
   _conf.filter = filter;
   _conf.odr = odr;
-  return sendConfiguration();
+  return (sendConfiguration() == SENSOR_STATUS_OK);
 }
 
 bool BME68x::setOversampling(BME68x_OVERSAMPLING osPress, BME68x_OVERSAMPLING osTemp, BME68x_OVERSAMPLING osHum)
@@ -563,39 +575,29 @@ bool BME68x::setOversampling(BME68x_OVERSAMPLING osPress, BME68x_OVERSAMPLING os
   _conf.os_pres = osPress;
   _conf.os_temp = osTemp;
   _conf.os_hum = osHum;
-  return sendConfiguration();
+  return (sendConfiguration() == SENSOR_STATUS_OK);
 };
 
 bool BME68x::setIIRFilterSize(BME68x_IIR_FILTER filter)
 {
   _conf.filter = filter;
-  return sendConfiguration();
+  return (sendConfiguration() == SENSOR_STATUS_OK);
 };
 
 bool BME68x::setODR(BME68x_STANDBYTIME odr)
 {
   _conf.odr = odr;
-  return sendConfiguration();
+  return (sendConfiguration() == SENSOR_STATUS_OK);
 };
 
 bool BME68x::setGasHeater(uint16_t heaterTemp, uint16_t heaterTime)
 {
   _heatr_conf.heatr_temp = heaterTemp;
   _heatr_conf.heatr_dur = heaterTime;
-
   if (_prm_heatr_temp) paramsValueStore(_prm_heatr_temp, false);
   if (_prm_heatr_dur) paramsValueStore(_prm_heatr_dur, false);
 
-  return sendHeaterMode();
-};
-
-/**
- * Soft reset
- * */
-bool BME68x::softReset()
-{
-  int8_t rslt = bme68x_soft_reset(&_dev);
-  return checkApiCode("bme68x_soft_reset", rslt);
+  return (sendConfiguration() == SENSOR_STATUS_OK);
 };
 
 /**
@@ -603,28 +605,30 @@ bool BME68x::softReset()
  * */
 sensor_status_t BME68x::readRawData()
 {
-  int8_t rslt;
+  sensor_status_t rslt;
   uint32_t measure_delay;
   struct bme68x_data data;
   uint8_t n_fields;
 
   // Set operation mode
-  rslt = bme68x_set_op_mode(BME68X_FORCED_MODE, &_dev);
-  if (!checkApiCode("bme68x_set_op_mode", rslt)) return _lastStatus;
+  rslt = checkApiCode("bme68x_set_op_mode", bme68x_set_op_mode(BME68X_FORCED_MODE, &_dev));
+  if (rslt != SENSOR_STATUS_OK) return rslt;
 
   // Calculate delay period in microseconds
   measure_delay = bme68x_get_meas_dur(BME68X_FORCED_MODE, &_conf, &_dev) + (_heatr_conf.heatr_dur * 1000);
   _dev.delay_us(measure_delay, this);
 
   // Get data
-  rslt = bme68x_get_data(BME68X_FORCED_MODE, &data, &n_fields, &_dev);
-  if (!checkApiCode("bme68x_get_data", rslt)) return _lastStatus;
+  rslt = checkApiCode("bme68x_get_data", bme68x_get_data(BME68X_FORCED_MODE, &data, &n_fields, &_dev));
+  if (rslt != SENSOR_STATUS_OK) return rslt;
 
   if ((n_fields) && (data.status & BME68X_NEW_DATA_MSK) && (data.status & BME68X_GASM_VALID_MSK) && (data.status & BME68X_HEAT_STAB_MSK)) {
-    setRawValues(data.pressure, data.temperature, data.humidity, data.gas_resistance);
+    if (_meas_wait > 0) {
+      _meas_wait--;
+      return SENSOR_STATUS_NO_DATA;
+    };
+    return setRawValues(data.pressure, data.temperature, data.humidity, data.gas_resistance);
   } else {
-    setRawStatus(SENSOR_STATUS_ERROR, false);
+    return SENSOR_STATUS_NO_DATA;
   };
-
-  return _lastStatus;
 };

@@ -64,9 +64,9 @@ class DS18x20 : public rSensorX1 {
       // callbacks
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
     
-    bool sensorReset() override;
-    DS18x20_RESOLUTION getResolution();
-    bool setResolution(DS18x20_RESOLUTION resolution);
+    sensor_status_t sensorReset() override;
+    sensor_status_t getResolution(DS18x20_RESOLUTION *resolution);
+    sensor_status_t setResolution(DS18x20_RESOLUTION resolution);
   protected:
     void createSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize) override;
     void registerItemsParameters(paramsGroupHandle_t parent_group) override;
@@ -82,23 +82,23 @@ class DS18x20 : public rSensorX1 {
     DS18x20_RESOLUTION _resolution = DS18x20_RESOLUTION_INVALID; // Current resulution
 
     bool addressSelect();
-    bool readPowerSupply();
+    sensor_status_t readPowerSupply();
 
     bool validFamily(uint8_t faminly_byte);
     bool validAddress(uint8_t* rom_code);
     bool readROM(bool storeAddress);
     bool scanDevices(uint8_t index);
 
-    bool readScratchpad(uint8_t *buffer);
-    bool writeScratchpad(uint8_t *buffer);
-    bool saveScratchpad();
+    sensor_status_t readScratchpad(uint8_t *buffer);
+    sensor_status_t writeScratchpad(uint8_t *buffer);
+    sensor_status_t saveScratchpad();
 
     void waitForDuration();
-    void waitForDeviceSignal();
-    void waitForConversion();
+    sensor_status_t waitForDeviceSignal();
+    sensor_status_t waitForConversion();
 
-    bool startConvert();
-    bool readTemperature(float * value);
+    sensor_status_t startConvert();
+    sensor_status_t readTemperature(float * value);
 };
 
 #ifdef __cplusplus

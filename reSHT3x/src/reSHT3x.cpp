@@ -73,6 +73,7 @@ SHT3xD::SHT3xD():rSensorHT()
 	_frequency = SHT3xD_SINGLE;
 	_mode = SHT3xD_MODE_NOHOLD;
 	_repeatability = SHT3xD_REPEATABILITY_MEDIUM;
+	_heater = false;
 }
 
 /**
@@ -125,18 +126,20 @@ bool SHT3xD::initExtItems(const char* sensorName, const char* topicName, const b
 /**
  * Start device
  * */
-bool SHT3xD::sensorReset()
+sensor_status_t SHT3xD::sensorReset()
 {
 	readSerialNumber();
-	sensor_status_t err = softReset();
-	if (err != SENSOR_STATUS_OK) return false;
- 	err = setMode(_frequency, _mode, _repeatability);
-	if (err != SENSOR_STATUS_OK) return false;
-	err = clearStatusRegister();
-	if (err != SENSOR_STATUS_OK) return false;
-	err = setHeater(false);
-	if (err != SENSOR_STATUS_OK) return false;
-	return true;
+	sensor_status_t status = softReset();
+	if (status == SENSOR_STATUS_OK) {
+   	status = setMode(_frequency, _mode, _repeatability);
+		if (status == SENSOR_STATUS_OK) {
+			status = clearStatusRegister();
+			if (status == SENSOR_STATUS_OK) {
+				status = setHeaterEx(false);
+			};
+		};
+	};
+	return status;
 }
 
 /**
@@ -144,14 +147,10 @@ bool SHT3xD::sensorReset()
  * */
 sensor_status_t SHT3xD::softReset()
 {
-  esp_err_t err = sendCommand(SHT3xD_CMD_SOFT_RESET);
-	if (err == ESP_OK) {
-		ets_delay_us(SHT3xD_DELAY_SOFT_RESET);
-		rlog_i(logTAG, "Sensor [%s] has been reset!", _name);
-	}	else {
-	  rlog_e(logTAG, "Soft reset failed: %d %s!", err, esp_err_to_name(err));
-	};
-	return this->rSensor::setEspError(err, true);
+  SENSOR_ERR_CHECK(sendCommand(SHT3xD_CMD_SOFT_RESET), RSENSOR_LOG_MSG_RESET_FAILED);
+  rlog_i(logTAG, RSENSOR_LOG_MSG_RESET, _name);
+	ets_delay_us(SHT3xD_DELAY_SOFT_RESET);
+	return SENSOR_STATUS_OK;
 }
 
 /**
@@ -160,13 +159,12 @@ sensor_status_t SHT3xD::softReset()
 uint32_t SHT3xD::readSerialNumber()
 {
 	esp_err_t err = readBuffer(SHT3xD_CMD_READ_SERIAL_NUMBER, 50, 6);
-	this->rSensor::setEspError(err, false);
 	if (err == ESP_OK) {
 		uint32_t serialNum = (((((_bufData[0] << 8) | _bufData[1]) << 8) | _bufData[3]) << 8) | _bufData[4];
-		rlog_i(logTAG, "Sensor [ %s ] serial number: %.8x", _name, serialNum);
+		rlog_i(logTAG, "Sensor [%s] serial number: %.8x", _name, serialNum);
 		return serialNum;
-	}
-	else rlog_w(logTAG, "Failed to read serial number for sensor [ %s ]: %d %s!", _name, err, esp_err_to_name(err));
+	};
+	rlog_w(logTAG, "Failed to read serial number for sensor [%s]: %d %s!", _name, err, esp_err_to_name(err));
 	return 0;
 }
 
@@ -201,38 +199,34 @@ esp_err_t SHT3xD::readBuffer(const uint16_t command, const uint32_t usWaitData, 
  * */
 sensor_status_t SHT3xD::clearStatusRegister()
 {
-	esp_err_t err = sendCommand(SHT3xD_CMD_CLEAR_STATUS);
-	if (err == ESP_OK) rlog_i(logTAG, "%s: status register has been cleared", _name);
-	else rlog_e(logTAG, "Failed to clear status register for sensor [ %s ]: %d %s!", _name, err, esp_err_to_name(err));
-	return this->rSensor::setEspError(err, false);
+	SENSOR_ERR_CHECK(sendCommand(SHT3xD_CMD_CLEAR_STATUS), "Failed to clear status register for sensor [%s]: %d %s");
+	rlog_i(logTAG, "Sensor [%s]: status register has been cleared", _name);
+	return SENSOR_STATUS_OK;
 }
 
-SHT3xD_STATUS SHT3xD::readStatusRegister()
+sensor_status_t SHT3xD::readStatusRegister(SHT3xD_STATUS* status)
 {
-  SHT3xD_STATUS ret;
-	esp_err_t err = readBuffer(SHT3xD_CMD_READ_STATUS, 0, 3);
-  if (err == ESP_OK) {
-		// BIT0 - Write data checksum status :: '0': checksum of last write transfer was correct / '1': checksum of last write transfer failed
-		ret.lastChecksumFailed = _bufData[1] & 0x01;
-		// BIT1 - Command status :: '0': last command executed successfully  / '1': last command not processed. It was either invalid, failed the integrated command checksum 
-		ret.lastCommandFailed = _bufData[1] & 0x02;
-		// BIT2-3 - Reserved
-		// BIT4 - System reset detected :: '0': no reset detected since last ‘clear status register’ command / '1': reset detected (hard reset, soft reset command or supply fail)
-		ret.systemResetDetected = _bufData[1] & 0x10;
-		// BIT5-9 - Reserved
-		// BIT10 - T tracking alert :: ‘0’ : no alert / ‘1’ : alert
-		ret.alertTemperature = _bufData[0] & 0x04;
-		// BIT11 - RH tracking alert :: ‘0’ : no alert / ‘1’ : alert
-  	ret.alertHumidity = _bufData[0] & 0x08;
-		// BIT12 - Reserved
-		// BIT13 - Heater status :: ‘0’ : Heater OFF / ‘1’ : Heater ON
-    ret.heaterStatus = _bufData[0] & 0x20;
-		// BIT14 - Reserved
-		// BIT15 - Alert pending status :: '0': no pending alerts / '1': at least one pending alert
-    ret.alertPendingStatus = _bufData[0] & 0x80;
-  } else rlog_e(logTAG, "Failed to read status register for sensor [ %s ]: %d %s!", _name, err, esp_err_to_name(err));
-  this->rSensor::setEspError(err, false);	
-	return ret;
+	SENSOR_ERR_CHECK(readBuffer(SHT3xD_CMD_READ_STATUS, 0, 3), RSENSOR_LOG_MSG_READ_STATUS_FAILED);
+	// BIT0 - Write data checksum status :: '0': checksum of last write transfer was correct / '1': checksum of last write transfer failed
+	status->lastChecksumFailed = _bufData[1] & BIT0;
+	// BIT1 - Command status :: '0': last command executed successfully  / '1': last command not processed. It was either invalid, failed the integrated command checksum 
+	status->lastCommandFailed = _bufData[1] & BIT1;
+	// BIT2-3 - Reserved
+	// BIT4 - System reset detected :: '0': no reset detected since last ‘clear status register’ command / '1': reset detected (hard reset, soft reset command or supply fail)
+	status->systemResetDetected = _bufData[1] & BIT4;
+	// BIT5-9 - Reserved
+	// BIT10 - T tracking alert :: ‘0’ : no alert / ‘1’ : alert
+	status->alertTemperature = _bufData[0] & BIT10;
+	// BIT11 - RH tracking alert :: ‘0’ : no alert / ‘1’ : alert
+	status->alertHumidity = _bufData[0] & BIT11;
+	// BIT12 - Reserved
+	// BIT13 - Heater status :: ‘0’ : Heater OFF / ‘1’ : Heater ON
+	status->heaterStatus = _bufData[0] & BIT13;
+	// BIT14 - Reserved
+	// BIT15 - Alert pending status :: '0': no pending alerts / '1': at least one pending alert
+	status->alertPendingStatus = _bufData[0] & BIT15;
+	
+	return SENSOR_STATUS_OK;
 }
 
 /**
@@ -241,24 +235,36 @@ SHT3xD_STATUS SHT3xD::readStatusRegister()
  * It can be switched on and off by command. The status is listed in the status register. 
  * After a reset the heater is disabled (default condition).
  * */
-sensor_status_t SHT3xD::setHeater(const bool heaterMode)
+sensor_status_t SHT3xD::setHeaterEx(bool heaterMode)
 {
-  esp_err_t err = sendCommand(heaterMode ? SHT3xD_CMD_HEATER_ENABLE : SHT3xD_CMD_HEATER_DISABLE);
-	if (err == ESP_OK) {
-		SHT3xD_STATUS status = readStatusRegister();
-		if (status.heaterStatus != heaterMode) {
-			rlog_e(logTAG, "Heating mode is not confirmed by sensor [ %s ]", _name);
-			this->rSensor::setRawStatus(SENSOR_STATUS_ERROR, true);
-			return SENSOR_STATUS_ERROR;
-		};
-		rlog_i(logTAG, "%s: heater is %s", _name, heaterMode ? RSENSOR_LOG_MSG_HEATER_ON : RSENSOR_LOG_MSG_HEATER_OFF);
-	}	else rlog_e(logTAG, "Failed to set heating mode for sensor [ %s ]: %d %s", err, esp_err_to_name(err));
-	return this->rSensor::setEspError(err, true);
+	// Send heater status
+	SENSOR_ERR_CHECK(sendCommand(heaterMode ? SHT3xD_CMD_HEATER_ENABLE : SHT3xD_CMD_HEATER_DISABLE), RSENSOR_LOG_MSG_HEATER_SET_FAILED);
+	// Check heater status
+	SENSOR_ERR_CHECK(readBuffer(SHT3xD_CMD_READ_STATUS, 0, 3), RSENSOR_LOG_MSG_READ_STATUS_FAILED);
+	// BIT13 - Heater status :: ‘0’ : Heater OFF / ‘1’ : Heater ON
+	_heater = _bufData[0] & BIT13;
+	if (_heater == heaterMode) {
+		rlog_i(logTAG, RSENSOR_LOG_MSG_HEATER_STATE, _name, _heater ? RSENSOR_LOG_MSG_HEATER_ON : RSENSOR_LOG_MSG_HEATER_OFF);
+		return SENSOR_STATUS_OK;
+	} else {
+		rlog_i(logTAG, RSENSOR_LOG_MSG_HEATER_UNCONFIRMED, _name);
+		return SENSOR_STATUS_ERROR;
+	};
+}
+
+sensor_status_t SHT3xD::setHeater(bool heaterMode)
+{
+	sensor_status_t ret = setHeaterEx(heaterMode);
+	setRawStatus(ret, false);
+	return ret;
 }
 
 bool SHT3xD::isHeaterEnabled()
 {
-  SHT3xD_STATUS status = readStatusRegister();
+	SHT3xD_STATUS status;
+	memset(&status, 0, sizeof(status));
+	setRawStatus(readStatusRegister(&status), false);
+	_heater = status.heaterStatus;
 	return status.heaterStatus;
 }
 
@@ -370,11 +376,11 @@ sensor_status_t SHT3xD::startPeriodicMode(const SHT3xD_FREQUENCY frequency, cons
 	if (err == ESP_OK) {
 		_frequency = frequency;
 		_repeatability = repeatability;
-		rlog_i(logTAG, "%s: set measurement mode: frequency=0x%.2x, repeatability=0x%.2x", _name, frequency, repeatability);
+		rlog_i(logTAG, "Sensor [%s]: set measurement mode: frequency=0x%.2x, repeatability=0x%.2x", _name, frequency, repeatability);
 	} else {
-		rlog_e(logTAG, "Failed to set measurement mode: %d %s!", err, esp_err_to_name(err));
+  	rlog_e(logTAG, "Failed to set measurement mode for sensor [%s]: %d %s!", _name, err, esp_err_to_name(err));
 	};
-	return this->rSensor::setEspError(err, true);
+	return convertEspError(err);
 }
 
 /**
@@ -386,7 +392,7 @@ sensor_status_t SHT3xD::activateART()
 	esp_err_t err = sendCommand(SHT3xD_CMD_ART);
 	if (err == ESP_OK) rlog_i(logTAG, "%s: accelerated response time activated", _name);
 	else rlog_e(logTAG, "Failed to set ART: %d %s!", err, esp_err_to_name(err));
-	return this->rSensor::setEspError(err, true);
+	return setEspError(err, true);
 }
 
 /**
@@ -418,19 +424,18 @@ uint16_t SHT3xD::humidity2raw(value_t value)
  * */
 sensor_status_t SHT3xD::readRawDataCustom(const uint16_t command, const uint32_t measure_delay)
 {
-	// Read temperature and humidity RAW values
-	esp_err_t err = readBuffer(command, measure_delay, 6);
-  if (err != ESP_OK) {
-    rlog_e(logTAG, "Failed to read values from sensor [ %s ]: %d %s!", _name, err, esp_err_to_name(err));
-    return this->rSensor::setEspError(err, false);
-  };
-  // Store values in sensors: first two bytes are the temperature (in most other sensors, the humidity goes first)
-  this->rSensorX2::setRawValues(raw2humidity((_bufData[3] << 8) | _bufData[4]), raw2temperature((_bufData[0] << 8) | _bufData[1]));
-  return SENSOR_STATUS_OK;
+	SENSOR_ERR_CHECK(readBuffer(command, measure_delay, 6), RSENSOR_LOG_MSG_READ_DATA_FAILED);
+	return setRawValues(raw2humidity((_bufData[3] << 8) | _bufData[4]), raw2temperature((_bufData[0] << 8) | _bufData[1]));
 }
 
 sensor_status_t SHT3xD::readRawData()
 {
+  // It is pointless to take measurements while the heater is operating.
+  if (_heater) {
+    rlog_w(logTAG, RSENSOR_LOG_MSG_HEATER_STATE, _name, RSENSOR_LOG_MSG_HEATER_ON);
+    return SENSOR_STATUS_NO_DATA;
+  };
+
 	if (_frequency == SHT3xD_SINGLE) {
 		// Single shot mode
 		switch (_mode) {
@@ -485,22 +490,22 @@ sensor_status_t SHT3xD::writeAlertDataCustom(const uint16_t command, const value
 	// Send data to device
 	_bufCmd[0] = command >> 8;
 	_bufCmd[1] = command & 0xFF;
-	esp_err_t err = writeI2C(_I2C_num, _I2C_address, _bufCmd, 2, bufAlert, 3, SHT3xD_TIMEOUT);
-  if (err == ESP_OK) {
-		rlog_i(logTAG, "%s: alert limit 0x%.2x set successfully: humidity=%f, temperature=%f", _name, command, humidity, temperature);
-		SHT3xD_STATUS status = readStatusRegister();
+	SENSOR_ERR_CHECK(writeI2C(_I2C_num, _I2C_address, _bufCmd, 2, bufAlert, 3, SHT3xD_TIMEOUT), "Failed to send alert limits for sensor [%s]: %d %s!");
+	// Check operation status
+	SHT3xD_STATUS status;
+	if (readStatusRegister(&status) == SENSOR_STATUS_OK) {
 		if (status.lastChecksumFailed) {
-			rlog_e(logTAG, "Failed to send alert limits for sensor [ %s ]: checksum failed!", _name);
-			this->rSensor::setRawStatus(SENSOR_STATUS_CRC_ERROR, true);
+			rlog_e(logTAG, "Failed to send alert limits for sensor [%s]: checksum failed!", _name);
 			return SENSOR_STATUS_CRC_ERROR;
 		};
 		if (status.lastCommandFailed) {
-			rlog_e(logTAG, "Failed to send alert limits for sensor [ %s ]: command failed!", _name);
-			this->rSensor::setRawStatus(SENSOR_STATUS_ERROR, true);
+			rlog_e(logTAG, "Failed to send alert limits for sensor [%s]: command failed!", _name);
 			return SENSOR_STATUS_ERROR;
 		};
-	}	else rlog_e(logTAG, "Failed to send alert limits for sensor [ %s ]: %d %s!", _name, err, esp_err_to_name(err));
-  return this->rSensor::setEspError(err, true);
+		rlog_i(logTAG, "%s: alert limit 0x%.2x set successfully: humidity=%f, temperature=%f", _name, command, humidity, temperature);
+		return SENSOR_STATUS_OK;
+	};
+	return SENSOR_STATUS_ERROR;
 }
 
 sensor_status_t SHT3xD::setAlertLow(const value_t temperatureSet, const value_t temperatureClear, const value_t humiditySet, const value_t humidityClear) 
@@ -509,6 +514,7 @@ sensor_status_t SHT3xD::setAlertLow(const value_t temperatureSet, const value_t 
 	if (ret == SENSOR_STATUS_OK) {
 		ret = writeAlertDataCustom(SHT3xD_CMD_WRITE_ALR_LIMIT_LC, temperatureClear, humidityClear);
 	};
+	setRawStatus(ret, true);
 	return ret;
 }
 
@@ -518,6 +524,7 @@ sensor_status_t SHT3xD::setAlertHigh(const value_t temperatureSet, const value_t
 	if (ret == SENSOR_STATUS_OK) {
 		ret = writeAlertDataCustom(SHT3xD_CMD_WRITE_ALR_LIMIT_HC, temperatureClear, humidityClear);
 	};
+	setRawStatus(ret, true);
 	return ret;
 }
 
@@ -527,51 +534,63 @@ sensor_status_t SHT3xD::setAlertHigh(const value_t temperatureSet, const value_t
 sensor_status_t SHT3xD::readAlertDataCustom(const uint16_t command, value_t *humidity, value_t *temperature)
 {
 	// Read temperature and humidity RAW values
-	esp_err_t err = readBuffer(command, 0, 3);
-  if (err == ESP_OK) {
-		// Convert to float values
-		uint16_t rawData = (_bufData[0] << 8) | _bufData[1];
-		*humidity = raw2humidity(rawData & 0xFE00);
-		*temperature = raw2temperature(rawData << 7);
-  } else rlog_e(logTAG, "Failed to read alert limits for sensor [ %s ]: %d %s!", _name, err, esp_err_to_name(err));
-  return this->rSensor::setEspError(err, true);
+	SENSOR_ERR_CHECK(readBuffer(command, 0, 3), "Failed to read alert limits for sensor [%s]: %d %s!");
+	// Convert to float values
+	uint16_t rawData = (_bufData[0] << 8) | _bufData[1];
+	*humidity = raw2humidity(rawData & 0xFE00);
+	*temperature = raw2temperature(rawData << 7);
+  return SENSOR_STATUS_OK;
 };
 
 sensor_status_t SHT3xD::readAlertLowSet(const uint16_t command, value_t *humidity, value_t *temperature)
 {
-	return readAlertDataCustom(SHT3xD_CMD_READ_ALR_LIMIT_LS, humidity, temperature);
+	sensor_status_t ret = readAlertDataCustom(SHT3xD_CMD_READ_ALR_LIMIT_LS, humidity, temperature);
+	setRawStatus(ret, false);
+	return ret;
 }
 
 sensor_status_t SHT3xD::readAlertLowClear(const uint16_t command, value_t *humidity, value_t *temperature)
 {
-	return readAlertDataCustom(SHT3xD_CMD_READ_ALR_LIMIT_LC, humidity, temperature);
+	sensor_status_t ret = readAlertDataCustom(SHT3xD_CMD_READ_ALR_LIMIT_LC, humidity, temperature);
+	setRawStatus(ret, false);
+	return ret;
 }
 
 sensor_status_t SHT3xD::readAlertHighSet(const uint16_t command, value_t *humidity, value_t *temperature)
 {
-	return readAlertDataCustom(SHT3xD_CMD_READ_ALR_LIMIT_HS, humidity, temperature);
+	sensor_status_t ret = readAlertDataCustom(SHT3xD_CMD_READ_ALR_LIMIT_HS, humidity, temperature);
+	setRawStatus(ret, false);
+	return ret;
 }
 
 sensor_status_t SHT3xD::readAlertHighClear(const uint16_t command, value_t *humidity, value_t *temperature)
 {
-	return readAlertDataCustom(SHT3xD_CMD_READ_ALR_LIMIT_HC, humidity, temperature);
+	sensor_status_t ret = readAlertDataCustom(SHT3xD_CMD_READ_ALR_LIMIT_HC, humidity, temperature);
+	setRawStatus(ret, false);
+	return ret;
 }
 
 bool SHT3xD::isAlertPendingStatus()
 {
-  SHT3xD_STATUS status = readStatusRegister();
-	return status.alertPendingStatus;
+	SHT3xD_STATUS status;
+	memset(&status, 0, sizeof(status));
+	setRawStatus(readStatusRegister(&status), false);
+  return status.alertPendingStatus;
 }
 
 bool SHT3xD::isAlertHumidity()
 {
-  SHT3xD_STATUS status = readStatusRegister();
+	SHT3xD_STATUS status;
+	memset(&status, 0, sizeof(status));
+	setRawStatus(readStatusRegister(&status), false);
 	return status.alertHumidity;
 }
 
 bool SHT3xD::isAlertTemperature()
 {
-  SHT3xD_STATUS status = readStatusRegister();
+	SHT3xD_STATUS status;
+	memset(&status, 0, sizeof(status));
+	setRawStatus(readStatusRegister(&status), false);
 	return status.alertTemperature;
 }
 

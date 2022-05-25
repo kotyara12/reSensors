@@ -118,6 +118,7 @@ bool BME280::initExtItems(const char* sensorName, const char* topicName, const b
 {
   _I2C_num = numI2C;
   _I2C_address = addrI2C;
+  _meas_wait = 16;
   _mode = mode;
   _dev.settings.standby_time = odr;
   _dev.settings.filter = filter;
@@ -264,65 +265,78 @@ char* BME280::jsonCustomValues()
 #endif // CONFIG_SENSOR_AS_JSON
 
 // API error handling
-bool BME280::checkApiCode(const char* api_name, int8_t rslt)
+sensor_status_t BME280::checkApiCode(const char* api_name, int8_t rslt)
 {
   switch (rslt) {
     case BME280_OK:
-      setRawStatus(SENSOR_STATUS_OK, false);
-      return true;
+      return SENSOR_STATUS_OK;
     case BME280_E_NULL_PTR:
-      setRawStatus(SENSOR_STATUS_ERROR, false);
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Null pointer", _name, api_name, rslt);
-      return false;
+      return SENSOR_STATUS_ERROR;
     case BME280_E_COMM_FAIL:
-      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Communication failure\r\n", _name, api_name, rslt);
-      return false;
+      return SENSOR_STATUS_CONN_ERROR;
     case BME280_E_INVALID_LEN:
-      setRawStatus(SENSOR_STATUS_ERROR, false);
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Incorrect length parameter\r\n", _name, api_name, rslt);
-      return false;
+      return SENSOR_STATUS_ERROR;
     case BME280_E_DEV_NOT_FOUND:
-      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Device not found\r\n", _name, api_name, rslt);
-      return false;
+      return SENSOR_STATUS_CONN_ERROR;
     case BME280_E_NVM_COPY_FAILED:
-      setRawStatus(SENSOR_STATUS_CAL_ERROR, false);
       rlog_w(logTAG, "%s: API name [%s] earning [%d]: Invalid temperature\r\n", _name, api_name, rslt);
-      return false;
+      return SENSOR_STATUS_CAL_ERROR;
     default:
-      setRawStatus(SENSOR_STATUS_ERROR, false);
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Unknown error code\r\n", _name, api_name, rslt);
-      return false;
+      return SENSOR_STATUS_ERROR;
   };
 }
 
 /**
  * Start device
  * */
-bool BME280::sensorReset()
+sensor_status_t BME280::sensorReset()
 {
-  int8_t rslt = bme280_init(&_dev); // bme280_soft_reset() inline
-  if (checkApiCode("bme280_init", rslt)) {
-    return sendConfiguration(BME280_ALL_SETTINGS_SEL) && sendPowerMode(_mode);
+  sensor_status_t rslt = checkApiCode("bme280_init", bme280_init(&_dev)); // bme280_soft_reset() inline
+  if (rslt == SENSOR_STATUS_OK) {
+    rslt = sendConfiguration(BME280_ALL_SETTINGS_SEL);
+    if (rslt == SENSOR_STATUS_OK) {
+      rslt = sendPowerMode(_mode);
+    };
   };
-  return false;
+  return rslt;
 }
 
 /**
  * Setting parameters
  * */
-bool BME280::sendPowerMode(BME280_MODE mode)
+uint8_t BME280::osr2int(BME280_OVERSAMPLING osr)
 {
-  rlog_i(_name, "Send power mode");
+  switch (osr) {
+    case BME280_OSM_X1:  return 1;
+    case BME280_OSM_X2:  return 2;
+    case BME280_OSM_X4:  return 4;
+    case BME280_OSM_X8:  return 8;
+    case BME280_OSM_X16: return 16;
+    default: return 0;
+  };
+}
+
+sensor_status_t BME280::sendPowerMode(BME280_MODE mode)
+{
+  rlog_i(logTAG, RSENSOR_LOG_MSG_SET_MODE_HEADER, _name, mode);
   int8_t rslt = bme280_set_sensor_mode(mode, &_dev);
   if (rslt == BME280_OK) { _mode = mode; };
   return checkApiCode("bme280_set_sensor_mode", rslt);
 }
 
-bool BME280::sendConfiguration(uint8_t settings_sel)
+sensor_status_t BME280::sendConfiguration(uint8_t settings_sel)
 {
-  rlog_i(_name, "Send configuration");
+  rlog_i(logTAG, RSENSOR_LOG_MSG_SEND_CONFIG, _name);
+  uint8_t _meas_wait_pres = osr2int((BME280_OVERSAMPLING)_dev.settings.osr_p);
+  uint8_t _meas_wait_temp = osr2int((BME280_OVERSAMPLING)_dev.settings.osr_t);
+  uint8_t _meas_wait_humd = osr2int((BME280_OVERSAMPLING)_dev.settings.osr_h);
+  _meas_wait_pres > _meas_wait_temp ? _meas_wait = _meas_wait_pres : _meas_wait = _meas_wait_temp;
+  if (_meas_wait_humd > _meas_wait) _meas_wait = _meas_wait_humd;
   int8_t rslt = bme280_set_sensor_settings(settings_sel, &_dev);
   if (rslt == BME280_OK) { _mode = BME280_MODE_SLEEP; };
   return checkApiCode("bme280_set_sensor_settings", rslt);
@@ -337,7 +351,10 @@ bool BME280::setConfiguration(BME280_MODE mode,
   _dev.settings.osr_h = osHumd;
   _dev.settings.filter = filter;
   _dev.settings.standby_time = odr;
-  return sendConfiguration(BME280_ALL_SETTINGS_SEL) && sendPowerMode(mode);
+  if (sendConfiguration(BME280_ALL_SETTINGS_SEL) == SENSOR_STATUS_OK) {
+    return (sendPowerMode(mode) == SENSOR_STATUS_OK);
+  };
+  return false;
 }
 
 bool BME280::setOversampling(BME280_OVERSAMPLING osPress, BME280_OVERSAMPLING osTemp, BME280_OVERSAMPLING osHumd)
@@ -345,19 +362,19 @@ bool BME280::setOversampling(BME280_OVERSAMPLING osPress, BME280_OVERSAMPLING os
   _dev.settings.osr_h = osPress;
   _dev.settings.osr_h = osTemp;
   _dev.settings.osr_h = osHumd;
-  return sendConfiguration(BME280_OSR_PRESS_SEL | BME280_OSR_TEMP_SEL | BME280_OSR_HUM_SEL);
+  return (sendConfiguration(BME280_OSR_PRESS_SEL | BME280_OSR_TEMP_SEL | BME280_OSR_HUM_SEL) == SENSOR_STATUS_OK);
 };
 
 bool BME280::setIIRFilterSize(BME280_IIR_FILTER filter)
 {
   _dev.settings.filter = filter;
-  return sendConfiguration(BME280_FILTER_SEL);
+  return (sendConfiguration(BME280_FILTER_SEL) == SENSOR_STATUS_OK);
 };
 
 bool BME280::setODR(BME280_STANDBYTIME odr)
 {
   _dev.settings.standby_time = odr;
-  return sendConfiguration(BME280_STANDBY_SEL);
+  return (sendConfiguration(BME280_STANDBY_SEL) == SENSOR_STATUS_OK);
 };
 
 /**
@@ -365,13 +382,13 @@ bool BME280::setODR(BME280_STANDBYTIME odr)
  * */
 sensor_status_t BME280::readRawData()
 {
-  int8_t rslt;
+  sensor_status_t rslt;
   struct bme280_data comp_data;
 
   // Send a request for FORCED mode if the previously configured mode is different from cyclic (NORMAL)
   if (_mode != BME280_MODE_NORMAL) {
-    rslt = bme280_set_sensor_mode(BME280_MODE_FORCED, &_dev);
-    if (!checkApiCode("bme280_set_sensor_mode", rslt)) return _lastStatus; 
+    rslt = checkApiCode("bme280_set_sensor_mode", bme280_set_sensor_mode(BME280_MODE_FORCED, &_dev));
+    if (rslt != SENSOR_STATUS_OK) return rslt;
     _mode = BME280_MODE_FORCED;
 
     // Calculate the minimum delay required between consecutive measurement based upon the sensor enabled and the oversampling configuration
@@ -379,10 +396,12 @@ sensor_status_t BME280::readRawData()
   };
 
   // Reading the raw data from sensor
-  rslt = bme280_get_sensor_data(BME280_ALL, &comp_data, &_dev);
-  if (!checkApiCode("bme280_get_sensor_data", rslt)) return _lastStatus;
+  rslt = checkApiCode("bme280_get_sensor_data", bme280_get_sensor_data(BME280_ALL, &comp_data, &_dev));
+  if (rslt != SENSOR_STATUS_OK) return rslt;
 
-  setRawValues(comp_data.pressure, comp_data.temperature, comp_data.humidity);
-
-  return _lastStatus;
+  if (_meas_wait > 0) {
+    _meas_wait--;
+    return SENSOR_STATUS_NO_DATA;
+  };
+  return setRawValues(comp_data.pressure, comp_data.temperature, comp_data.humidity);
 };

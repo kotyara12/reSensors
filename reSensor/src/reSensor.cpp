@@ -17,7 +17,7 @@ static const char* logTAG = "SENS";
 
 // =======================================================================================================================
 // =======================================================================================================================
-// =================================================== meteo functions ===================================================
+// =================================================== Meteo routines ====================================================
 // =======================================================================================================================
 // =======================================================================================================================
 
@@ -88,6 +88,9 @@ rSensorItem::rSensorItem(rSensor *sensor, const char* itemName,
   #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
   _pgItem = nullptr;
   _offsetValue = 0.0;
+  _deltaMax = 0.0;
+  _limitMin = 0.0;
+  _limitMax = 0.0;
 
   _forcedRawPublish = false;
   _filterMode = SENSOR_FILTER_RAW;
@@ -176,6 +179,29 @@ void rSensorItem::setOffsetValue(float offsetValue)
   };
 }
 
+void rSensorItem::setValidRange(value_t validMin, value_t validMax)
+{
+  _limitMin = validMin;
+  _limitMax = validMax;
+}
+
+sensor_status_t rSensorItem::checkValue(const value_t rawValue)
+{
+  // Check for empty value
+  if (isnan(rawValue)) {
+    return SENSOR_STATUS_NO_DATA;
+  };
+  // Check for valid range values, if set
+  if ((_limitMin < _limitMax) && ((rawValue < _limitMin) || (rawValue > _limitMax))) {
+    return SENSOR_STATUS_BAD_DATA;
+  };
+  // Check for maximum change from previous measure, if set
+  if ((_deltaMax > 0.0) && !isnan(_data.lastValue.rawValue) && (abs(rawValue - _data.lastValue.rawValue) > _deltaMax)) {
+    return SENSOR_STATUS_BAD_DATA;
+  };
+  return SENSOR_STATUS_OK;
+}
+
 value_t rSensorItem::convertValue(const value_t rawValue)
 {
   return rawValue;
@@ -189,8 +215,8 @@ sensor_status_t rSensorItem::getRawValue(value_t * rawValue)
 void rSensorItem::setRawValue(const value_t rawValue, const time_t rawTime)
 {
   _data.lastValue.timestamp = rawTime;
-   _data.lastValue.rawValue = rawValue;
-   _data.lastValue.filteredValue = getFilteredValue(convertValue(rawValue + _offsetValue));
+  _data.lastValue.rawValue = rawValue;
+  _data.lastValue.filteredValue = getFilteredValue(convertValue(rawValue + _offsetValue));
  
   // Compare the day for the current value and the daily minimum
   struct tm _lastT, _dayT;
@@ -362,6 +388,9 @@ void rSensorItem::registerItemParameters(paramsGroup_t * group)
   _prm_offsetValue = paramsRegisterValue(OPT_KIND_PARAMETER, OPT_TYPE_FLOAT, nullptr, group, 
     CONFIG_SENSOR_PARAM_OFFSET_KEY, CONFIG_SENSOR_PARAM_OFFSET_FRIENDLY, 
     CONFIG_MQTT_PARAMS_QOS, &_offsetValue);
+  _prm_deltaMax = paramsRegisterValue(OPT_KIND_PARAMETER, OPT_TYPE_FLOAT, nullptr, group, 
+    CONFIG_SENSOR_PARAM_DELTAMAX_KEY, CONFIG_SENSOR_PARAM_DELTAMAX_FRIENDLY, 
+    CONFIG_MQTT_PARAMS_QOS, &_deltaMax);
   _prm_filterMode = paramsRegisterValue(OPT_KIND_PARAMETER, OPT_TYPE_U8, _filterHandler, group,
     CONFIG_SENSOR_PARAM_FILTERMODE_KEY, CONFIG_SENSOR_PARAM_FILTERMODE_FRIENDLY,
     CONFIG_MQTT_PARAMS_QOS, &_filterMode);
@@ -1135,6 +1164,8 @@ rPressureItem::rPressureItem(rSensor *sensor, const char* itemName, const unit_p
 ) {
   _units = unitValue;
   _forcedRawPublish = true; 
+  // Set default valid range: ~700 - 800 mmhg
+  setValidRange(90000, 110000); 
 };
 
 value_t rPressureItem::convertValue(const value_t rawValue)
@@ -1167,7 +1198,8 @@ rSensor::rSensor()
   _readLast = 0;
   _errLimit = 0;
   _errCount = 0;
-  _lastStatus = SENSOR_STATUS_OK;
+  _lstStatus = SENSOR_STATUS_NO_INIT;
+  _errStatus = SENSOR_STATUS_NO_INIT;
   _cbOnChangeStatus = nullptr;
   _cbOnPublishData = nullptr;
 }
@@ -1195,25 +1227,10 @@ void rSensor::initProperties(const char* sensorName, const char* topicName, cons
   _errLimit = errorLimit;
   _errCount = 0;
   _pgSensor = nullptr;
-  _lastStatus = SENSOR_STATUS_NO_INIT;
+  _lstStatus = SENSOR_STATUS_NO_INIT;
+  _errStatus = SENSOR_STATUS_NO_INIT;
   _cbOnChangeStatus = cb_status;
   _cbOnPublishData = cb_publish;
-}
-
-bool rSensor::sensorStart()
-{
-  bool ret = sensorReset();
-  if (ret) {
-    if (_lastStatus == SENSOR_STATUS_NO_INIT) {
-      rlog_i(logTAG, RSENSOR_LOG_MSG_INIT_OK, _name);
-      setRawStatus(SENSOR_STATUS_OK, true);
-    };
-  } else {
-    if (_lastStatus < SENSOR_STATUS_CONN_ERROR) {
-      setRawStatus(SENSOR_STATUS_ERROR, true);
-    };
-  };
-  return ret;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------
@@ -1299,43 +1316,45 @@ void rSensor::postEventStatus(const sensor_status_t oldStatus, const sensor_stat
 
 void rSensor::setRawStatus(sensor_status_t newStatus, bool forced)
 {
-  sensor_status_t prevStatus = _lastStatus;
-  if (_lastStatus != newStatus) {
+  sensor_status_t prvStatus = _errStatus;
+  _lstStatus = newStatus;
+  // Status changed
+  if (_errStatus != newStatus) {
+    // No init
     if (newStatus == SENSOR_STATUS_NO_INIT) {
-      _lastStatus = newStatus;
+      _errStatus = newStatus;
+      _errCount = 0;
       if (_cbOnChangeStatus) {
-        _cbOnChangeStatus(this, _lastStatus, newStatus);
+        _cbOnChangeStatus(this, prvStatus, newStatus);
       };
-      postEventStatus(prevStatus, newStatus);
-      this->publishData(false);
+      postEventStatus(prvStatus, newStatus);
+    // OK
     } else if (newStatus == SENSOR_STATUS_OK) {
-      // Do not send a notification about the status change when the device starts
-      bool isFirstOk = (_lastStatus == SENSOR_STATUS_NO_INIT) && (_errCount == 0);
-      // Save new status immediately
-      _lastStatus = newStatus;
+      bool isFirstOk = (_errStatus == SENSOR_STATUS_NO_INIT) && (_errCount == 0);
+      _errStatus = newStatus;
       _errCount = 0;
       if (!isFirstOk) {
         if (_cbOnChangeStatus) {
-          _cbOnChangeStatus(this, prevStatus, newStatus);
+          _cbOnChangeStatus(this, prvStatus, newStatus);
         };
-        postEventStatus(prevStatus, newStatus);
+        postEventStatus(prvStatus, newStatus);
+        publishData(false);
       };
-      this->publishData(false);
+    // Errors
     } else {
-      // Save the new status only if the number of errors exceeds the threshold
       _errCount++;
       if (forced || (_errCount > _errLimit)) {
-        _lastStatus = newStatus;
+        _errStatus = newStatus;
         if (_cbOnChangeStatus) {
-          _cbOnChangeStatus(this, _lastStatus, newStatus);
+          _cbOnChangeStatus(this, prvStatus, newStatus);
         };
-        postEventStatus(prevStatus, newStatus);
-        this->publishData(false);
+        postEventStatus(prvStatus, newStatus);
+        publishData(false);
       };
     };
   } else {
     // Count error anyway
-    if (newStatus == SENSOR_STATUS_OK) {
+    if ((newStatus == SENSOR_STATUS_NO_INIT) || (newStatus == SENSOR_STATUS_OK)) {
       if (_errCount > 0) {
         _errCount = 0;
       };
@@ -1347,7 +1366,7 @@ void rSensor::setRawStatus(sensor_status_t newStatus, bool forced)
 
 void rSensor::setErrorStatus(sensor_status_t newStatus, bool forced)
 {
-  if ((_lastStatus < SENSOR_STATUS_CONN_ERROR) && (newStatus >= SENSOR_STATUS_CONN_ERROR)) {
+  if ((_errStatus < SENSOR_STATUS_CONN_ERROR) && (newStatus >= SENSOR_STATUS_CONN_ERROR)) {
     setRawStatus(newStatus, forced);
   };
 }
@@ -1375,12 +1394,12 @@ sensor_status_t rSensor::setEspError(uint32_t error, bool forced)
 
 sensor_status_t rSensor::getStatus()
 {
-  return _lastStatus;
+  return _errStatus;
 }
 
 const char* rSensor::getStatusString()
 {
-  switch (_lastStatus) {
+  switch (_errStatus) {
     case SENSOR_STATUS_NO_INIT:
       return CONFIG_SENSOR_STATUS_NO_INIT;
     case SENSOR_STATUS_NO_DATA:
@@ -1393,11 +1412,66 @@ const char* rSensor::getStatusString()
       return CONFIG_SENSOR_STATUS_CALIBRATION;
     case SENSOR_STATUS_CRC_ERROR: 
       return CONFIG_SENSOR_STATUS_CRC_ERROR;
+    case SENSOR_STATUS_BAD_DATA:
+      return CONFIG_SENSOR_STATUS_BAD_DATA;
     case SENSOR_STATUS_ERROR: 
       return CONFIG_SENSOR_STATUS_ERROR;
     default:
       return CONFIG_SENSOR_STATUS_UNKNOWN;
   }
+}
+
+// -----------------------------------------------------------------------------------------------------------------------
+// ---------------------------------------------- Communication with sensor ----------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------
+
+bool rSensor::sensorStart()
+{
+  sensor_status_t resetStatus = sensorReset();
+  if (resetStatus == SENSOR_STATUS_OK) {
+    rlog_i(logTAG, RSENSOR_LOG_MSG_INIT_OK, _name);
+    setRawStatus(resetStatus, true);
+    return true;
+  };
+  setRawStatus(resetStatus, true);
+  return false;
+}
+
+sensor_status_t rSensor::readData()
+{
+  // Check if the sensor has been initialized
+  if (_errStatus == SENSOR_STATUS_NO_INIT) {
+    rlog_e(logTAG, RSENSOR_LOG_MSG_NO_INIT, _name);
+    return _errStatus;
+  };
+
+  // If the previous operation was completed with an error, reset the sensor
+  if (!((_lstStatus == SENSOR_STATUS_OK) || (_lstStatus == SENSOR_STATUS_NO_DATA))) {
+    _lstStatus = sensorReset();
+    if (_lstStatus != SENSOR_STATUS_OK) {
+      setRawStatus(_lstStatus, false);
+      return _lstStatus;
+    };
+  };
+
+  // Check if the sensor reading interval has expired
+  if (millis() >= (_readLast + _readInterval)) {
+    _readLast = millis();
+    rlog_d(logTAG, "Read data from [ %s ]...", _name);
+    _lstStatus = readRawData();
+
+    // If reading fails, reset sensor and try again
+    if (!((_lstStatus == SENSOR_STATUS_OK) || (_lstStatus == SENSOR_STATUS_NO_DATA))) {
+      _lstStatus = sensorReset();
+      if (_lstStatus == SENSOR_STATUS_OK) {
+        _lstStatus = readRawData();
+      };
+    };
+
+    setRawStatus(_lstStatus, false);
+  };
+
+  return _errStatus;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------
@@ -1409,7 +1483,7 @@ const char* rSensor::getStatusString()
 char* rSensor::getDisplayValueStatus()
 {
   #if CONFIG_SENSOR_STATUS_AS_MIXED_ON_ERROR
-    if (_lastStatus == SENSOR_STATUS_OK) {
+    if (_errStatus == SENSOR_STATUS_OK) {
       return getDisplayValue();  
     } else {
       return malloc_string(getStatusString());
@@ -1419,33 +1493,6 @@ char* rSensor::getDisplayValueStatus()
   #endif // CONFIG_SENSOR_STATUS_AS_MIXED_ON_ERROR
 }
 #endif // CONFIG_SENSOR_DISPLAY_ENABLED
-
-// Read data from sensor
-sensor_status_t rSensor::readData()
-{
-  // Check status, autoreset on errors
-  if ((_lastStatus == SENSOR_STATUS_NO_INIT) || (_lastStatus == SENSOR_STATUS_ERROR)) {
-    if (!sensorReset()) {
-      rlog_e(logTAG, RSENSOR_LOG_MSG_NO_INIT, _name);
-      return _lastStatus;
-    };
-  };
-
-  // Check read interval
-  if (millis() >= (_readLast + _readInterval)) {
-    _readLast = millis();
-    rlog_v(logTAG, "Read data from [ %s ]...", _name);
-    sensor_status_t statusRead = readRawData();
-    
-    // In case of failure, reset the sensor and try again
-    if (statusRead > SENSOR_STATUS_OK) {
-      sensorReset();
-      statusRead = readRawData();
-    };
-    return statusRead;
-  };
-  return _lastStatus;
-}
 
 // -----------------------------------------------------------------------------------------------------------------------
 // ------------------------------------------------ Publishing sensor data -----------------------------------------------
@@ -1617,20 +1664,17 @@ bool rSensorX1::setFilterMode(const sensor_filter_t filterMode, const uint16_t f
 }
 
 // Writing measured RAW values to internal items
-bool rSensorX1::checkRawValues(const value_t newValue)
+sensor_status_t rSensorX1::setRawValues(const value_t newValue)
 {
-  return !isnan(newValue);
-}
-
-void rSensorX1::setRawValues(const value_t newValue)
-{
-  if (checkRawValues(newValue)) {
-    time_t timestamp = time(nullptr);
-    if (_item) _item->setRawValue(newValue, timestamp);
-    setRawStatus(SENSOR_STATUS_OK, true);
-  } else {
-    setRawStatus(SENSOR_STATUS_NO_DATA, false);
+  sensor_status_t ret = SENSOR_STATUS_NO_DATA;
+  if (_item) {
+    ret = _item->checkValue(newValue);
+    if (ret == SENSOR_STATUS_OK) {
+      time_t timestamp = time(nullptr);
+      _item->setRawValue(newValue, timestamp);
+    };
   };
+  return ret;
 }
 
 // Get a pointer to storage
@@ -1800,14 +1844,18 @@ bool rSensorStub::initExtItems(const char* sensorName, const char* topicName, co
 {
   initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   this->rSensorX1::setSensorItems(item);
-  return sensorReset();
+  return sensorStart();
 }
 
 // Sensor reset
-bool rSensorStub::sensorReset()
+sensor_status_t rSensorStub::sensorReset()
 {
   // Item initialization is called only once in setSensorItems(item); >> _item->initItem();
-  return (_item != nullptr);
+  if (_item != nullptr) {
+    return SENSOR_STATUS_OK;
+  } else {
+    return SENSOR_STATUS_ERROR;
+  };
 }
 
 // Initialization of internal items
@@ -1827,16 +1875,15 @@ void rSensorStub::registerItemsParameters(paramsGroupHandle_t parent_group)
 
 sensor_status_t rSensorStub::readRawData()
 {
-  sensor_status_t status = SENSOR_STATUS_NOT_SUPPORTED;
+  sensor_status_t ret = SENSOR_STATUS_NOT_SUPPORTED;
   if (_item) {
     value_t rawValue;
-    status = _item->getRawValue(&rawValue);
-    if (status == SENSOR_STATUS_OK) {
-      setRawValues(rawValue);
+    ret = _item->getRawValue(&rawValue);
+    if (ret == SENSOR_STATUS_OK) {
+      return setRawValues(rawValue);
     };
   };
-  setRawStatus(status, false);
-  return status;
+  return ret;
 }
 
 // =======================================================================================================================
@@ -1908,21 +1955,23 @@ bool rSensorX2::setFilterMode2(const sensor_filter_t filterMode, const uint16_t 
 }
 
 // Writing measured RAW values to internal items
-bool rSensorX2::checkRawValues(const value_t newValue1, const value_t newValue2)
+sensor_status_t rSensorX2::setRawValues(const value_t newValue1, const value_t newValue2)
 {
-  return !isnan(newValue1) && !isnan(newValue2);
-}
-
-void rSensorX2::setRawValues(const value_t newValue1, const value_t newValue2)
-{
-  if (checkRawValues(newValue1, newValue2)) {
-    time_t timestamp = time(nullptr);
-    if (_item1) _item1->setRawValue(newValue1, timestamp);
-    if (_item2) _item2->setRawValue(newValue2, timestamp);
-    setRawStatus(SENSOR_STATUS_OK, true);
-  } else {
-    setRawStatus(SENSOR_STATUS_NO_DATA, true);
+  sensor_status_t ret = SENSOR_STATUS_NO_DATA;
+  if (_item1) {
+    ret = _item1->checkValue(newValue1);
+    if (ret == SENSOR_STATUS_OK) {
+      time_t timestamp = time(nullptr);
+      _item1->setRawValue(newValue1, timestamp);
+      if (_item2) {
+        ret = _item2->checkValue(newValue2);
+        if (ret == SENSOR_STATUS_OK) {
+          _item2->setRawValue(newValue2, timestamp);
+        };
+      };
+    };
   };
+  return ret;
 }
 
 // Get a pointer to storage
@@ -2354,22 +2403,29 @@ bool rSensorX3::setFilterMode3(const sensor_filter_t filterMode, const uint16_t 
 }
 
 // Writing measured RAW values to internal items
-bool rSensorX3::checkRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3)
+sensor_status_t rSensorX3::setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3)
 {
-  return !isnan(newValue1) && !isnan(newValue2) && !isnan(newValue3);
-}
-
-void rSensorX3::setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3)
-{
-  if (checkRawValues(newValue1, newValue2, newValue3)) {
-    time_t timestamp = time(nullptr);
-    if (_item1) _item1->setRawValue(newValue1, timestamp);
-    if (_item2) _item2->setRawValue(newValue2, timestamp);
-    if (_item3) _item3->setRawValue(newValue3, timestamp);
-    setRawStatus(SENSOR_STATUS_OK, true);
-  } else {
-    setRawStatus(SENSOR_STATUS_NO_DATA, true);
+  sensor_status_t ret = SENSOR_STATUS_NO_DATA;
+  if (_item1) {
+    ret = _item1->checkValue(newValue1);
+    if (ret == SENSOR_STATUS_OK) {
+      time_t timestamp = time(nullptr);
+      _item1->setRawValue(newValue1, timestamp);
+      if (_item2) {
+        ret = _item2->checkValue(newValue2);
+        if (ret == SENSOR_STATUS_OK) {
+          _item2->setRawValue(newValue2, timestamp);
+          if (_item3) {
+            ret = _item3->checkValue(newValue3);
+            if (ret == SENSOR_STATUS_OK) {
+              _item3->setRawValue(newValue3, timestamp);
+            };
+          };
+        };
+      };
+    };
   };
+  return ret;
 }
 
 // Get a pointer to storage
@@ -2789,23 +2845,35 @@ bool rSensorX4::setFilterMode4(const sensor_filter_t filterMode, const uint16_t 
 }
 
 // Writing measured RAW values to internal items
-bool rSensorX4::checkRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4)
+sensor_status_t rSensorX4::setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4)
 {
-  return !isnan(newValue1) && !isnan(newValue2) && !isnan(newValue3) && !isnan(newValue4);
-}
-
-void rSensorX4::setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4)
-{
-  if (checkRawValues(newValue1, newValue2, newValue3, newValue4)) {
-    time_t timestamp = time(nullptr);
-    if (_item1) _item1->setRawValue(newValue1, timestamp);
-    if (_item2) _item2->setRawValue(newValue2, timestamp);
-    if (_item3) _item3->setRawValue(newValue3, timestamp);
-    if (_item4) _item4->setRawValue(newValue4, timestamp);
-    setRawStatus(SENSOR_STATUS_OK, true);
-  } else {
-    setRawStatus(SENSOR_STATUS_NO_DATA, true);
+  sensor_status_t ret = SENSOR_STATUS_NO_DATA;
+  if (_item1) {
+    ret = _item1->checkValue(newValue1);
+    if (ret == SENSOR_STATUS_OK) {
+      time_t timestamp = time(nullptr);
+      _item1->setRawValue(newValue1, timestamp);
+      if (_item2) {
+        ret = _item2->checkValue(newValue2);
+        if (ret == SENSOR_STATUS_OK) {
+          _item2->setRawValue(newValue2, timestamp);
+          if (_item3) {
+            ret = _item3->checkValue(newValue3);
+            if (ret == SENSOR_STATUS_OK) {
+              _item3->setRawValue(newValue3, timestamp);
+              if (_item4) {
+                ret = _item4->checkValue(newValue4);
+                if (ret == SENSOR_STATUS_OK) {
+                  _item4->setRawValue(newValue4, timestamp);
+                };
+              };
+            };
+          };
+        };
+      };
+    };
   };
+  return ret;
 }
 
 // Get a pointer to storage
@@ -3324,24 +3392,41 @@ bool rSensorX5::setFilterMode5(const sensor_filter_t filterMode, const uint16_t 
 }
 
 // Writing measured RAW values to internal items
-bool rSensorX5::checkRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4, const value_t newValue5)
+sensor_status_t rSensorX5::setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4, const value_t newValue5)
 {
-  return !isnan(newValue1) && !isnan(newValue2) && !isnan(newValue3) && !isnan(newValue4) && !isnan(newValue5);
-}
-
-void rSensorX5::setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4, const value_t newValue5)
-{
-  if (checkRawValues(newValue1, newValue2, newValue3, newValue4, newValue5)) {
-    time_t timestamp = time(nullptr);
-    if (_item1) _item1->setRawValue(newValue1, timestamp);
-    if (_item2) _item2->setRawValue(newValue2, timestamp);
-    if (_item3) _item3->setRawValue(newValue3, timestamp);
-    if (_item4) _item4->setRawValue(newValue4, timestamp);
-    if (_item5) _item5->setRawValue(newValue5, timestamp);
-    setRawStatus(SENSOR_STATUS_OK, true);
-  } else {
-    setRawStatus(SENSOR_STATUS_NO_DATA, true);
+  sensor_status_t ret = SENSOR_STATUS_NO_DATA;
+  if (_item1) {
+    ret = _item1->checkValue(newValue1);
+    if (ret == SENSOR_STATUS_OK) {
+      time_t timestamp = time(nullptr);
+      _item1->setRawValue(newValue1, timestamp);
+      if (_item2) {
+        ret = _item2->checkValue(newValue2);
+        if (ret == SENSOR_STATUS_OK) {
+          _item2->setRawValue(newValue2, timestamp);
+          if (_item3) {
+            ret = _item3->checkValue(newValue3);
+            if (ret == SENSOR_STATUS_OK) {
+              _item3->setRawValue(newValue3, timestamp);
+              if (_item4) {
+                ret = _item4->checkValue(newValue4);
+                if (ret == SENSOR_STATUS_OK) {
+                  _item4->setRawValue(newValue4, timestamp);
+                  if (_item5) {
+                    ret = _item5->checkValue(newValue5);
+                    if (ret == SENSOR_STATUS_OK) {
+                      _item5->setRawValue(newValue5, timestamp);
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
   };
+  return ret;
 }
 
 // Get a pointer to storage

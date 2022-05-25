@@ -40,6 +40,7 @@ BMP280::BMP280():rSensorX2()
 {
   _I2C_num = 0;
   _I2C_address = 0;
+  _meas_wait = 16;
   memset(&_dev, 0, sizeof(_dev));
   memset(&_conf, 0, sizeof(_conf));
 
@@ -174,79 +175,86 @@ char* BMP280::getDisplayValue()
 #endif // CONFIG_SENSOR_DISPLAY_ENABLED
 
 // API error handling
-bool BMP280::checkApiCode(const char* api_name, int8_t rslt)
+sensor_status_t BMP280::checkApiCode(const char* api_name, int8_t rslt)
 {
   switch (rslt) {
     case BMP280_OK:
-      setRawStatus(SENSOR_STATUS_OK, false);
-      return true;
+      return SENSOR_STATUS_OK;
     case BMP280_E_NULL_PTR:
-      setRawStatus(SENSOR_STATUS_ERROR, false);
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Null pointer", _name, api_name, rslt);
-      return false;
+      return SENSOR_STATUS_ERROR;
     case BMP280_E_COMM_FAIL:
-      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Communication failure\r\n", _name, api_name, rslt);
-      return false;
+      return SENSOR_STATUS_CONN_ERROR;
     case BMP280_E_INVALID_LEN:
-      setRawStatus(SENSOR_STATUS_ERROR, false);
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Incorrect length parameter\r\n", _name, api_name, rslt);
-      return false;
+      return SENSOR_STATUS_ERROR;
     case BMP280_E_DEV_NOT_FOUND:
-      setRawStatus(SENSOR_STATUS_CONN_ERROR, false);
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Device not found\r\n", _name, api_name, rslt);
-      return false;
+      return SENSOR_STATUS_CONN_ERROR;
     case BMP280_E_INVALID_MODE:
-      setRawStatus(SENSOR_STATUS_NOT_SUPPORTED, false);
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Invalid mode\r\n", _name, api_name, rslt);
-      return false;
+      return SENSOR_STATUS_NOT_SUPPORTED;
     case BMP280_E_IMPLAUS_TEMP:
     case BMP280_E_IMPLAUS_PRESS:
-      setRawStatus(SENSOR_STATUS_NO_DATA, false);
-      rlog_w(_name, "%s: API name [%s] earning [%d]: Invalid temperature\r\n", _name, api_name, rslt);
-      return logTAG;
-    case BMP280_E_CAL_PARAM_RANGE:
-      setRawStatus(SENSOR_STATUS_CAL_ERROR, false);
       rlog_w(logTAG, "%s: API name [%s] earning [%d]: Invalid temperature\r\n", _name, api_name, rslt);
-      return false;
+      return SENSOR_STATUS_NO_DATA;
+    case BMP280_E_CAL_PARAM_RANGE:
+      rlog_w(logTAG, "%s: API name [%s] earning [%d]: Invalid temperature\r\n", _name, api_name, rslt);
+      return SENSOR_STATUS_CAL_ERROR;
     default:
-      setRawStatus(SENSOR_STATUS_ERROR, false);
       rlog_e(logTAG, "%s: API name [%s] error [%d]: Unknown error code\r\n", _name, api_name, rslt);
-      return false;
+      return SENSOR_STATUS_ERROR;
   };
 }
 
 /**
  * Start device
  * */
-bool BMP280::sensorReset()
+sensor_status_t BMP280::sensorReset()
 {
-  int8_t rslt;
-
   _dev.dev_id = (_I2C_num << 7) | (_I2C_address & 0x7F);
   _mode = BMP280_MODE_SLEEP;
 
-  rslt = bmp280_init(&_dev); // bmp280_soft_reset(dev) inline
-  if (checkApiCode("bmp280_init", rslt)) {
-    return sendConfiguration() && sendPowerMode(_mode);
+  sensor_status_t rslt = checkApiCode("bmp280_init", bmp280_init(&_dev));
+  if (rslt == SENSOR_STATUS_OK) {
+    rslt = sendConfiguration();
+    if (rslt == SENSOR_STATUS_OK) {
+      rslt = sendPowerMode(_mode);
+    };
   };
-  return false;
+  return rslt;
 }
 
 /**
  * Setting parameters
  * */
-bool BMP280::sendPowerMode(BMP280_MODE mode)
+uint8_t BMP280::osr2int(BMP280_OVERSAMPLING osr)
 {
-  rlog_i(_name, "Send power mode");
+  switch (osr) {
+    case BMP280_OSM_X1:  return 1;
+    case BMP280_OSM_X2:  return 2;
+    case BMP280_OSM_X4:  return 4;
+    case BMP280_OSM_X8:  return 8;
+    case BMP280_OSM_X16: return 16;
+    default: return 0;
+  };
+}
+
+sensor_status_t BMP280::sendPowerMode(BMP280_MODE mode)
+{
+  rlog_i(logTAG, RSENSOR_LOG_MSG_SET_MODE_HEADER, _name, mode);
   int8_t rslt = bmp280_set_power_mode(mode, &_dev);
   if (rslt == BMP280_OK) { _mode = mode; };
   return checkApiCode("bmp280_set_power_mode", rslt);
 }
 
-bool BMP280::sendConfiguration()
+sensor_status_t BMP280::sendConfiguration()
 {
-  rlog_i(_name, "Send configuration");
+  rlog_i(logTAG, RSENSOR_LOG_MSG_SEND_CONFIG, _name);
+  uint8_t _meas_wait_pres = osr2int((BMP280_OVERSAMPLING)_conf.os_pres);
+  uint8_t _meas_wait_temp = osr2int((BMP280_OVERSAMPLING)_conf.os_temp);
+  _meas_wait_pres < _meas_wait_temp ? _meas_wait = _meas_wait_temp : _meas_wait = _meas_wait_pres;
   int8_t rslt = bmp280_set_config(&_conf, &_dev);
   if (rslt == BMP280_OK) { _mode = BMP280_MODE_SLEEP; };
   return checkApiCode("bmp280_set_config", rslt);
@@ -260,26 +268,29 @@ bool BMP280::setConfiguration(BMP280_MODE mode,
   _conf.filter = filter;
   _conf.os_pres = osPress;
   _conf.os_temp = osTemp;
-  return sendConfiguration() && sendPowerMode(mode);
+  if (sendConfiguration() == SENSOR_STATUS_OK) {
+    return (sendPowerMode(mode) == SENSOR_STATUS_OK);
+  };
+  return false;
 }
 
 bool BMP280::setOversampling(BMP280_OVERSAMPLING osPress, BMP280_OVERSAMPLING osTemp)
 {
   _conf.os_pres = osPress;
   _conf.os_temp = osTemp;
-  return sendConfiguration();
+  return (sendConfiguration() == SENSOR_STATUS_OK);
 };
 
 bool BMP280::setIIRFilterSize(BMP280_IIR_FILTER filter)
 {
   _conf.filter = filter;
-  return sendConfiguration();
+  return (sendConfiguration() == SENSOR_STATUS_OK);
 };
 
 bool BMP280::setODR(BMP280_STANDBYTIME odr)
 {
   _conf.odr = odr;
-  return sendConfiguration();
+  return (sendConfiguration() == SENSOR_STATUS_OK);
 };
 
 /**
@@ -287,14 +298,14 @@ bool BMP280::setODR(BMP280_STANDBYTIME odr)
  * */
 sensor_status_t BMP280::readRawData()
 {
-  int8_t rslt;
+  sensor_status_t rslt;
   struct bmp280_uncomp_data ucomp_data;
   double temperature, pressure;
 
   // Send a request for FORCED mode if the previously configured mode is different from cyclic (NORMAL)
   if (_mode != BMP280_MODE_NORMAL) {
-    rslt = bmp280_set_power_mode(BMP280_MODE_FORCED, &_dev);
-    if (!checkApiCode("bmp280_set_power_mode", rslt)) return _lastStatus; 
+    rslt = checkApiCode("bmp280_set_power_mode", bmp280_set_power_mode(BMP280_MODE_FORCED, &_dev));
+    if (rslt != SENSOR_STATUS_OK) return rslt;
     _mode = BMP280_MODE_FORCED;
 
     // Calculate the minimum delay required between consecutive measurement based upon the sensor enabled and the oversampling configuration
@@ -302,18 +313,20 @@ sensor_status_t BMP280::readRawData()
   };
 
   // Reading the raw data from sensor
-  rslt = bmp280_get_uncomp_data(&ucomp_data, &_dev);
-  if (!checkApiCode("bmp280_get_uncomp_data", rslt)) return _lastStatus;
+  rslt = checkApiCode("bmp280_get_uncomp_data", bmp280_get_uncomp_data(&ucomp_data, &_dev));
+  if (rslt != SENSOR_STATUS_OK) return rslt;
 
   // Getting the compensated pressure
-  rslt = bmp280_get_comp_pres_double(&pressure, ucomp_data.uncomp_press, &_dev);
-  if (!checkApiCode("bmp280_get_comp_pres_double", rslt)) return _lastStatus;
+  rslt = checkApiCode("bmp280_get_comp_pres_double", bmp280_get_comp_pres_double(&pressure, ucomp_data.uncomp_press, &_dev));
+  if (rslt != SENSOR_STATUS_OK) return rslt;
 
   // Getting the compensated temperature
-  rslt = bmp280_get_comp_temp_double(&temperature, ucomp_data.uncomp_temp, &_dev);
-  if (!checkApiCode("bmp280_get_comp_temp_double", rslt)) return _lastStatus;
+  rslt = checkApiCode("bmp280_get_comp_temp_double", bmp280_get_comp_temp_double(&temperature, ucomp_data.uncomp_temp, &_dev));
+  if (rslt != SENSOR_STATUS_OK) return rslt;
 
-  setRawValues(pressure, temperature);
-
-  return _lastStatus;
+  if (_meas_wait > 0) {
+    _meas_wait--;
+    return SENSOR_STATUS_NO_DATA;
+  };
+  return setRawValues(pressure, temperature);
 };

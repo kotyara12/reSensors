@@ -94,10 +94,8 @@ class BMP280 : public rSensorX2 {
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
 
     // Reset hardware
-    bool sensorReset() override;
+    sensor_status_t sensorReset() override;
     // Setting parameters
-    bool sendConfiguration();
-    bool sendPowerMode(BMP280_MODE mode);
     bool setConfiguration(BMP280_MODE mode = BMP280_MODE_FORCED, 
       BMP280_STANDBYTIME odr = BMP280_STANDBY_1000ms, BMP280_IIR_FILTER filter = BMP280_FLT_NONE,
       BMP280_OVERSAMPLING osPress = BMP280_OSM_X1, BMP280_OVERSAMPLING osTemp = BMP280_OSM_X1);
@@ -118,11 +116,15 @@ class BMP280 : public rSensorX2 {
   private:
     int                      _I2C_num;
     uint8_t                  _I2C_address;
+    uint8_t                  _meas_wait;
     struct bmp280_dev        _dev;
     struct bmp280_config     _conf;
     BMP280_MODE              _mode = BMP280_MODE_SLEEP;
 
-    bool checkApiCode(const char* api_name, int8_t rslt);
+    uint8_t osr2int(BMP280_OVERSAMPLING osr);
+    sensor_status_t checkApiCode(const char* api_name, int8_t rslt);
+    sensor_status_t sendConfiguration();
+    sensor_status_t sendPowerMode(BMP280_MODE mode);
 };
 
 #endif // __RE_BMP280_H__

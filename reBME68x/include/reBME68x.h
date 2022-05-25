@@ -151,12 +151,10 @@ class BME68x : public rSensorX4 {
     uint8_t getI2CAddress();
 
     // Soft reset
-    bool sensorReset() override;
-    bool softReset();
+    sensor_status_t sensorReset() override;
+    sensor_status_t sendHeaterMode();
 
     // Setting parameters
-    bool sendConfiguration();
-    bool sendHeaterMode();
     bool setConfiguration(BME68x_STANDBYTIME odr = BME68x_STANDBY_NONE, BME68x_IIR_FILTER filter = BME68x_FILTER_OFF,
       BME68x_OVERSAMPLING osPress = BME68x_OS_X1, BME68x_OVERSAMPLING osTemp = BME68x_OS_X1, BME68x_OVERSAMPLING osHum = BME68x_OS_X1);
     bool setOversampling(BME68x_OVERSAMPLING osPress = BME68x_OS_X1, BME68x_OVERSAMPLING osTemp = BME68x_OS_X1, BME68x_OVERSAMPLING osHum = BME68x_OS_X1);
@@ -187,6 +185,7 @@ class BME68x : public rSensorX4 {
   private:
     int                      _I2C_num;
     uint8_t                  _I2C_address;
+    uint8_t                  _meas_wait;
     struct bme68x_dev        _dev;
     struct bme68x_conf       _conf;
     struct bme68x_heatr_conf _heatr_conf;
@@ -195,7 +194,9 @@ class BME68x : public rSensorX4 {
     paramsEntryHandle_t      _prm_heatr_dur = nullptr;
     rBME68xHeaterHandler*    _heatr_hndl = nullptr;
 
-    bool checkApiCode(const char* api_name, int8_t rslt);
+    uint8_t osr2int(BME68x_OVERSAMPLING osr);
+    sensor_status_t checkApiCode(const char* api_name, int8_t rslt);
+    sensor_status_t sendConfiguration();    
 };
 
 #endif // __RE_BME68x_H__
