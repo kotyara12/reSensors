@@ -1,8 +1,7 @@
 {
-  "name": "reAM232x",
-  "version": "1.0.0",
-  "description": "ESP32 library for AM2320 / AM2321 sensors.",
-  "keywords": "AM2320, AM2321",
+  "name": "reSensors",
+  "version": "4.0.0",
+  "description": "Drivers for various sensors for ESP-IDF",
   "authors":
   [
     {
@@ -12,6 +11,6 @@
     }
   ],
   "license": "MIT",
-  "frameworks": ["espidf"],
+  "frameworks": ["arduino", "espidf"],
   "platforms": ["espressif32"]
 }

@@ -9,13 +9,21 @@
 #ifndef __RESENSOR_H__
 #define __RESENSOR_H__
 
-#include <sys/types.h>
+// #include <cstdlib>
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include <time.h>
 #include <math.h>
+#include <memory.h>
 #include "project_config.h"
 #include "def_consts.h"
+#include "rLog.h"
+#include "rStrings.h"
 #include "reParams.h"
+#include "reEsp32.h"
 #include "reEvents.h"
+#include "reNvs.h"
 
 // -----------------------------------------------------------------------------------------------------------------------
 // ------------------------------------------------ Sensors log messages -------------------------------------------------
@@ -258,7 +266,7 @@ class rSensorItem {
     virtual sensor_status_t getRawValue(value_t * rawValue);
 
     // Publishing values
-    char* asString(const char* format, const value_t value);
+    char* asString(const char* format, const value_t value, bool nan_brackets);
     #if CONFIG_SENSOR_AS_PLAIN
     bool publishDataValue(const char* topic, const char* format, const value_t value);
     #endif // CONFIG_SENSOR_AS_PLAIN
@@ -428,6 +436,7 @@ class rSensor {
     // Sensor status
     void setCallbackOnChangeStatus(cb_status_changed_t cb);
     sensor_status_t getStatus();
+    const char* statusString(sensor_status_t status);
     const char* getStatusString();
 
     // Publishing data
