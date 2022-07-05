@@ -2,7 +2,7 @@
    EN: Library for reading data from Capacitive Soil Moisture Sensor v1.2 or similar
    RU: Библиотека для считывания данных с Capacitive Soil Moisture Sensor v1.2 или аналогичных
    --------------------------
-   (с) 2021 Разживин Александр | Razzhivin Alexander
+   (с) 2021-2002 Разживин Александр | Razzhivin Alexander
    kotyara12@yandex.ru | https://kotyara12.ru | tg: @kotyara1971
 */
 
@@ -11,17 +11,19 @@
 
 #include <stdint.h>
 #include <driver/gpio.h>
-#include <reParams.h>
-#include <reSensor.h>
+#include "reParams.h"
+#include "reSensor.h"
+#include "reADC.h"
 #include "project_config.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-class rMoistureItem: public rSensorItem {
+class rMoistureItem: public reADC1 {
   public:
-    rMoistureItem(const char* itemName, 
+    rMoistureItem(rSensor *sensor, const char* itemName, 
+      const adc1_channel_t channel, const adc_atten_t atten, const bool cal_enabled, const double coefficient,
       const value_t levelMin, const value_t levelMax, const type_bounds_t typeBounds, const value_t sizeRange,
       const sensor_filter_t filterMode, const uint16_t filterSize,
       const char* formatNumeric, const char* formatString 

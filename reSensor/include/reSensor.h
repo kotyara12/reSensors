@@ -275,53 +275,53 @@ class rSensorItem {
     #endif // CONFIG_SENSOR_AS_JSON
 
     // Publishing timestamp
-    char* asTimestamp(const sensor_value_t data);
+    char* asTimestamp(sensor_value_t *data);
     #if CONFIG_SENSOR_TIMESTAMP_ENABLE
     #if CONFIG_SENSOR_AS_PLAIN
-    bool publishTimestamp(const char* topic, const sensor_value_t data);
+    bool publishTimestamp(const char* topic, sensor_value_t *data);
     #endif // CONFIG_SENSOR_AS_PLAIN
     #if CONFIG_SENSOR_AS_JSON
-    char* jsonTimestamp(const sensor_value_t data);
+    char* jsonTimestamp(sensor_value_t *data);
     #endif // CONFIG_SENSOR_AS_JSON
     #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
 
     // Publishing "timestring" (string value and timestamp)
-    char* asStringTimeValue(const sensor_value_t data);
+    char* asStringTimeValue(sensor_value_t *data);
     #if CONFIG_SENSOR_TIMESTRING_ENABLE
     #if CONFIG_SENSOR_AS_PLAIN
-    bool publishStringTimeValue(const char* topic, const sensor_value_t data);
+    bool publishStringTimeValue(const char* topic, sensor_value_t *data);
     #endif // CONFIG_SENSOR_AS_PLAIN
     #if CONFIG_SENSOR_AS_JSON
-    char* jsonStringTimeValue(const sensor_value_t data);
+    char* jsonStringTimeValue(sensor_value_t *data);
     #endif // CONFIG_SENSOR_AS_JSON
     #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
 
     // Publishing raw and filtered values
     #if CONFIG_SENSOR_AS_PLAIN
-    bool publishValue(const char* topic, const sensor_value_t data);
+    bool publishValue(const char* topic, sensor_value_t *data);
     #endif // CONFIG_SENSOR_AS_PLAIN
     #if CONFIG_SENSOR_AS_JSON
-    char* jsonValue(const sensor_value_t data);
+    char* jsonValue(sensor_value_t *data);
     #endif // CONFIG_SENSOR_AS_JSON
 
     // Publishing part of sensor data
     #if CONFIG_SENSOR_AS_PLAIN
-    bool publishPartSensorValue(const char* topic, const char* type, const sensor_value_t data);
+    bool publishPartSensorValue(const char* topic, const char* type, sensor_value_t *data);
     #endif // CONFIG_SENSOR_AS_PLAIN
     #if CONFIG_SENSOR_AS_JSON
-    char* jsonPartSensorValue(const char* type, const sensor_value_t data);
+    char* jsonPartSensorValue(const char* type, sensor_value_t *data);
     #endif // CONFIG_SENSOR_AS_JSON
 
     // Publishing extremes
     #if CONFIG_SENSOR_AS_PLAIN
-    bool publishExtremums(const char* topic, const sensor_extremums_t range
+    bool publishExtremums(const char* topic, sensor_extremums_t *range
       #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
       , const bool minValueChanged, const bool maxValueChanged
       #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
       );
     #endif // CONFIG_SENSOR_AS_PLAIN
     #if CONFIG_SENSOR_AS_JSON
-    char* jsonExtremums(const char* type, const sensor_extremums_t range);
+    char* jsonExtremums(const char* type, sensor_extremums_t *range);
     #endif // CONFIG_SENSOR_AS_JSON
 
     // Publishing latest values and extremes

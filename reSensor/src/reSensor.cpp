@@ -442,27 +442,25 @@ bool rSensorItem::publishDataValue(const char* topic, const char* format, const 
 
 char* rSensorItem::jsonDataValue(bool brackets, const char* format, const value_t value)
 {
+#if CONFIG_SENSOR_STRING_ENABLE
+  // {"numeric":0.00,"string":"0.00°С"}
   char* ret = nullptr;
-  #if CONFIG_SENSOR_STRING_ENABLE
-    // {"numeric":0.00,"string":"0.00°С"}
-    char* _numeric = asString(format, value, true);
-    if (_numeric != nullptr) {
-      char* _string = asString(_fmtString, value, true);
-      if (_string != nullptr) {
-        if (brackets) {
-          ret = malloc_stringf("{\"%s\":%s,\"%s\":\"%s\"}", CONFIG_SENSOR_NUMERIC_VALUE, _numeric, CONFIG_SENSOR_STRING_VALUE, _string);
-        } else {
-          ret = malloc_stringf("\"%s\":%s,\"%s\":\"%s\"", CONFIG_SENSOR_NUMERIC_VALUE, _numeric, CONFIG_SENSOR_STRING_VALUE, _string);
-        };
-        free(_string);
-      };
-      free(_numeric);
+  char* _numeric = asString(format, value, true);
+  char* _string = asString(_fmtString, value, true);
+  if ((_numeric != nullptr) && (_string != nullptr)) {
+    if (brackets) {
+      ret = malloc_stringf("{\"%s\":%s,\"%s\":\"%s\"}", CONFIG_SENSOR_NUMERIC_VALUE, _numeric, CONFIG_SENSOR_STRING_VALUE, _string);
+    } else {
+      ret = malloc_stringf("\"%s\":%s,\"%s\":\"%s\"", CONFIG_SENSOR_NUMERIC_VALUE, _numeric, CONFIG_SENSOR_STRING_VALUE, _string);
     };
-  #else
-    // 0.00
-    ret = asString(format, value, true);
-  #endif // CONFIG_SENSOR_STRING_ENABLE
+    if (_string != nullptr) free(_string);
+    if (_numeric != nullptr) free(_numeric);
+  };
   return ret;
+#else
+  // 0.00
+  return asString(format, value, true);
+#endif // CONFIG_SENSOR_STRING_ENABLE
 }
 
 #endif // CONFIG_SENSOR_AS_JSON
@@ -473,14 +471,14 @@ char* rSensorItem::jsonDataValue(bool brackets, const char* format, const value_
 
 #if CONFIG_SENSOR_TIMESTAMP_ENABLE
 
-char* rSensorItem::asTimestamp(const sensor_value_t data)
+char* rSensorItem::asTimestamp(sensor_value_t *data)
 {
-  return malloc_timestr_empty(_fmtTimestamp, data.timestamp);
+  return malloc_timestr_empty(_fmtTimestamp, data->timestamp);
 }
 
 #if CONFIG_SENSOR_AS_PLAIN
 
-bool rSensorItem::publishTimestamp(const char* topic, const sensor_value_t data)
+bool rSensorItem::publishTimestamp(const char* topic, sensor_value_t *data)
 {
   bool ret = false;
   if (_owner != nullptr) {
@@ -497,7 +495,7 @@ bool rSensorItem::publishTimestamp(const char* topic, const sensor_value_t data)
 
 #if CONFIG_SENSOR_AS_JSON
 
-char* rSensorItem::jsonTimestamp(const sensor_value_t data)
+char* rSensorItem::jsonTimestamp(sensor_value_t *data)
 {
   char* ret = nullptr;
   char* _time = asTimestamp(data);
@@ -518,28 +516,26 @@ char* rSensorItem::jsonTimestamp(const sensor_value_t data)
 
 #if CONFIG_SENSOR_TIMESTRING_ENABLE
 
-char* rSensorItem::asStringTimeValue(const sensor_value_t data)
+char* rSensorItem::asStringTimeValue(sensor_value_t *data)
 {
   char* ret = nullptr;
-  if (isnan(data.filteredValue)) {
+  if (isnan(data->filteredValue)) {
     ret = malloc_stringf("%s", CONFIG_FORMAT_EMPTY);
   } else {
-    char* _string = asString(_fmtString, data.filteredValue, false);
-    if (_string != nullptr) {
-      char* _time = malloc_timestr_empty(_fmtTimestampValue, data.timestamp);
-      if (_time != nullptr) {
-        ret = malloc_stringf(_fmtStringTimeValue, _string, _time);
-        free(_time);
-      };
-      free(_string);
+    char* _string = asString(_fmtString, data->filteredValue, false);
+    char* _time = malloc_timestr_empty(_fmtTimestampValue, data->timestamp);
+    if ((_string != nullptr) && (_time != nullptr)) {
+      ret = malloc_stringf(_fmtStringTimeValue, _string, _time);
     };
+    if (_string != nullptr) free(_string);
+    if (_time != nullptr) free(_time);
   };
   return ret;
 }
 
 #if CONFIG_SENSOR_AS_PLAIN
 
-bool rSensorItem::publishStringTimeValue(const char* topic, const sensor_value_t data)
+bool rSensorItem::publishStringTimeValue(const char* topic, sensor_value_t *data)
 {
   bool ret = false;
   if (_owner != nullptr) {
@@ -556,7 +552,7 @@ bool rSensorItem::publishStringTimeValue(const char* topic, const sensor_value_t
 
 #if CONFIG_SENSOR_AS_JSON
 
-char* rSensorItem::jsonStringTimeValue(const sensor_value_t data)
+char* rSensorItem::jsonStringTimeValue(sensor_value_t *data)
 {
   char* ret = nullptr;
   char* _stv = asStringTimeValue(data);
@@ -577,26 +573,26 @@ char* rSensorItem::jsonStringTimeValue(const sensor_value_t data)
 
 #if CONFIG_SENSOR_AS_PLAIN
 
-bool rSensorItem::publishValue(const char* topic, const sensor_value_t data)
+bool rSensorItem::publishValue(const char* topic, sensor_value_t *data)
 {
   bool ret = false;
   // filtered value
   char* _topicFiltered = mqttGetSubTopic(topic, CONFIG_SENSOR_FILTERED_VALUE);
   if (_topicFiltered != nullptr) {
-    ret = publishDataValue(_topicFiltered, _fmtNumeric, data.filteredValue);
+    ret = publishDataValue(_topicFiltered, _fmtNumeric, data->filteredValue);
     free(_topicFiltered);
     // raw value
     if (ret) {
       #if (CONFIG_SENSOR_RAW_ENABLE == 1)
         // raw value - always
         char* _topicRaw = mqttGetSubTopic(topic, CONFIG_SENSOR_RAW_VALUE);
-        ret = (_topicRaw != nullptr) && publishDataValue(_topicRaw, "%f", data.rawValue);
+        ret = (_topicRaw != nullptr) && publishDataValue(_topicRaw, "%f", data->rawValue);
         if (_topicRaw != nullptr) free(_topicRaw);
       #elif (CONFIG_SENSOR_RAW_ENABLE == 2)
         // raw value - only when there is filtration
         if (_forcedRawPublish || (_filterMode != SENSOR_FILTER_RAW) || (_offsetValue != 0.0)) {
           char* _topicRaw = mqttGetSubTopic(topic, CONFIG_SENSOR_RAW_VALUE);
-          ret = (_topicRaw != nullptr) && publishDataValue(_topicRaw, "%f", data.rawValue);
+          ret = (_topicRaw != nullptr) && publishDataValue(_topicRaw, "%f", data->rawValue);
           if (_topicRaw != nullptr) free(_topicRaw);
         };
       #endif // CONFIG_SENSOR_RAW_ENABLE
@@ -608,40 +604,32 @@ bool rSensorItem::publishValue(const char* topic, const sensor_value_t data)
 
 #if CONFIG_SENSOR_AS_JSON
 
-char* rSensorItem::jsonValue(const sensor_value_t data)
+char* rSensorItem::jsonValue(sensor_value_t *data)
 {
   char* ret = nullptr;
+  // Generating JSON for filtered value
+  char* _json_flt = jsonDataValue(true, _fmtNumeric, data->filteredValue);
+  // Generating JSON for raw value, if enabled
+  char* _json_raw = nullptr;
   #if (CONFIG_SENSOR_RAW_ENABLE == 1)
-    // {"value":{...},"raw":{...}} - always
-    char* _json_raw = jsonDataValue(true, "%f", data.rawValue);
-    if (_json_raw != nullptr) {
-      char* _json_flt = jsonDataValue(true, _fmtNumeric, data.filteredValue);
-      if (_json_flt != nullptr) {
-        ret = malloc_stringf("\"%s\":%s,\"%s\":%s", CONFIG_SENSOR_FILTERED_VALUE, _json_flt, CONFIG_SENSOR_RAW_VALUE, _json_raw);
-        free(_json_flt);
-      };
-      free(_json_raw);
-    };
+    _json_raw = jsonDataValue(true, "%f", data->rawValue);
   #elif (CONFIG_SENSOR_RAW_ENABLE == 2)
-    //  {"value":{...},"raw":{...}} - only when there is filtration
     if (_forcedRawPublish || (_filterMode != SENSOR_FILTER_RAW) || (_offsetValue != 0.0)) {
-      char* _json_raw = jsonDataValue(true, "%f", data.rawValue);
-      if (_json_raw != nullptr) {
-        char* _json_flt = jsonDataValue(true, _fmtNumeric, data.filteredValue);
-        if (_json_flt != nullptr) {
-          ret = malloc_stringf("\"%s\":%s,\"%s\":%s", CONFIG_SENSOR_FILTERED_VALUE, _json_flt, CONFIG_SENSOR_RAW_VALUE, _json_raw);
-          free(_json_flt);
-        };
-        free(_json_raw);
-      };
-    } else {
-      // ...
-      ret = jsonDataValue(false, _fmtNumeric, data.filteredValue);
+      _json_raw = jsonDataValue(true, "%f", data->rawValue);
     };
-  #else
-    // ...
-    ret = jsonDataValue(false, _fmtNumeric, data.filteredValue);
   #endif // CONFIG_SENSOR_RAW_ENABLE
+  // If there are two JSONs, we mix them into one and delete the sources. If one - return as is
+  if (_json_flt != nullptr) {
+    if (_json_raw != nullptr) {
+      ret = malloc_stringf("\"%s\":%s,\"%s\":%s", CONFIG_SENSOR_FILTERED_VALUE, _json_flt, CONFIG_SENSOR_RAW_VALUE, _json_raw);
+      free(_json_raw);
+      free(_json_flt);
+    } else {
+      ret = _json_flt;
+    };
+  } else {
+    ret = _json_raw;
+  };
   return ret;
 }
 
@@ -653,7 +641,7 @@ char* rSensorItem::jsonValue(const sensor_value_t data)
 
 #if CONFIG_SENSOR_AS_PLAIN
 
-bool rSensorItem::publishPartSensorValue(const char* topic, const char* type, const sensor_value_t data)
+bool rSensorItem::publishPartSensorValue(const char* topic, const char* type, sensor_value_t *data)
 {
   bool ret = false;
   char* _topicData = mqttGetSubTopic(topic, type);
@@ -676,40 +664,26 @@ bool rSensorItem::publishPartSensorValue(const char* topic, const char* type, co
 
 #if CONFIG_SENSOR_AS_JSON
 
-char* rSensorItem::jsonPartSensorValue(const char* type, const sensor_value_t data)
+char* rSensorItem::jsonPartSensorValue(const char* type, sensor_value_t *data)
 {
   char* ret = nullptr;
   char* _json_value = jsonValue(data);
   if (_json_value != nullptr) {
+    char* _json_ext = nullptr;
     #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-      char* _json_time = jsonTimestamp(data);
-      if (_json_time != nullptr) {
-        #if CONFIG_SENSOR_TIMESTRING_ENABLE
-          // "{"type":{...},"time":"12:45:38 01.02.2021","tsv":"0.00°С 12:45 01.02"}
-          char* _json_stv = jsonStringTimeValue(data);
-          if (_json_stv != nullptr) {
-            ret = malloc_stringf("\"%s\":{%s,%s,%s}", type, _json_value, _json_time, _json_stv);
-            free(_json_stv);
-          };
-        #else
-          // {"type":{...},"time":"12:45:38 01.02.2021"}
-          ret = malloc_stringf("\"%s\":{%s,%s}", type, _json_value, _json_time);
-        #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-        free(_json_time);
-      };
-    #else 
-      #if CONFIG_SENSOR_TIMESTRING_ENABLE
-        // {"type":{...},"tsv":"0.00°С 12:45 01.02"}
-        char* _json_stv = jsonStringTimeValue(data);
-        if (_json_stv != nullptr) {
-          ret = malloc_stringf("\"%s\":{%s,%s}", type, _json_value, _json_stv);
-          free(_json_stv);
-        };
-      #else
-        // "type":{...}
-        ret = malloc_stringf("\"%s\":%s", type, _json_value);
-      #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
+      _json_ext = concat_strings_div(_json_ext, jsonTimestamp(data), ",");
     #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
+    #if CONFIG_SENSOR_TIMESTRING_ENABLE
+      _json_ext = concat_strings_div(_json_ext, jsonStringTimeValue(data), ",");
+    #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
+    if (_json_ext == nullptr) {
+      // "type":{...}
+      ret = malloc_stringf("\"%s\":%s", type, _json_value);
+    } else {
+      // "{"type":{...},"time":"12:45:38 01.02.2021","tsv":"0.00°С 12:45 01.02"}
+      ret = malloc_stringf("\"%s\":{%s,%s}", type, _json_value, _json_ext);
+      free(_json_ext);
+    };
     free(_json_value);
   };
   return ret;
@@ -723,18 +697,18 @@ char* rSensorItem::jsonPartSensorValue(const char* type, const sensor_value_t da
 
 #if CONFIG_SENSOR_AS_PLAIN
 
-bool rSensorItem::publishExtremums(const char* topic, const sensor_extremums_t range
+bool rSensorItem::publishExtremums(const char* topic, sensor_extremums_t *range
   #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
   , const bool minValueChanged, const bool maxValueChanged
   #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
 )
 {
   #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
-    return (!minValueChanged || publishPartSensorValue(topic, CONFIG_SENSOR_MINIMAL, range.minValue))
-        && (!maxValueChanged || publishPartSensorValue(topic, CONFIG_SENSOR_MAXIMAL, range.maxValue));
+    return (!minValueChanged || publishPartSensorValue(topic, CONFIG_SENSOR_MINIMAL, &(range->minValue)))
+        && (!maxValueChanged || publishPartSensorValue(topic, CONFIG_SENSOR_MAXIMAL, &(range->maxValue)));
   #else
-    return publishPartSensorValue(topic, CONFIG_SENSOR_MINIMAL, range.minValue) 
-        && publishPartSensorValue(topic, CONFIG_SENSOR_MAXIMAL, range.maxValue);
+    return publishPartSensorValue(topic, CONFIG_SENSOR_MINIMAL, &(range->minValue)) 
+        && publishPartSensorValue(topic, CONFIG_SENSOR_MAXIMAL, &(range->maxValue));
   #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
 }
 
@@ -742,14 +716,14 @@ bool rSensorItem::publishExtremums(const char* topic, const sensor_extremums_t r
 
 #if CONFIG_SENSOR_AS_JSON
 
-char* rSensorItem::jsonExtremums(const char* type, const sensor_extremums_t range)
+char* rSensorItem::jsonExtremums(const char* type, sensor_extremums_t *range)
 {
   char* ret = nullptr;
   // "type":{"min":{...},"max":{...}}
-  char* _min_value = jsonPartSensorValue(CONFIG_SENSOR_MINIMAL, range.minValue);
-  if (_min_value) {
-    char* _max_value = jsonPartSensorValue(CONFIG_SENSOR_MAXIMAL, range.maxValue);
-    if (_max_value) {
+  char* _min_value = jsonPartSensorValue(CONFIG_SENSOR_MINIMAL, &(range->minValue));
+  if (_min_value != nullptr) {
+    char* _max_value = jsonPartSensorValue(CONFIG_SENSOR_MAXIMAL, &(range->maxValue));
+    if (_max_value != nullptr) {
       ret = malloc_stringf("\"%s\":{%s,%s}", type, _min_value, _max_value);
       free(_max_value);
     };
@@ -775,7 +749,7 @@ bool rSensorItem::publishValues(const char* topic)
       #if CONFIG_SENSOR_EXTREMUMS_DAILY_ENABLE
         if (ret) {
           char* _topicExtremumsDaily = mqttGetSubTopic(_topicExtremums, CONFIG_SENSOR_EXTREMUMS_DAILY);
-          ret = (_topicExtremumsDaily) && publishExtremums(_topicExtremumsDaily, _data.extremumsDaily
+          ret = (_topicExtremumsDaily) && publishExtremums(_topicExtremumsDaily, &_data.extremumsDaily
             #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
             , _data.extremumsDaily.minValueChanged, _data.extremumsDaily.maxValueChanged
             #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
@@ -791,7 +765,7 @@ bool rSensorItem::publishValues(const char* topic)
       #if CONFIG_SENSOR_EXTREMUMS_WEEKLY_ENABLE
         if (ret) {
           char* _topicExtremumsWeekly = mqttGetSubTopic(_topicExtremums, CONFIG_SENSOR_EXTREMUMS_WEEKLY);
-          ret = (_topicExtremumsWeekly) && publishExtremums(_topicExtremumsWeekly, _data.extremumsWeekly
+          ret = (_topicExtremumsWeekly) && publishExtremums(_topicExtremumsWeekly, &_data.extremumsWeekly
             #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
             , _data.extremumsWeekly.minValueChanged, _data.extremumsWeekly.maxValueChanged
             #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
@@ -807,7 +781,7 @@ bool rSensorItem::publishValues(const char* topic)
       #if CONFIG_SENSOR_EXTREMUMS_ENTIRELY_ENABLE
         if (ret) {
           char* _topicExtremumsEntirely = mqttGetSubTopic(_topicExtremums, CONFIG_SENSOR_EXTREMUMS_ENTIRELY);
-          ret = (_topicExtremumsEntirely) && publishExtremums(_topicExtremumsEntirely, _data.extremumsEntirely
+          ret = (_topicExtremumsEntirely) && publishExtremums(_topicExtremumsEntirely, &_data.extremumsEntirely
             #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
             , _data.extremumsEntirely.minValueChanged, _data.extremumsEntirely.maxValueChanged
             #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
@@ -837,74 +811,24 @@ bool rSensorItem::publishNamedValues()
 char* rSensorItem::jsonValues()
 {
   char* ret = nullptr;
-  // {"value":{...},"extremums":{???}}
-  char* _last = jsonPartSensorValue(CONFIG_SENSOR_LASTVALUE, _data.lastValue);
-  if (_last) {
+  char* _last = jsonPartSensorValue(CONFIG_SENSOR_LASTVALUE, &_data.lastValue);
+  if (_last != nullptr) {
+    char* _extr = nullptr;
     #if CONFIG_SENSOR_EXTREMUMS_ENTIRELY_ENABLE
-      char* _bnde = jsonExtremums(CONFIG_SENSOR_EXTREMUMS_ENTIRELY, _data.extremumsEntirely);
-      if (_bnde) {
-        #if CONFIG_SENSOR_EXTREMUMS_WEEKLY_ENABLE
-          char* _bndw = jsonExtremums(CONFIG_SENSOR_EXTREMUMS_WEEKLY, _data.extremumsWeekly);
-          if (_bndw) {
-            #if CONFIG_SENSOR_EXTREMUMS_DAILY_ENABLE
-              // {"value":{...},"extremums":{"daily":{...},"weekly":{...},"entirely":{...}}}
-              char* _bndd = jsonExtremums(CONFIG_SENSOR_EXTREMUMS_DAILY, _data.extremumsDaily);
-              if (_bndd) {
-                ret = malloc_stringf("{%s,\"%s\":{%s,%s,%s}}", _last, CONFIG_SENSOR_EXTREMUS, _bndd, _bndw, _bnde);
-                free(_bndd);
-              };
-            #else
-              // {"value":{...},"extremums":{"weekly":{...},"entirely":{...}}}
-              ret = malloc_stringf("{%s,\"%s\":{%s,%s}}", _last, CONFIG_SENSOR_EXTREMUS, _bndw, _bnde);
-            #endif // CONFIG_SENSOR_EXTREMUMS_DAILY_ENABLE
-            free(_bndw);
-          };
-        #else
-          #if CONFIG_SENSOR_EXTREMUMS_DAILY_ENABLE
-            // {"value":{...},"extremums":{"daily":{...},"entirely":{...}}}
-            char* _bndd = jsonExtremums(CONFIG_SENSOR_EXTREMUMS_DAILY, _data.extremumsDaily);
-            if (_bndd) {
-              ret = malloc_stringf("{%s,\"%s\":{%s,%s}}", _last, CONFIG_SENSOR_EXTREMUS, _bndd, _bnde);
-              free(_bndd);
-            };
-          #else
-            // {"value":{...},"extremums":{"entirely":{...}}}
-            ret = malloc_stringf("{%s,\"%s\":{%s}}", _last, CONFIG_SENSOR_EXTREMUS, _bnde);
-          #endif // CONFIG_SENSOR_EXTREMUMS_DAILY_ENABLE
-        #endif // CONFIG_SENSOR_EXTREMUMS_WEEKLY_ENABLE
-        free(_bnde);
-      };
-    #else
-      #if CONFIG_SENSOR_EXTREMUMS_WEEKLY_ENABLE
-        char* _bndw = jsonExtremums(CONFIG_SENSOR_EXTREMUMS_WEEKLY, _data.extremumsWeekly);
-        if (_bndw) {
-          #if CONFIG_SENSOR_EXTREMUMS_DAILY_ENABLE
-            // {"value":{...},"extremums":{"daily":{...},"weekly":{...}}}
-            char* _bndd = jsonExtremums(CONFIG_SENSOR_EXTREMUMS_DAILY, _data.extremumsDaily);
-            if (_bndd) {
-              ret = malloc_stringf("{%s,\"%s\":{%s,%s}}", _last, CONFIG_SENSOR_EXTREMUS, _bndd, _bndw);
-              free(_bndd);
-            };
-          #else
-            // {"value":{...},"extremums":{"weekly":{...}}}
-            ret = malloc_stringf("{%s,\"%s\":{%s}}", _last, CONFIG_SENSOR_EXTREMUS, _bndw);
-          #endif // CONFIG_SENSOR_EXTREMUMS_DAILY_ENABLE
-          free(_bndw);
-        };
-      #else
-        #if CONFIG_SENSOR_EXTREMUMS_DAILY_ENABLE
-          // {"value":{...},"extremums":{"daily":{...}}}
-          char* _bndd = jsonExtremums(CONFIG_SENSOR_EXTREMUMS_DAILY, _data.extremumsDaily);
-          if (_bndd) {
-            ret = malloc_stringf("{%s,\"%s\":{%s}}", _last, CONFIG_SENSOR_EXTREMUS, _bndd);
-            free(_bndd);
-          };
-        #else
-          // {{...}}
-          ret = malloc_stringf("{%s}", _last);
-        #endif // CONFIG_SENSOR_EXTREMUMS_DAILY_ENABLE
-      #endif // CONFIG_SENSOR_EXTREMUMS_WEEKLY_ENABLE
+      _extr = concat_strings_div(_extr, jsonExtremums(CONFIG_SENSOR_EXTREMUMS_ENTIRELY, &_data.extremumsEntirely), ",");
     #endif // CONFIG_SENSOR_EXTREMUMS_ENTIRELY_ENABLE
+    #if CONFIG_SENSOR_EXTREMUMS_WEEKLY_ENABLE
+      _extr = concat_strings_div(_extr, jsonExtremums(CONFIG_SENSOR_EXTREMUMS_WEEKLY, &_data.extremumsWeekly), ",");
+    #endif // CONFIG_SENSOR_EXTREMUMS_WEEKLY_ENABLE
+    #if CONFIG_SENSOR_EXTREMUMS_DAILY_ENABLE
+      _extr = concat_strings_div(_extr, jsonExtremums(CONFIG_SENSOR_EXTREMUMS_DAILY, &_data.extremumsDaily), ",");
+    #endif // CONFIG_SENSOR_EXTREMUMS_DAILY_ENABLE
+    if (_extr == nullptr) {
+      ret = malloc_stringf("{%s}", _last);
+    } else {
+      ret = malloc_stringf("{%s,\"%s\":{%s}}", _last, CONFIG_SENSOR_EXTREMUS, _extr);
+      free(_extr);
+    };
     free(_last);
   };
   return ret;
@@ -1215,7 +1139,7 @@ const char* rSensor::getName()
 void rSensor::topicsCreate(bool topicPrimary)
 {
   if (_topicPub) free(_topicPub);
-  _topicPub =  mqttGetTopicDevice1(topicPrimary, _topicLocal, _topicName);
+  if (_topicName) _topicPub = mqttGetTopicDevice1(topicPrimary, _topicLocal, _topicName);
   if (_topicPub) {
     rlog_i(logTAG, "Generated topic for sensor \"%s\": [ %s ]", _name, _topicPub);
   } else {
@@ -1708,7 +1632,8 @@ sensor_extremums_t rSensorX1::getExtremumsDaily(const bool readSensor)
 char* rSensorX1::getDisplayValue()
 {
   if (_item) {
-    return  _item->asStringTimeValue(_item->getValue());
+    // sensor_value_t value = _item->getValue();
+    return _item->asStringTimeValue(&_item->getHandle()->lastValue);
   };
   return nullptr;
 }

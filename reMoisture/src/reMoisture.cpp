@@ -7,7 +7,8 @@
 // =======================================================================================================================
 
 // Constructor
-rMoistureItem::rMoistureItem(const char* itemName, 
+rMoistureItem::rMoistureItem(rSensor *sensor, const char* itemName, 
+  const adc1_channel_t channel, const adc_atten_t atten, const bool cal_enabled, const double coefficient,
   const value_t levelMin, const value_t levelMax, const type_bounds_t typeBounds, const value_t sizeRange,
   const sensor_filter_t filterMode, const uint16_t filterSize,
   const char* formatNumeric, const char* formatString 
@@ -18,7 +19,9 @@ rMoistureItem::rMoistureItem(const char* itemName,
   , const char* formatTimestampValue, const char* formatStringTimeValue
   #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
 // inherited constructor
-):rSensorItem(itemName, filterMode, filterSize, formatNumeric, formatString
+):reADC1(sensor, itemName, 
+  channel, atten, cal_enabled, coefficient, 
+  filterMode, filterSize, formatNumeric, formatString
   #if CONFIG_SENSOR_TIMESTAMP_ENABLE
   , formatTimestamp
   #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
@@ -68,16 +71,19 @@ void rMoistureItem::setLevelMax(const value_t newValue)
 
 value_t rMoistureItem::convertValue(const value_t rawValue)
 {
+  if (isnan(rawValue)) return NAN;
+  
+  // Converting voltage to % moisture
   switch (_type) {
-    case RANDE_AUTOEXPANDING_DIRECT:
+    case BOUNDS_AUTOEXPANDING_DIRECT:
       if (rawValue < _level_min) setLevelMin(rawValue);
       if (rawValue > _level_max) setLevelMax(rawValue);
       break;
-    case RANDE_AUTOEXPANDING_INVERT:
+    case BOUNDS_AUTOEXPANDING_INVERT:
       if (rawValue < _level_max) setLevelMax(rawValue);
       if (rawValue > _level_min) setLevelMin(rawValue);
       break;
-    case RANDE_SLIDING:
+    case BOUNDS_SLIDING:
       if (_level_min < _level_max) {
         if (rawValue < _level_min) {
           setLevelMin(rawValue);
