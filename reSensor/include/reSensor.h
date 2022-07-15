@@ -60,6 +60,7 @@
 #define RSENSOR_LOG_MSG_READ_STATUS_FAILED         "Failed to read status from sensor [%s]: %d %s"
 #define RSENSOR_LOG_MSG_READ_MODE_FAILED           "Failed to read mode from sensor [%s]: %d %s"
 #define RSENSOR_LOG_MSG_READ_RESOLUTION_FAILED     "Failed to read resolution from sensor [%s]: %d %s"
+#define RSENSOR_LOG_MSG_SEND_COMMAND_FAILED        "Failed to send command to sensor [%s]: %d %s"
 #define RSENSOR_LOG_MSG_READ_DATA_FAILED           "Failed to read data from sensor [%s]: %d %s"
 #define RSENSOR_LOG_MSG_READ_HUMD_FAILED           "Failed to read humidity value from sensor [%s]: %d %s"
 #define RSENSOR_LOG_MSG_READ_TEMP_FAILED           "Failed to read temperature value from sensor [%s]: %d %s"
@@ -266,7 +267,7 @@ class rSensorItem {
     virtual sensor_status_t getRawValue(value_t * rawValue);
 
     // Publishing values
-    char* asString(const char* format, const value_t value, bool nan_brackets);
+    virtual char* asString(const char* format, const value_t value, bool nan_brackets);
     #if CONFIG_SENSOR_AS_PLAIN
     bool publishDataValue(const char* topic, const char* format, const value_t value);
     #endif // CONFIG_SENSOR_AS_PLAIN

@@ -221,45 +221,59 @@ void rSensorItem::setRawValue(const value_t rawValue, const time_t rawTime)
   };
 
   // Determine the absolute minimum and maximum
-  if ((_data.lastValue.filteredValue < _data.extremumsEntirely.minValue.filteredValue) || (_data.extremumsEntirely.minValue.timestamp == 0)) {
-    _data.extremumsEntirely.minValue = _data.lastValue;
-    #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
-    _data.extremumsEntirely.minValueChanged = true;
-    #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
-  };
-  if ((_data.lastValue.filteredValue > _data.extremumsEntirely.maxValue.filteredValue) || (_data.extremumsEntirely.maxValue.timestamp == 0)) {
-    _data.extremumsEntirely.maxValue = _data.lastValue;
-    #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
-    _data.extremumsEntirely.maxValueChanged = true;
-    #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
-  };
+  if (!isnan(_data.lastValue.filteredValue)) {
+    if ((_data.lastValue.filteredValue < _data.extremumsEntirely.minValue.filteredValue) 
+      || isnan(_data.extremumsEntirely.minValue.filteredValue) 
+      || (_data.extremumsEntirely.minValue.timestamp == 0)) {
+      _data.extremumsEntirely.minValue = _data.lastValue;
+      #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+      _data.extremumsEntirely.minValueChanged = true;
+      #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+    };
+    if ((_data.lastValue.filteredValue > _data.extremumsEntirely.maxValue.filteredValue) 
+      || isnan(_data.extremumsEntirely.maxValue.filteredValue) 
+      || (_data.extremumsEntirely.maxValue.timestamp == 0)) {
+        _data.extremumsEntirely.maxValue = _data.lastValue;
+        #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+        _data.extremumsEntirely.maxValueChanged = true;
+        #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+    };
 
-  // Determine the weekly minimum and maximum
-  if ((_data.lastValue.filteredValue < _data.extremumsWeekly.minValue.filteredValue) || (_data.extremumsWeekly.minValue.timestamp == 0)) {
-    _data.extremumsWeekly.minValue = _data.lastValue;
-    #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
-    _data.extremumsWeekly.minValueChanged = true;
-    #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
-  };
-  if ((_data.lastValue.filteredValue > _data.extremumsWeekly.maxValue.filteredValue) || (_data.extremumsWeekly.maxValue.timestamp == 0)) {
-    _data.extremumsWeekly.maxValue = _data.lastValue;
-    #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
-    _data.extremumsWeekly.maxValueChanged = true;
-    #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
-  };
+    // Determine the weekly minimum and maximum
+    if ((_data.lastValue.filteredValue < _data.extremumsWeekly.minValue.filteredValue) 
+      || isnan(_data.extremumsWeekly.minValue.filteredValue) 
+      || (_data.extremumsWeekly.minValue.timestamp == 0)) {
+        _data.extremumsWeekly.minValue = _data.lastValue;
+        #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+        _data.extremumsWeekly.minValueChanged = true;
+        #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+    };
+    if ((_data.lastValue.filteredValue > _data.extremumsWeekly.maxValue.filteredValue) 
+      || isnan(_data.extremumsWeekly.maxValue.filteredValue) 
+      || (_data.extremumsWeekly.maxValue.timestamp == 0)) {
+        _data.extremumsWeekly.maxValue = _data.lastValue;
+        #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+        _data.extremumsWeekly.maxValueChanged = true;
+        #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+    };
 
-  // Determine the daily minimum and maximum
-  if ((_data.lastValue.filteredValue < _data.extremumsDaily.minValue.filteredValue) || (_data.extremumsDaily.minValue.timestamp == 0)) {
-    _data.extremumsDaily.minValue = _data.lastValue;
-    #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
-    _data.extremumsDaily.minValueChanged = true;
-    #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
-  };
-  if ((_data.lastValue.filteredValue > _data.extremumsDaily.maxValue.filteredValue) || (_data.extremumsDaily.maxValue.timestamp == 0)) {
-    _data.extremumsDaily.maxValue = _data.lastValue;
-    #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
-    _data.extremumsDaily.maxValueChanged = true;
-    #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+    // Determine the daily minimum and maximum
+    if ((_data.lastValue.filteredValue < _data.extremumsDaily.minValue.filteredValue) 
+      || isnan(_data.extremumsDaily.minValue.filteredValue) 
+      || (_data.extremumsDaily.minValue.timestamp == 0)) {
+        _data.extremumsDaily.minValue = _data.lastValue;
+        #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+        _data.extremumsDaily.minValueChanged = true;
+        #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+    };
+    if ((_data.lastValue.filteredValue > _data.extremumsDaily.maxValue.filteredValue) 
+      || isnan(_data.extremumsDaily.maxValue.filteredValue) 
+      || (_data.extremumsDaily.maxValue.timestamp == 0)) {
+        _data.extremumsDaily.maxValue = _data.lastValue;
+        #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+        _data.extremumsDaily.maxValueChanged = true;
+        #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+    };
   };
 }
 
@@ -1354,7 +1368,7 @@ sensor_status_t rSensor::readData()
   // Check if the sensor reading interval has expired
   if (millis() >= (_readLast + _readInterval)) {
     _readLast = millis();
-    rlog_d(logTAG, "Read data from [ %s ]...", _name);
+    rlog_v(logTAG, "Read data from [ %s ]...", _name);
     _lstStatus = readRawData();
 
     // If reading fails, reset sensor and try again
