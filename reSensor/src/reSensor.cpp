@@ -1146,7 +1146,7 @@ void rSensor::initProperties(const char* sensorName, const char* topicName, cons
 // Sensor name
 const char* rSensor::getName()
 {
-  return _name;
+  return (_name == nullptr) ? "???" : _name;
 }
 
 // Mqtt topic
@@ -1155,9 +1155,9 @@ void rSensor::topicsCreate(bool topicPrimary)
   if (_topicPub) free(_topicPub);
   if (_topicName) _topicPub = mqttGetTopicDevice1(topicPrimary, _topicLocal, _topicName);
   if (_topicPub) {
-    rlog_i(logTAG, "Generated topic for sensor \"%s\": [ %s ]", _name, _topicPub);
+    rlog_i(logTAG, "Generated topic for sensor \"%s\": [ %s ]", getName(), _topicPub);
   } else {
-    rlog_e(logTAG, "Failed to generate topic for sensor \"%s\"", _name);
+    rlog_e(logTAG, "Failed to generate topic for sensor \"%s\"", getName());
   };
 }
 
@@ -1165,7 +1165,7 @@ void rSensor::topicsFree()
 {
   if (_topicPub) free(_topicPub);
   _topicPub = nullptr;
-  rlog_d(logTAG, "Topic for sensor \"%s\" has been scrapped", _name);
+  rlog_d(logTAG, "Topic for sensor \"%s\" has been scrapped", getName());
 }
 
 char* rSensor::getTopicPub()
@@ -1340,7 +1340,7 @@ bool rSensor::sensorStart()
 {
   sensor_status_t resetStatus = sensorReset();
   if (resetStatus == SENSOR_STATUS_OK) {
-    rlog_i(logTAG, RSENSOR_LOG_MSG_INIT_OK, _name);
+    rlog_i(logTAG, RSENSOR_LOG_MSG_INIT_OK, getName());
     setRawStatus(resetStatus, true);
     return true;
   };
@@ -1352,7 +1352,7 @@ sensor_status_t rSensor::readData()
 {
   // Check if the sensor has been initialized
   if (_errStatus == SENSOR_STATUS_NO_INIT) {
-    rlog_e(logTAG, RSENSOR_LOG_MSG_NO_INIT, _name);
+    rlog_e(logTAG, RSENSOR_LOG_MSG_NO_INIT, getName());
     return _errStatus;
   };
 
@@ -1368,7 +1368,7 @@ sensor_status_t rSensor::readData()
   // Check if the sensor reading interval has expired
   if (millis() >= (_readLast + _readInterval)) {
     _readLast = millis();
-    rlog_v(logTAG, "Read data from [ %s ]...", _name);
+    rlog_v(logTAG, "Read data from [ %s ]...", getName());
     _lstStatus = readRawData();
 
     // If reading fails, reset sensor and try again
@@ -1771,7 +1771,7 @@ sensor_status_t rSensorStub::sensorReset()
 // Initialization of internal items
 void rSensorStub::createSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize)
 {
-  rlog_e(logTAG, "Only external items can be used for [ %s ] sensor!", _name);
+  rlog_e(logTAG, "Only external items can be used for [ %s ] sensor!", getName());
   setRawStatus(SENSOR_STATUS_NOT_SUPPORTED, true);
 }
 
@@ -2140,7 +2140,7 @@ void rSensorHT::createSensorItems(const sensor_filter_t filterMode1, const uint1
     #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
   );
   if (_item1) {
-    rlog_d(_name, RSENSOR_LOG_MSG_CREATE_ITEM, _item1->getName(), _name);
+    rlog_d(_name, RSENSOR_LOG_MSG_CREATE_ITEM, _item1->getName(), getName());
   };
 
   // Temperature
@@ -2155,7 +2155,7 @@ void rSensorHT::createSensorItems(const sensor_filter_t filterMode1, const uint1
     #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
   );
   if (_item2) {
-    rlog_d(_name, RSENSOR_LOG_MSG_CREATE_ITEM, _item2->getName(), _name);
+    rlog_d(_name, RSENSOR_LOG_MSG_CREATE_ITEM, _item2->getName(), getName());
   };
 }
 

@@ -19,11 +19,14 @@ DHTxx::DHTxx():rSensorHT()
   rtc_cpu_freq_config_t conf;
   rtc_clk_cpu_freq_get_config(&conf);
   _maxCycles = conf.freq_mhz * 1000;
+  
+  _resetGPIO = GPIO_NUM_NC;
+  _resetLevel = 1;
 }
 
 // Dynamically creating internal items on the heap
 bool DHTxx::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-  DHTxx_TYPE sensorType, const uint8_t gpioNum, const bool gpioPullup,
+  DHTxx_TYPE sensorType, const uint8_t gpioNum, const bool gpioPullup, const int8_t gpioReset, const uint8_t levelReset,
   const sensor_filter_t filterMode1, const uint16_t filterSize1, 
   const sensor_filter_t filterMode2, const uint16_t filterSize2,
   const uint32_t minReadInterval, const uint16_t errorLimit,
@@ -32,6 +35,8 @@ bool DHTxx::initIntItems(const char* sensorName, const char* topicName, const bo
   _sensorType = sensorType;
   _sensorGPIO = (gpio_num_t)gpioNum;
   _gpioPullup = gpioPullup;
+  _resetGPIO  = (gpio_num_t)gpioReset;
+  _resetLevel = levelReset;
   // Initialize properties
   initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   // Initialize internal items
@@ -44,7 +49,7 @@ bool DHTxx::initIntItems(const char* sensorName, const char* topicName, const bo
 
 // Connecting external previously created items, for example statically declared
 bool DHTxx::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-  DHTxx_TYPE sensorType, const uint8_t gpioNum, const bool gpioPullup,
+  DHTxx_TYPE sensorType, const uint8_t gpioNum, const bool gpioPullup, const int8_t gpioReset, const uint8_t levelReset,
   rSensorItem* item1, rSensorItem* item2,
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
@@ -52,6 +57,8 @@ bool DHTxx::initExtItems(const char* sensorName, const char* topicName, const bo
   _sensorType = sensorType;
   _sensorGPIO = (gpio_num_t)gpioNum;
   _gpioPullup = gpioPullup;
+  _resetGPIO  = (gpio_num_t)gpioReset;
+  _resetLevel = levelReset;
   // Initialize properties
   initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   // Assign items
@@ -63,6 +70,16 @@ bool DHTxx::initExtItems(const char* sensorName, const char* topicName, const bo
 // Sensor initialization and start
 sensor_status_t DHTxx::sensorReset()
 {
+  // Initialize Reset GPIO
+  if (_resetGPIO > GPIO_NUM_NC) {
+    gpio_pad_select_gpio(_resetGPIO);
+    SENSOR_ERR_CHECK(gpio_set_direction(_resetGPIO, GPIO_MODE_OUTPUT), RSENSOR_LOG_MSG_INIT_FAILED);
+    SENSOR_ERR_CHECK(gpio_set_level(_resetGPIO, (_resetLevel == 0) ? 0 : 1), RSENSOR_LOG_MSG_INIT_FAILED);
+    vTaskDelay(pdMS_TO_TICKS(2500));
+    SENSOR_ERR_CHECK(gpio_set_level(_resetGPIO, (_resetLevel == 0) ? 1 : 0), RSENSOR_LOG_MSG_INIT_FAILED);
+    vTaskDelay(pdMS_TO_TICKS(500));
+  };
+
   // Initialize GPIO
   gpio_pad_select_gpio(_sensorGPIO);
   // Set pullup, if needed
@@ -72,6 +89,7 @@ sensor_status_t DHTxx::sensorReset()
   } else {
     SENSOR_ERR_CHECK(gpio_pullup_dis(_sensorGPIO), RSENSOR_LOG_MSG_INIT_FAILED);
   };
+
   return SENSOR_STATUS_OK;
 }
 

@@ -94,6 +94,7 @@ class SHT3xD : public rSensorHT {
     // Clear status register
     sensor_status_t clearStatusRegister();
     // Built-in heater control
+    sensor_status_t setHeaterEx(bool heaterMode);
     sensor_status_t setHeater(bool heaterMode);
     bool isHeaterEnabled();
     // After issuing the ART command the sensor will start acquiring data with a frequency of 4Hz
@@ -127,7 +128,6 @@ class SHT3xD : public rSensorHT {
     esp_err_t sendCommand(const uint16_t command);
     esp_err_t readBuffer(const uint16_t command, const uint32_t usWaitData, const uint8_t bytes);
     sensor_status_t startPeriodicMode(const SHT3xD_FREQUENCY frequency, const SHT3xD_REPEATABILITY repeatability);
-    sensor_status_t setHeaterEx(bool heaterMode);
     value_t raw2temperature(uint16_t rawValue);
     value_t raw2humidity(uint16_t rawValue);
     uint16_t temperature2raw(value_t value);

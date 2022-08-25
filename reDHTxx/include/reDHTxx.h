@@ -34,7 +34,7 @@ class DHTxx : public rSensorHT {
     // Dynamically creating internal items on the heap
     bool initIntItems(const char* sensorName, const char* topicName, const bool topicLocal, 
       // hardware properties
-      DHTxx_TYPE sensorType, const uint8_t gpioNum, const bool gpioPullup,
+      DHTxx_TYPE sensorType, const uint8_t gpioNum, const bool gpioPullup, const int8_t gpioReset, const uint8_t levelReset,
       // humidity filter
       const sensor_filter_t filterMode1 = SENSOR_FILTER_RAW, const uint16_t filterSize1 = 0, 
       // temperature filter
@@ -47,7 +47,7 @@ class DHTxx : public rSensorHT {
     // Connecting external previously created items, for example statically declared
     bool initExtItems(const char* sensorName, const char* topicName, const bool topicLocal, 
       // hardware properties
-      DHTxx_TYPE sensorType, const uint8_t gpioNum, const bool gpioPullup,
+      DHTxx_TYPE sensorType, const uint8_t gpioNum, const bool gpioPullup, const int8_t gpioReset, const uint8_t levelReset,
       // humidity filter
       rSensorItem* item1, 
       // temperature filter
@@ -63,6 +63,8 @@ class DHTxx : public rSensorHT {
   private:
     DHTxx_TYPE       _sensorType = DHT_DHT22;
     gpio_num_t       _sensorGPIO;
+    gpio_num_t       _resetGPIO;
+    uint8_t          _resetLevel;
     bool             _gpioPullup;
     uint32_t         _maxCycles;
 
