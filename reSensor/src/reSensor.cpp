@@ -1094,12 +1094,12 @@ value_t rPressureItem::convertValue(const value_t rawValue)
 // =======================================================================================================================
 
 // Constructor
-rSensor::rSensor()
+rSensor::rSensor(uint8_t eventId)
 {
   _name = nullptr;
   _topicName = nullptr;
   _topicPub =  nullptr;
-  _eventId = 0;
+  _eventId = eventId;
   _readInterval = 0;
   _readLast = 0;
   _errLimit = 0;
@@ -1171,13 +1171,6 @@ void rSensor::topicsFree()
 char* rSensor::getTopicPub()
 {
   return _topicPub;
-}
-
-void rSensor::setEventId(uint8_t eventId)
-{
-  if ((eventId != _eventId) && (eventId < 8)) {
-    _eventId = eventId;
-  };
 }
 
 // -----------------------------------------------------------------------------------------------------------------------
@@ -1531,7 +1524,7 @@ char* rSensor::jsonDisplayAndCustomValues()
 // =======================================================================================================================
 
 // Constructor
-rSensorX1::rSensorX1():rSensor()
+rSensorX1::rSensorX1(uint8_t eventId):rSensor(eventId)
 { 
   _item = nullptr;
 }
@@ -1743,7 +1736,7 @@ void rSensorX1::nvsRestoreExtremums(const char* nvs_space)
 // =======================================================================================================================
 
 // Constructor
-rSensorStub::rSensorStub():rSensorX1()
+rSensorStub::rSensorStub(uint8_t eventId):rSensorX1(eventId)
 { 
 }
 
@@ -1803,7 +1796,7 @@ sensor_status_t rSensorStub::readRawData()
 // =======================================================================================================================
 
 // Constructor
-rSensorX2::rSensorX2():rSensor()
+rSensorX2::rSensorX2(uint8_t eventId):rSensor(eventId)
 { 
   _item1 = nullptr;
   _item2 = nullptr;
@@ -2120,7 +2113,7 @@ void rSensorX2::nvsRestoreExtremums(const char* nvs_space)
 // =======================================================================================================================
 // =======================================================================================================================
 
-rSensorHT::rSensorHT():rSensorX2() 
+rSensorHT::rSensorHT(uint8_t eventId):rSensorX2(eventId) 
 {
 }
 
@@ -2231,7 +2224,7 @@ char* rSensorHT::jsonCustomValues()
 // =======================================================================================================================
 
 // Constructor
-rSensorX3::rSensorX3():rSensor()
+rSensorX3::rSensorX3(uint8_t eventId):rSensor(eventId)
 { 
   _item1 = nullptr;
   _item2 = nullptr;
@@ -2653,7 +2646,7 @@ void rSensorX3::nvsRestoreExtremums(const char* nvs_space)
 // =======================================================================================================================
 
 // Constructor
-rSensorX4::rSensorX4():rSensor()
+rSensorX4::rSensorX4(uint8_t eventId):rSensor(eventId)
 { 
   _item1 = nullptr;
   _item2 = nullptr;
@@ -3180,7 +3173,7 @@ void rSensorX4::nvsRestoreExtremums(const char* nvs_space)
 // =======================================================================================================================
 
 // Constructor
-rSensorX5::rSensorX5():rSensor()
+rSensorX5::rSensorX5(uint8_t eventId):rSensor(eventId)
 { 
   _item1 = nullptr;
   _item2 = nullptr;

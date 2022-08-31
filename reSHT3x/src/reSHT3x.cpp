@@ -66,7 +66,7 @@
 
 static const char* logTAG = "SHT3x";
 
-SHT3xD::SHT3xD():rSensorHT()
+SHT3xD::SHT3xD(uint8_t eventId):rSensorHT(eventId)
 {
   _I2C_num = 0;
   _I2C_address = 0;

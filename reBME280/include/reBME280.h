@@ -60,7 +60,7 @@ typedef enum {
 
 class BME280 : public rSensorX3 {
   public:
-    BME280();
+    BME280(uint8_t eventId);
     ~BME280();
 
     // Dynamically creating internal items on the heap

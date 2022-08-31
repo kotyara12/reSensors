@@ -40,7 +40,7 @@ extern "C" {
 
 class DS18x20 : public rSensorX1 {
   public:
-    DS18x20();
+    DS18x20(uint8_t eventId);
     
     // Dynamically creating internal items on the heap
     bool initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,  

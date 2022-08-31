@@ -36,7 +36,7 @@ static bool _check_resolution(DS18x20_RESOLUTION resolution)
   return (resolution >= DS18x20_RESOLUTION_9_BIT) && (resolution <= DS18x20_RESOLUTION_12_BIT);
 }
 
-DS18x20::DS18x20():rSensorX1()
+DS18x20::DS18x20(uint8_t eventId):rSensorX1(eventId)
 {
   _pin = GPIO_NUM_NC;
   _address = ONEWIRE_NONE;

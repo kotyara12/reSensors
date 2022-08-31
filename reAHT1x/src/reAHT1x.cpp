@@ -48,7 +48,7 @@
 
 static const char* logTAG = "AHT1x";
 
-AHT1x::AHT1x():rSensorHT() 
+AHT1x::AHT1x(uint8_t eventId):rSensorHT(eventId) 
 {
 }
 

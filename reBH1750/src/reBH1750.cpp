@@ -20,7 +20,7 @@ static const char * logTAG = "BH1750";
 
 #define BH1750_I2C_TIMEOUT 3000
 
-BH1750::BH1750():rSensorX1()
+BH1750::BH1750(uint8_t eventId):rSensorX1(eventId)
 {
   _I2C_num = 0;
   _I2C_address = 0;

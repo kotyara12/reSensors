@@ -12,7 +12,7 @@ static const char* logTAG = "DHTxx";
 #define DHT_TIMEOUT UINT32_MAX
 
 // Constructor
-DHTxx::DHTxx():rSensorHT()
+DHTxx::DHTxx(uint8_t eventId):rSensorHT(eventId)
 { 
   // 1 millisecond timeout for reading pulses from DHT sensor
   // Note that count is now ignored as the DHT reading algorithm adjusts itself based on the speed of the processor.

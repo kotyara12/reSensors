@@ -30,7 +30,7 @@ typedef enum {
 
 class CCS811 : public rSensorX2 {
   public:
-    CCS811();
+    CCS811(uint8_t eventId);
     ~CCS811();
 
     // Dynamically creating internal items on the heap

@@ -42,7 +42,7 @@ extern "C" {
 
 class HTU2x : public rSensorHT {
   public:
-    HTU2x();
+    HTU2x(uint8_t eventId);
 
     // Dynamically creating internal items on the heap
     bool initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,  

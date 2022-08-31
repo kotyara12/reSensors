@@ -44,7 +44,7 @@ char* rDirectionItem::asString(const char* format, const value_t value, bool nan
   };
 }
 
-FXJT485::FXJT485():rSensorX1()
+FXJT485::FXJT485(uint8_t eventId):rSensorX1(eventId)
 {
   _uartPort = 0;
   _uartRx = GPIO_NUM_NC;

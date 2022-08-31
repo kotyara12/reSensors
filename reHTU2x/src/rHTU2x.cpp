@@ -47,7 +47,7 @@
 static const char* logTAG = "HTU2x";
 static const char* HTU2X_TYPES [] = {"NULL", "SHT20", "HTU2x / SHT21", "Si7013", "Si7020", "Si7021", "Si7021 FAKE", "UNKNOWN"};
 
-HTU2x::HTU2x():rSensorHT()
+HTU2x::HTU2x(uint8_t eventId):rSensorHT(eventId)
 {
   _resolution = HTU2X_RES_RH12_TEMP14;
   _compensated = false;

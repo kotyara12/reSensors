@@ -102,7 +102,7 @@ class rIAQItem: public rSensorItem {
 
 class BME68x : public rSensorX4 {
   public:
-    BME68x();
+    BME68x(uint8_t eventId);
     ~BME68x();
 
     // Dynamically creating internal items on the heap

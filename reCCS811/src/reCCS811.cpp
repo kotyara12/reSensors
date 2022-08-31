@@ -110,7 +110,7 @@ static const char* logTAG = "CCS811";
   return false; \
 }; 
 
-CCS811::CCS811():rSensorX2()
+CCS811::CCS811(uint8_t eventId):rSensorX2(eventId)
 {
   _I2C_num = 0;
   _I2C_address = 0;

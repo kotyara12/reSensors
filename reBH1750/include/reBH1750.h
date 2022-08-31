@@ -44,7 +44,7 @@ extern "C" {
 
 class BH1750 : public rSensorX1 {
   public:
-    BH1750();
+    BH1750(uint8_t eventId);
     
     // Dynamically creating internal items on the heap
     bool initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,  

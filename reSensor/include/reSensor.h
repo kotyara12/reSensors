@@ -411,7 +411,7 @@ class rPressureItem: public rSensorItem {
 
 class rSensor {
   public:
-    rSensor();
+    rSensor(uint8_t eventId);
     ~rSensor();
 
     // Initialization
@@ -426,7 +426,6 @@ class rSensor {
     void topicsCreate(bool topicPrimary);
     void topicsFree();
     char* getTopicPub();
-    void setEventId(uint8_t eventId);
 
     // Reading data from a physical sensor
     sensor_status_t readData();
@@ -508,7 +507,7 @@ class rSensor {
 
 class rSensorX1: public rSensor {
   public:
-    rSensorX1(); 
+    rSensorX1(uint8_t eventId); 
     ~rSensorX1();
     
     bool setFilterMode(const sensor_filter_t filterMode, const uint16_t filterSize);
@@ -551,7 +550,7 @@ class rSensorX1: public rSensor {
 
 class rSensorStub: public rSensorX1 {
   public:
-    rSensorStub();  
+    rSensorStub(uint8_t eventId);  
     // Connecting external previously created items, for example statically declared
     bool initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
       rSensorItem* item, const uint32_t minReadInterval = 0, const uint16_t errorLimit = 0,
@@ -567,7 +566,7 @@ class rSensorStub: public rSensorX1 {
 
 class rSensorX2: public rSensor {
   public:
-    rSensorX2();
+    rSensorX2(uint8_t eventId);
     ~rSensorX2();
 
     bool setFilterMode1(const sensor_filter_t filterMode, const uint16_t filterSize);
@@ -622,7 +621,7 @@ class rSensorX2: public rSensor {
 
 class rSensorHT: public rSensorX2 {
   public:
-    rSensorHT();  
+    rSensorHT(uint8_t eventId);  
   protected:
     void createSensorItems(
       // humidity value
@@ -643,7 +642,7 @@ class rSensorHT: public rSensorX2 {
 
 class rSensorX3: public rSensor {
   public:
-    rSensorX3();
+    rSensorX3(uint8_t eventId);
     ~rSensorX3();
 
     bool setFilterMode1(const sensor_filter_t filterMode, const uint16_t filterSize);
@@ -707,7 +706,7 @@ class rSensorX3: public rSensor {
 
 class rSensorX4: public rSensor {
   public:
-    rSensorX4();
+    rSensorX4(uint8_t eventId);
     ~rSensorX4();
 
     bool setFilterMode1(const sensor_filter_t filterMode, const uint16_t filterSize);
@@ -782,7 +781,7 @@ class rSensorX4: public rSensor {
 
 class rSensorX5: public rSensor {
   public:
-    rSensorX5();
+    rSensorX5(uint8_t eventId);
     ~rSensorX5();
 
     bool setFilterMode1(const sensor_filter_t filterMode, const uint16_t filterSize);
