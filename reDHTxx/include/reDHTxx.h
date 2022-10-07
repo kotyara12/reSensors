@@ -65,6 +65,7 @@ class DHTxx : public rSensorHT {
     gpio_num_t       _sensorGPIO;
     gpio_num_t       _resetGPIO;
     uint8_t          _resetLevel;
+    time_t           _resetTime;
     bool             _gpioPullup;
     uint32_t         _maxCycles;
 

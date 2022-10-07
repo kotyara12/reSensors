@@ -1331,6 +1331,7 @@ const char* rSensor::getStatusString()
 
 bool rSensor::sensorStart()
 {
+  rlog_d(logTAG, RSENSOR_LOG_MSG_INIT, getName());
   sensor_status_t resetStatus = sensorReset();
   if (resetStatus == SENSOR_STATUS_OK) {
     rlog_i(logTAG, RSENSOR_LOG_MSG_INIT_OK, getName());

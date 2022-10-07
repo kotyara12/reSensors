@@ -29,6 +29,7 @@
 // ------------------------------------------------ Sensors log messages -------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
 
+#define RSENSOR_LOG_MSG_INIT                       "Sensor [%s] initialization..."
 #define RSENSOR_LOG_MSG_INIT_OK                    "Sensor [%s] initialization completed successfully"
 #define RSENSOR_LOG_MSG_NO_INIT                    "Sensor [%s] not initializated"
 #define RSENSOR_LOG_MSG_NO_DATA                    "Sensor [%s]: no new data"
@@ -41,6 +42,7 @@
 #define RSENSOR_LOG_MSG_INIT_FAILED                "Failed to initialize sensor [%s]: %d %s"
 
 #define RSENSOR_LOG_MSG_RESET                      "Sensor [%s] has been reset"
+#define RSENSOR_LOG_MSG_RESET_POWER                "Power reset for [%s] sensor"
 #define RSENSOR_LOG_MSG_RESET_FAILED               "Soft reset [%s] failed: %d %s"
 
 #define RSENSOR_LOG_MSG_SEND_CONFIG                "Sensor [%s]: send configuration"

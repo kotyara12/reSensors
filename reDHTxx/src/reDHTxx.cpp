@@ -10,6 +10,7 @@
 static const char* logTAG = "DHTxx";
 
 #define DHT_TIMEOUT UINT32_MAX
+#define DHT_MIN_RESET_INTERVAL 600
 
 // Constructor
 DHTxx::DHTxx(uint8_t eventId):rSensorHT(eventId)
@@ -22,6 +23,7 @@ DHTxx::DHTxx(uint8_t eventId):rSensorHT(eventId)
   
   _resetGPIO = GPIO_NUM_NC;
   _resetLevel = 1;
+  _resetTime = 0;
 }
 
 // Dynamically creating internal items on the heap
@@ -37,6 +39,7 @@ bool DHTxx::initIntItems(const char* sensorName, const char* topicName, const bo
   _gpioPullup = gpioPullup;
   _resetGPIO  = (gpio_num_t)gpioReset;
   _resetLevel = levelReset;
+  _resetTime  = 0;
   // Initialize properties
   initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   // Initialize internal items
@@ -59,6 +62,7 @@ bool DHTxx::initExtItems(const char* sensorName, const char* topicName, const bo
   _gpioPullup = gpioPullup;
   _resetGPIO  = (gpio_num_t)gpioReset;
   _resetLevel = levelReset;
+  _resetTime  = 0;
   // Initialize properties
   initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   // Assign items
@@ -71,7 +75,9 @@ bool DHTxx::initExtItems(const char* sensorName, const char* topicName, const bo
 sensor_status_t DHTxx::sensorReset()
 {
   // Initialize Reset GPIO
-  if (_resetGPIO > GPIO_NUM_NC) {
+  if ((_resetGPIO > GPIO_NUM_NC) && ((_resetTime == 0) || (time(nullptr) - _resetTime) >= DHT_MIN_RESET_INTERVAL)) {
+    rlog_w(logTAG, RSENSOR_LOG_MSG_RESET_POWER, _name);
+    time(&_resetTime);
     gpio_pad_select_gpio(_resetGPIO);
     SENSOR_ERR_CHECK(gpio_set_direction(_resetGPIO, GPIO_MODE_OUTPUT), RSENSOR_LOG_MSG_INIT_FAILED);
     SENSOR_ERR_CHECK(gpio_set_level(_resetGPIO, (_resetLevel == 0) ? 0 : 1), RSENSOR_LOG_MSG_INIT_FAILED);
