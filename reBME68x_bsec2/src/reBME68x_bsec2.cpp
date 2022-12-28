@@ -1,4 +1,4 @@
-#include "reBME68x.h"
+#include "reBME68x_besc2.h"
 #include "freertos/FreeRTOS.h"
 #include "rStrings.h"
 #include "reEsp32.h"
@@ -65,71 +65,6 @@ void rBME68xHeaterHandler::onChange(param_change_mode_t mode)
   bme->sendHeaterMode();
 }
 
-// -----------------------------------------------------------------------------------------------------------------------
-// ------------------------------------------------------ rIAQItem -------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------
-
-// Constructor
-rIAQItem::rIAQItem(rSensor *sensor, const char* itemName, rSensorItem *humidityItem,
-  const sensor_filter_t filterMode, const uint16_t filterSize,
-  const char* formatNumeric, const char* formatString 
-  #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-  , const char* formatTimestamp
-  #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-  #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-  , const char* formatTimestampValue, const char* formatStringTimeValue
-  #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-// inherited constructor
-):rMapItem(sensor, itemName, 
-  BOUNDS_FIXED, BME68x_DEFAULT_GAS_LIMIT_BAD, BME68x_DEFAULT_GAS_LIMIT_GOOD, 0, 100,
-  filterMode, filterSize, formatNumeric, formatString
-  #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-  , formatTimestamp
-  #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-  #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-  , formatTimestampValue, formatStringTimeValue
-  #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-) {
-  _humidity = humidityItem; 
-};
-
-void rIAQItem::registerItemParameters(paramsGroup_t * group)
-{
-  rMapItem::registerItemParameters(group);
-
-  _prm_hum_ratio = paramsRegisterValue(OPT_KIND_PARAMETER, OPT_TYPE_FLOAT, nullptr, group, 
-    CONFIG_SENSOR_PARAM_GAS_HUM_RATIO_KEY, CONFIG_SENSOR_PARAM_GAS_HUM_RATIO_FRIENDLY, 
-    CONFIG_MQTT_PARAMS_QOS, &_hum_ratio);
-  paramsSetLimitsFloat(_prm_hum_ratio, 0.0, 0.9);
-}
-
-value_t rIAQItem::convertValue(const value_t rawValue)
-{
-  // Gas score
-  float gas_value = rMapItem::convertValue(rawValue) * (1 - _hum_ratio);
-  
-  // Humidity score
-  float hum_value = 0.0;
-  if (_hum_ratio > 0.0) {
-    hum_value = _humidity->getValue().rawValue;
-    if (!isnan(hum_value)) {
-      float hum_reference = 40.0;
-      if ((hum_value >= 38.0) && (hum_value <= 42.0))
-        // Humidity +/-5% around optimum
-        hum_value = _hum_ratio * 100.0;
-      else { 
-        // Humidity is sub-optimal
-        if (hum_value < 38.0)
-          hum_value = _hum_ratio / hum_reference * hum_value * 100.0;
-        else {
-          hum_value = ((1.6666667 * _hum_ratio) - (_hum_ratio / (100.0 - hum_reference) * hum_value)) * 100.0;
-        };
-      }
-    };
-  };
-
-  return (100.0 - (hum_value + gas_value)) * 5.0;
-}
 
 // -----------------------------------------------------------------------------------------------------------------------
 // ------------------------------------------------------- BME68x --------------------------------------------------------
@@ -438,6 +373,12 @@ sensor_status_t BME68x::sensorReset()
     rslt = sendConfiguration();
     if (rslt == SENSOR_STATUS_OK) {
       rslt = sendHeaterMode();
+      if (rslt == SENSOR_STATUS_OK) {
+        bsec_library_return_t retb = bsec_init();
+        if (retb != BSEC_OK) {
+          return SENSOR_STATUS_ERROR;
+        };
+      };
     };
   };
   return rslt;

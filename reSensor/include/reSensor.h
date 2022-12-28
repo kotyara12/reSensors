@@ -175,12 +175,14 @@ typedef enum {
   UNIT_PRESSURE_MMHG          = 2
 } unit_pressure_t;
 
-typedef enum {
+typedef enum { 
   BOUNDS_FIXED                = 0,
-  BOUNDS_AUTOEXPANDING_DIRECT = 1,
-  BOUNDS_AUTOEXPANDING_INVERT = 2,
-  BOUNDS_SLIDING              = 3
+  BOUNDS_EXPAND               = 1,
+  BOUNDS_EXPAND_MIN           = 2,
+  BOUNDS_EXPAND_MAX           = 3,
+  BOUNDS_SHIFT_RANGE          = 4
 } type_bounds_t;
+
 
 typedef float value_t;
 
@@ -409,6 +411,38 @@ class rPressureItem: public rSensorItem {
     value_t convertValue(const value_t rawValue) override;
   private:
     unit_pressure_t _units;
+};
+
+class rMapItem: public rSensorItem {
+  public:
+    rMapItem(rSensor *sensor, const char* itemName, 
+      const type_bounds_t in_bounds, const value_t in_min, const value_t in_max,
+      const value_t out_min, const value_t out_max,
+      const sensor_filter_t filterMode, const uint16_t filterSize,
+      const char* formatNumeric, const char* formatString 
+      #if CONFIG_SENSOR_TIMESTAMP_ENABLE
+      , const char* formatTimestamp
+      #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
+      #if CONFIG_SENSOR_TIMESTRING_ENABLE  
+      , const char* formatTimestampValue, const char* formatStringTimeValue
+      #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
+      );
+
+    value_t checkBounds(value_t newValue);
+    value_t convertValue(const value_t rawValue) override;
+  protected:
+    void registerItemParameters(paramsGroup_t * group) override;
+  private:
+    type_bounds_t _in_bounds; 
+    value_t _in_min; 
+    value_t _in_max;
+    value_t _in_range;
+    value_t _out_min; 
+    value_t _out_max;
+    paramsEntryHandle_t _prm_in_min = nullptr;
+    paramsEntryHandle_t _prm_in_max = nullptr;
+    paramsEntryHandle_t _prm_in_bounds = nullptr;
+    paramsEntryHandle_t _prm_in_range = nullptr;
 };
 
 class rSensor {

@@ -1089,6 +1089,133 @@ value_t rPressureItem::convertValue(const value_t rawValue)
 
 // =======================================================================================================================
 // =======================================================================================================================
+// ====================================================== rMapItem =======================================================
+// =======================================================================================================================
+// =======================================================================================================================
+
+// Constructor
+rMapItem::rMapItem(rSensor *sensor, const char* itemName, 
+  const type_bounds_t in_bounds, const value_t in_min, const value_t in_max,
+  const value_t out_min, const value_t out_max,
+  const sensor_filter_t filterMode, const uint16_t filterSize,
+  const char* formatNumeric, const char* formatString 
+  #if CONFIG_SENSOR_TIMESTAMP_ENABLE
+  , const char* formatTimestamp
+  #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
+  #if CONFIG_SENSOR_TIMESTRING_ENABLE  
+  , const char* formatTimestampValue, const char* formatStringTimeValue
+  #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
+// inherited constructor
+):rSensorItem(sensor, itemName, filterMode, filterSize, formatNumeric, formatString
+  #if CONFIG_SENSOR_TIMESTAMP_ENABLE
+  , formatTimestamp
+  #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
+  #if CONFIG_SENSOR_TIMESTRING_ENABLE  
+  , formatTimestampValue, formatStringTimeValue
+  #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
+) {
+  _forcedRawPublish = true; 
+
+  _in_bounds = in_bounds;
+  _in_min = in_min;
+  _in_max = in_max;
+  _in_range = _in_max - _in_min;
+  
+  _out_min = out_min;
+  _out_max = out_max;
+};
+
+void rMapItem::registerItemParameters(paramsGroup_t * group)
+{
+  rSensorItem::registerItemParameters(group);
+
+  _prm_in_bounds = paramsRegisterValue(OPT_KIND_PARAMETER, OPT_TYPE_U8, nullptr, group, 
+    CONFIG_SENSOR_PARAM_MAP_BOUNDS_TYPE_KEY, CONFIG_SENSOR_PARAM_MAP_BOUNDS_TYPE_FRIENDLY, 
+    CONFIG_MQTT_PARAMS_QOS, &_in_bounds);
+  paramsSetLimitsU8(_prm_in_bounds, BOUNDS_FIXED, BOUNDS_SHIFT_RANGE);
+
+  _prm_in_min = paramsRegisterValue(OPT_KIND_PARAMETER, OPT_TYPE_FLOAT, nullptr, group, 
+    CONFIG_SENSOR_PARAM_MAP_BOUNDS_MIN_KEY, CONFIG_SENSOR_PARAM_MAP_BOUNDS_MIN_FRIENDLY, 
+    CONFIG_MQTT_PARAMS_QOS, &_in_min);
+
+  _prm_in_max = paramsRegisterValue(OPT_KIND_PARAMETER, OPT_TYPE_FLOAT, nullptr, group, 
+    CONFIG_SENSOR_PARAM_MAP_BOUNDS_MAX_KEY, CONFIG_SENSOR_PARAM_MAP_BOUNDS_MAX_FRIENDLY, 
+    CONFIG_MQTT_PARAMS_QOS, &_in_max);
+
+  _prm_in_range = paramsRegisterValue(OPT_KIND_PARAMETER, OPT_TYPE_FLOAT, nullptr, group, 
+    CONFIG_SENSOR_PARAM_MAP_BOUNDS_RANGE_KEY, CONFIG_SENSOR_PARAM_MAP_BOUNDS_RANGE_FRIENDLY, 
+    CONFIG_MQTT_PARAMS_QOS, &_in_range);
+}
+
+value_t rMapItem::checkBounds(value_t newValue) 
+{
+  value_t _value = newValue;
+
+  bool _store_min = false;
+  bool _store_max = false;
+
+  // Lower bound check
+  if (_in_min < _in_max ? _value < _in_min : _value > _in_min) {
+    if ((_in_bounds == BOUNDS_EXPAND) || (_in_bounds == BOUNDS_EXPAND_MIN) || (_in_bounds == BOUNDS_SHIFT_RANGE)) {
+      _in_min = _value;
+      _store_min = true;
+      if (_in_bounds == BOUNDS_SHIFT_RANGE) {
+        _in_max = _in_min + _in_range;
+        _store_max = true;
+      };
+    };
+  };
+
+  // Upper bound check
+  if (_in_min < _in_max ? _value > _in_max : _value < _in_max) {
+    if ((_in_bounds == BOUNDS_EXPAND) || (_in_bounds == BOUNDS_EXPAND_MAX) || (_in_bounds == BOUNDS_SHIFT_RANGE)) {
+      _in_max = _value;
+      _store_max = true;
+      if (_in_bounds == BOUNDS_SHIFT_RANGE) {
+        _in_min = _in_max - _in_range;
+        _store_min = true;
+      };
+    };
+  };
+
+  // Value normalization
+  if (_in_min < _in_max) {
+    if (_value < _in_min) { _value = _in_min; };
+    if (_value > _in_max) { _value = _in_max; };
+  } else {
+    if (_value > _in_min) { _value = _in_min; };
+    if (_value < _in_max) { _value = _in_max; };
+  };
+
+  // Store new bounds
+  if (_store_min) {
+    paramsValueStore(_prm_in_min, false);
+    rlog_d(getName(), "New lower range value set: %f", _in_min);
+  };
+  if (_store_max) {
+    paramsValueStore(_prm_in_max, false);
+    rlog_d(getName(), "New upper range value set: %f", _in_max);
+  };
+  if ((_in_bounds != BOUNDS_SHIFT_RANGE) && (_store_min || _store_max)) {
+    _in_range = _in_max - _in_min;
+    paramsValueStore(_prm_in_range, false);
+    rlog_d(getName(), "New range size set: %f", _in_range);
+  };
+
+  return _value;
+};
+
+value_t rMapItem::convertValue(const value_t rawValue)
+{
+  if (isnan(rawValue)) {
+    return (checkBounds(rawValue) - _in_min) * (_out_max - _out_min) / (_in_max - _in_min) + _out_min;
+  } else { 
+    return rawValue; 
+  };
+};
+
+// =======================================================================================================================
+// =======================================================================================================================
 // ======================================================= rSensor =======================================================
 // =======================================================================================================================
 // =======================================================================================================================

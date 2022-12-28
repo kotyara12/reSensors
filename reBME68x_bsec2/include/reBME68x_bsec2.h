@@ -1,23 +1,24 @@
 /* 
   EN: Module for receiving data from BME680 and BME688 sensors via I2C bus from ESP32. 
-      Based on BME68X Sensor API (https://github.com/BoschSensortec/BME68x-Sensor-API). 
-      !!! Air quality data are presented as sensor resistance (not converted)
+      Based on Bosch Sensortec's BSEC2 library (https://github.com/boschsensortec/Bosch-BSEC2-Library/). 
   RU: Модуль для получения данных с датчиков BME680 и BME688 по I2C шине из ESP32. 
-      Основан на BME68X Sensor API (https://github.com/BoschSensortec/BME68x-Sensor-API). 
-      !!! Данные по качеству воздуха представлены в виде сопротивления сенсора (без пересчета)
+      Основан на Bosch Sensortec's BSEC2 library (https://github.com/boschsensortec/Bosch-BSEC2-Library/). 
   --------------------------------------------------------------------------------
-  (с) 2021 Разживин Александр | Razzhivin Alexander
+  (с) 2022 Разживин Александр | Razzhivin Alexander
   kotyara12@yandex.ru | https://kotyara12.ru | tg: @kotyara1971
 */
 
-#ifndef __RE_BME68x_H__
-#define __RE_BME68x_H__
+#ifndef __RE_BME68x_BSEC2_H__
+#define __RE_BME68x_BSEC2_H__
+
 
 #include <stdint.h>
 #include <esp_err.h>
 #include <reSensor.h>
-#include "bme68x/bme68x.h"
-#include "bme68x/bme68x_defs.h"
+#include "bsec2/bme68x.h"
+#include "bsec2/bme68x_defs.h"
+#include "bsec2/bsec_datatypes.h"
+#include "bsec2/bsec_interface.h"
 
 #define BME68x_ADDRESS_LOW  BME68X_I2C_ADDR_LOW
 #define BME68x_ADDRESS_HIGH BME68X_I2C_ADDR_HIGH
@@ -66,28 +67,6 @@ class rBME68xHeaterHandler: public param_handler_t {
   public:
     rBME68xHeaterHandler(rSensor *sensor);
     void onChange(param_change_mode_t mode) override;
-};
-
-class rIAQItem: public rMapItem {
-  public:
-    rIAQItem(rSensor *sensor, const char* itemName, rSensorItem *humidityItem,
-      const sensor_filter_t filterMode, const uint16_t filterSize,
-      const char* formatNumeric, const char* formatString 
-      #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-      , const char* formatTimestamp
-      #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-      #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-      , const char* formatTimestampValue, const char* formatStringTimeValue
-      #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-      );
-    value_t convertValue(const value_t rawValue) override;
-  protected:
-    rSensorItem *_humidity = nullptr;
-    void registerItemParameters(paramsGroup_t * group) override;
-  private:
-    float               _hum_ratio = 0.10;  
-    limits_autoshift_t  _limits_autoshift = LIM_AUTOSHIFT_OFF;
-    paramsEntryHandle_t _prm_hum_ratio = nullptr;
 };
 
 class BME68x : public rSensorX4 {
@@ -189,4 +168,4 @@ class BME68x : public rSensorX4 {
     sensor_status_t sendConfiguration();    
 };
 
-#endif // __RE_BME68x_H__
+#endif // __RE_BME68x_BSEC2_H__
