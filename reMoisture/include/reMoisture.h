@@ -22,11 +22,11 @@
 extern "C" {
 #endif
 
-class rMoistureItem: public rSensorItem {
+class rMoistureItem: public rMapItem {
   public:
     rMoistureItem(rSensor *sensor, const char* itemName, 
       const adc1_channel_t channel, const adc_atten_t atten, const bool cal_enabled, const double coefficient,
-      const value_t levelMin, const value_t levelMax, const type_bounds_t typeBounds, const value_t sizeRange,
+      const type_bounds_t in_bounds, const value_t in_min, const value_t in_max,
       const sensor_filter_t filterMode, const uint16_t filterSize,
       const char* formatNumeric, const char* formatString 
       #if CONFIG_SENSOR_TIMESTAMP_ENABLE
@@ -43,8 +43,6 @@ class rMoistureItem: public rSensorItem {
     void setTempCorrection(double coefficent, value_t base_point);
     void setTemperature(value_t temperature);
   protected:
-    void setLevelMin(const value_t newValue);
-    void setLevelMax(const value_t newValue);
     void registerItemParameters(paramsGroup_t * group) override;
     sensor_status_t getRawValue(value_t * rawValue) override;
   private:
@@ -53,15 +51,6 @@ class rMoistureItem: public rSensorItem {
     adc_atten_t _atten;
     bool _cal_enable = false;
     esp_adc_cal_characteristics_t _chars;
-    // Convert to moisture
-    value_t _level_min;
-    paramsEntryHandle_t _prm_level_min;
-    value_t _level_max;
-    paramsEntryHandle_t _prm_level_max;
-    type_bounds_t _type;
-    paramsEntryHandle_t _prm_type;
-    value_t _range;
-    paramsEntryHandle_t _prm_range;
     // Temperature correction
     double  _temp_coef = 0.0;
     paramsEntryHandle_t _prm_temp_coef;

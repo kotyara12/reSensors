@@ -70,7 +70,7 @@ void rBME68xHeaterHandler::onChange(param_change_mode_t mode)
 // -----------------------------------------------------------------------------------------------------------------------
 
 // Constructor
-rIAQItem::rIAQItem(rSensor *sensor, const char* itemName, rSensorItem *humidityItem,
+rIAQItem::rIAQItem(rSensor *sensor, const char* itemName, rSensorItem *humidityItem, rSensorItem *temperatureItem,
   const sensor_filter_t filterMode, const uint16_t filterSize,
   const char* formatNumeric, const char* formatString 
   #if CONFIG_SENSOR_TIMESTAMP_ENABLE
@@ -81,7 +81,7 @@ rIAQItem::rIAQItem(rSensor *sensor, const char* itemName, rSensorItem *humidityI
   #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
 // inherited constructor
 ):rMapItem(sensor, itemName, 
-  BOUNDS_FIXED, BME68x_DEFAULT_GAS_LIMIT_BAD, BME68x_DEFAULT_GAS_LIMIT_GOOD, 0, 100,
+  BOUNDS_FIXED, BME68x_DEFAULT_GAS_LIMIT_BAD, BME68x_DEFAULT_GAS_LIMIT_GOOD, 500, 0,
   filterMode, filterSize, formatNumeric, formatString
   #if CONFIG_SENSOR_TIMESTAMP_ENABLE
   , formatTimestamp
@@ -91,6 +91,7 @@ rIAQItem::rIAQItem(rSensor *sensor, const char* itemName, rSensorItem *humidityI
   #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
 ) {
   _humidity = humidityItem; 
+  _temperature = temperatureItem;
 };
 
 void rIAQItem::registerItemParameters(paramsGroup_t * group)
@@ -105,30 +106,23 @@ void rIAQItem::registerItemParameters(paramsGroup_t * group)
 
 value_t rIAQItem::convertValue(const value_t rawValue)
 {
-  // Gas score
-  float gas_value = rMapItem::convertValue(rawValue) * (1 - _hum_ratio);
+  // Get temperature & humidity
+  float _temp = NAN;
+  float _humd = NAN;
+  if (_temperature) _temp = _temperature->getValue().rawValue;
+  if (_humidity) _humd = _humidity->getValue().rawValue;
   
-  // Humidity score
-  float hum_value = 0.0;
-  if (_hum_ratio > 0.0) {
-    hum_value = _humidity->getValue().rawValue;
-    if (!isnan(hum_value)) {
-      float hum_reference = 40.0;
-      if ((hum_value >= 38.0) && (hum_value <= 42.0))
-        // Humidity +/-5% around optimum
-        hum_value = _hum_ratio * 100.0;
-      else { 
-        // Humidity is sub-optimal
-        if (hum_value < 38.0)
-          hum_value = _hum_ratio / hum_reference * hum_value * 100.0;
-        else {
-          hum_value = ((1.6666667 * _hum_ratio) - (_hum_ratio / (100.0 - hum_reference) * hum_value)) * 100.0;
-        };
-      }
-    };
+ // Compensate exponential impact of humidity on resistance
+  if (!isnan(_temp) && !isnan(_humd)) {
+    // Calculate stauration density and absolute humidity
+    // double hum_abs = _humd * 10 * ((6.112 * 100.0 * exp((17.67 * _temp)/(243.12 + _temp)))/(461.52 * (_temp + 273.15)));
+    double hum_abs = 6.112 * exp((17.67 * _temp)/(_temp + 243.5)) * _humd * 2.1674 / (273.15 + _temp);
+    // Calculate the compensated value
+    double comp_gas = rawValue * exp(_hum_ratio * hum_abs);
+    // Recalculation in IAQ from 0 to 500 with inversion
+    return rMapItem::convertValue(comp_gas);
   };
-
-  return (100.0 - (hum_value + gas_value)) * 5.0;
+	return rMapItem::convertValue(rawValue);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------
@@ -301,7 +295,7 @@ void BME68x::createSensorItems(const sensor_filter_t filterMode1, const uint16_t
   };
 
   // Gas
-  _item4 = new rIAQItem(this, CONFIG_SENSOR_IAQ_NAME, _item3,
+  _item4 = new rIAQItem(this, CONFIG_SENSOR_IAQ_NAME, _item3, _item2,
     filterMode4, filterSize4,
     CONFIG_FORMAT_IAQ_VALUE, CONFIG_FORMAT_IAQ_STRING,
     #if CONFIG_SENSOR_TIMESTAMP_ENABLE

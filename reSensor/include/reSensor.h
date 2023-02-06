@@ -2,7 +2,7 @@
    EN: A unified base sensor class used by the sensor libraries
    RU: Унифицированный базовый класс сенсора, используемый библиотеками сенсоров
    --------------------------
-   (с) 2021-2022 Разживин Александр | Razzhivin Alexander
+   (с) 2021-2023 Разживин Александр | Razzhivin Alexander
    kotyara12@yandex.ru | https://kotyara12.ru | tg: @kotyara1971
 */
 
@@ -247,9 +247,11 @@ class rSensorItem {
     bool  doChangeFilterMode();
     void  setOffsetValue(float offsetValue);
     void  setValidRange(value_t validMin, value_t validMax);
+    void  setRawAndConvertedValue(const value_t rawValue, const value_t convertedValue, const time_t rawTime);
     void  setRawValue(const value_t rawValue, const time_t rawTime);
     virtual sensor_status_t checkValue(const value_t rawValue);
     virtual value_t convertValue(const value_t rawValue);
+    value_t convertOffsetValue(const value_t rawValue);
     const char* getName();
     sensor_handle_t getHandle();
     sensor_data_t getValues();
@@ -531,7 +533,7 @@ class rSensor {
   private:
     uint8_t         _eventId = 0;
     uint32_t        _readInterval;
-    unsigned long   _readLast;
+    int64_t         _readLast;
     sensor_status_t _lstStatus;
     sensor_status_t _errStatus;
     uint16_t        _errLimit;

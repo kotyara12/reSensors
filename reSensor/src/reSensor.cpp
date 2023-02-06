@@ -194,16 +194,21 @@ value_t rSensorItem::convertValue(const value_t rawValue)
   return rawValue;
 }
 
+value_t rSensorItem::convertOffsetValue(const value_t rawValue)
+{
+  return convertValue(rawValue + _offsetValue);
+}
+
 sensor_status_t rSensorItem::getRawValue(value_t * rawValue)
 {
   return SENSOR_STATUS_NOT_SUPPORTED;
 }
 
-void rSensorItem::setRawValue(const value_t rawValue, const time_t rawTime)
+void rSensorItem::setRawAndConvertedValue(const value_t rawValue, const value_t convertedValue, const time_t rawTime)
 {
   _data.lastValue.timestamp = rawTime;
   _data.lastValue.rawValue = rawValue;
-  _data.lastValue.filteredValue = getFilteredValue(convertValue(rawValue + _offsetValue));
+  _data.lastValue.filteredValue = getFilteredValue(convertedValue);
  
   // Compare the day for the current value and the daily minimum
   struct tm _lastT, _dayT;
@@ -275,6 +280,11 @@ void rSensorItem::setRawValue(const value_t rawValue, const time_t rawTime)
         #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
     };
   };
+}
+
+void rSensorItem::setRawValue(const value_t rawValue, const time_t rawTime)
+{
+  setRawAndConvertedValue(rawValue, convertOffsetValue(rawValue), rawTime);
 }
 
 const char* rSensorItem::getName()
@@ -1207,10 +1217,10 @@ value_t rMapItem::checkBounds(value_t newValue)
 
 value_t rMapItem::convertValue(const value_t rawValue)
 {
-  if (isnan(rawValue)) {
-    return (checkBounds(rawValue) - _in_min) * (_out_max - _out_min) / (_in_max - _in_min) + _out_min;
-  } else { 
+  if (isnan(rawValue) && ((_in_max - _in_min) != 0.0)) {
     return rawValue; 
+  } else { 
+    return (value_t)((checkBounds(rawValue) - _in_min) / (_in_max - _in_min) * (_out_max - _out_min) + _out_min);
   };
 };
 
@@ -1487,8 +1497,8 @@ sensor_status_t rSensor::readData()
   };
 
   // Check if the sensor reading interval has expired
-  if (millis() >= (_readLast + _readInterval)) {
-    _readLast = millis();
+  if ((_readInterval == 0) || ((esp_timer_get_time() - _readLast) >= (int64_t)(_readInterval * 1000))) {
+    _readLast = esp_timer_get_time();
     rlog_v(logTAG, "Read data from [ %s ]...", getName());
     _lstStatus = readRawData();
 

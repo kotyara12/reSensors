@@ -1,0 +1,387 @@
+### Использование интерфейса
+
+Ниже приводится краткий обзор типичной последовательности операций для BSEC.
+
+- Инициализация библиотеки
+
+| Шаги                                               | Функция                                 |
+|----------------------------------------------------|-----------------------------------------|
+| Инициализация библиотеки                           | bsec_init()                             |
+| Обновить параметры конфигурации (необязательно)    | bsec_set_configuration()                |
+| Восстановить состояние библиотеки (необязательно)  | bsec_set_state()                        |
+
+
+- Следующая функция вызывается для включения выходных сигналов и определения их частоты дискретизации / режима работы.
+
+| Шаги                                                       | Функция                    |
+|------------------------------------------------------------|----------------------------|
+| Включить вывод библиотеки в указанном режиме               | bsec_update_subscription() |
+
+
+- В этой таблице описывается основной цикл обработки
+
+| Шаги | Функция |
+|----------------------------------------------------------|--------------------------------------------------------------------------------------|
+| Получить настройки датчика, которые будут использоваться | bsec_sensor_control()                                                                |
+| Настройка датчиков и триггерных измерений                | [См. API BME68x и примеры кодов] https://github.com/BoschSensortec/BME68x-Sensor-API |
+| Чтение результатов с датчика                             | [См. API BME68x и примеры кодов] https://github.com/BoschSensortec/BME68x-Sensor-API |
+| Выполнение обработки сигналов                            | bsec_do_steps()                                                                      |
+
+- Перед выключением системы можно получить текущее состояние BSEC и затем использовать его во время повторной инициализации для продолжения обработки.
+  
+| Шаги                                     | Функция                  |
+|------------------------------------------|--------------------------|
+| Получить текущее состояние библиотеки    | bsec_get_state()         |
+| Получить текущую конфигурацию библиотеки | bsec_get_configuration() |
+
+
+### Конфигурация и состояние
+
+Значения переменных, принадлежащих экземпляру BSEC, делятся на две группы:
+  - Значения **не обновляются при обработке** сигналов относятся к **группе конфигурации**. Если это возможно, BSEC можно настроить перед использованием с помощью специальной строки конфигурации клиента.
+  - Значения, **обновленные во время обработки**, входят в **группу состояний**. Сохранение и восстановление состояния BSEC необходимо для сохранения ранее оцененных моделей датчиков и исходной информации, которая важна для наилучшей работы выходных данных газовых датчиков.
+
+Библиотека BSEC состоит из адаптивных алгоритмов, которые моделируют датчик газа, что со временем повышает его производительность. Они будут потеряны, если библиотека будет инициализирована из-за сброса системы. Во избежание этой ситуации состояние библиотеки должно храниться в энергонезависимой памяти, чтобы ее можно было загрузить после перезагрузки системы.
+
+
+********************************************************************************************
+
+
+bsec_library_return_t bsec_get_version(bsec_version_tbsec_version_p);
+
+Вернуть информацию о версии библиотеки BSEC
+
+@param [out] указатель на структуру bsec_version_p, которая должна быть заполнена информацией о версии
+
+Возвращает 0 в случае успеха, иначе код ошибки
+
+
+********************************************************************************************
+
+bsec_library_return_t bsec_init(void);
+
+Инициализировать библиотеку
+
+Инициализация и сброс BSEC выполняется вызовом bsec_init(). Вызов этой функции устанавливает связь между всеми внутренними модулями, инициализирует состояния библиотеки, зависящие от времени выполнения, и сбрасывает конфигурацию и состояние всех модулей обработки сигналов BSEC до значений по умолчанию.
+
+Перед любым дальнейшим использованием библиотеку необходимо инициализировать. Это гарантирует, что вся память и состояния находятся в определенных условиях перед обработкой любых данных.
+
+Возвращает 0 в случае успеха, иначе код ошибки
+
+code{.c}
+    // Initialize BSEC library before further use
+    bsec_init();
+endcode
+
+********************************************************************************************
+
+bsec_library_return_t bsec_update_subscription(const bsec_sensor_configuration_tconst requested_virtual_sensors,
+                const uint8_t n_requested_virtual_sensors, bsec_sensor_configuration_trequired_sensor_settings,
+                uint8_tn_required_sensor_settings);
+
+Подписка на выходные данные виртуальных датчиков библиотеки
+
+Используйте bsec_update_subscription(), чтобы указать BSEC, какие из обработанных выходных сигналов будут запрашиваться с какой частотой дискретизации. См. ::bsec_virtual_sensor_t для доступных выходных данных библиотеки.
+
+На основе запрошенных выходных данных виртуальных датчиков BSEC предоставит информацию о необходимых входных сигналах физических датчиков (см. ::bsec_physical_sensor_t) с соответствующей частотой дискретизации. Эта информация носит чисто информационный характер, так как функция bsec_sensor_control() гарантирует, что датчик работает надлежащим образом. Чтобы отключить виртуальный датчик, установите частоту дискретизации на ::BSEC_SAMPLE_RATE_DISABLED.
+
+Обновление подписки с помощью bsec_update_subscription() помимо обработки сигналов является одной из самых важных функций. Это позволяет включить желаемые выходы библиотеки. Эта функция определяет, какие физические входные сигналы датчика требуются, с какой частотой дискретизации для создания виртуальных выходных сигналов датчика, запрошенных пользователем. Когда эта функция завершается успешно, запрошенные выходные данные называются подписанными. Очень важной особенностью является сохранение уже подписанных выходов. Дополнительные выходы могут быть запрошены или отключены как по отдельности, так и по группам в дополнение к уже подписанным выходам без их изменения, за исключением случаев изменения уже подписанных выходов.
+
+Примечание: Состояние библиотеки, относящееся к подписанным выходам, не может быть сохранено между перезагрузками.
+
+Интерфейс bsec_update_subscription() требует использования массивов структур конфигурации датчиков. Такая структура имеет поля идентификатора датчика и частоты дискретизации. Эти поля имеют свойства:
+- Выходные сигналы виртуальных датчиков необходимо запрашивать с использованием уникальных идентификаторов (Член ::bsec_virtual_sensor_t)
+- Доступны разные наборы идентификаторов для входов физических датчиков и выходов виртуальных датчиков
+- Идентификаторы - это уникальные значения, определяемые библиотекой, а не внешними
+- Частота дискретизации должна быть указана как значение
+   - Допустимая частота дискретизации для непрерывно дискретизируемых сигналов
+   - 65535.0f (BSEC_SAMPLE_RATE_DISABLED) для отключения выходов и идентификации отключенных входов.
+
+Те же идентификаторы датчиков также используются в функциях bsec_do_steps().
+
+Принципы использования bsec_update_subscription():
+
+- Поддерживаются дифференциальные обновления (т. е. запрос только тех выходных данных, которые пользователь хотел бы изменить).
+- Неверные запросы выходов игнорируются. Также, если один из запрошенных выходов недоступен, все запросы игнорируются. При этом возвращается предупреждение.
+- Для отключения BSEC должны быть отключены все выходы. Только включенные (подписанные) выходы должны быть отключены, в то время как уже отключенные выходы не должны быть отключены явно.
+
+@param[in]       requested_virtual_sensors       Указатель на массив запрошенных конфигураций виртуального датчика (выхода) для библиотеки
+@param[in]       n_requested_virtual_sensors     Количество структур виртуальных датчиков, на которые указывает запрашиваемый_виртуальный_сенсор.
+@param[out]      required_sensor_settings        Указатель на массив необходимых конфигураций физических датчиков для библиотеки
+@param[in,out]   n_required_sensor_settings      [in] Размер выделенного массива required_sensor_settings, [out] количество возвращенных конфигураций датчика
+
+Возвращает 0 в случае успеха, иначе код ошибки
+
+code{.c}
+	// Example //
+	
+	// Change 3 virtual sensors (switch IAQ and raw temperature -> on / pressure -> off) 
+	bsec_sensor_configuration_t requested_virtual_sensors[3];
+	uint8_t n_requested_virtual_sensors = 3;
+	
+	requested_virtual_sensors[0].sensor_id = BSEC_OUTPUT_IAQ;
+	requested_virtual_sensors[0].sample_rate = BSEC_SAMPLE_RATE_ULP; 
+	requested_virtual_sensors[1].sensor_id = BSEC_OUTPUT_RAW_TEMPERATURE;
+	requested_virtual_sensors[1].sample_rate = BSEC_SAMPLE_RATE_ULP; 
+	requested_virtual_sensors[2].sensor_id = BSEC_OUTPUT_RAW_PRESSURE;
+	requested_virtual_sensors[2].sample_rate = BSEC_SAMPLE_RATE_DISABLED; 
+	
+	// Allocate a struct for the returned physical sensor settings
+	bsec_sensor_configuration_t required_sensor_settings[BSEC_MAX_PHYSICAL_SENSOR];
+	uint8_t  n_required_sensor_settings = BSEC_MAX_PHYSICAL_SENSOR;
+	
+	// Call bsec_update_subscription() to enable/disable the requested virtual sensors
+	bsec_update_subscription(requested_virtual_sensors, n_requested_virtual_sensors, required_sensor_settings, &n_required_sensor_settings);
+endcode
+
+
+********************************************************************************************
+
+bsec_library_return_t bsec_do_steps(const bsec_input_tconst inputs, const uint8_t n_inputs, bsec_output_toutputs, uint8_tn_outputs);
+
+Основная функция обработки сигналов BSEC
+
+Обработку входных сигналов и возврат выходных выборок выполняет функция bsec_do_steps().
+- Образцы всех входов библиотеки должны передаваться с уникальными идентификаторами, представляющими входные сигналы от физических датчиков, где порядок этих входов может быть выбран произвольным. Однако все входные данные должны предоставляться в течение того же периода времени, когда они считываются. Последовательное предоставление библиотеки может привести к неопределенному поведению.
+- Образцы всех выходов библиотеки возвращаются с уникальными идентификаторами, соответствующими выходным сигналам виртуальных датчиков, где порядок возвращаемых выходов может быть произвольным.
+- Образцы всех входных и выходных сигналов физических и виртуальных датчиков используют одно и то же представление в памяти со следующими полями:
+	- Идентификатор датчика:
+	- Для входов: требуется для идентификации входного сигнала от физического датчика
+   	- Для вывода: перезаписывается с помощью bsec_do_steps() для идентификации возвращенного сигнала от виртуального датчика.
+   	- Отметка времени выборки
+
+Вызов bsec_do_steps() требует, чтобы выборки входных сигналов были предоставлены вместе с их отметкой времени, когда они записываются и только когда они получены. Повторение образцов с одной и той же отметкой времени игнорируется и приводит к предупреждению. Повторение значений выборок, которые не были заново получены датчиком, приводит к отклонениям вычисленных выходных сигналов. Что касается возвращенных выборок вывода, важной особенностью является то, что значение для вывода возвращается только тогда, когда было вычислено новое вхождение. Выборка выходного сигнала возвращается только один раз.
+
+@param[in]       inputs          Массив образцов входных данных. Каждый элемент массива представляет собой образец другого физического датчика.
+@param[in]       n_inputs        Количество переданных структур входных данных.
+@param[out]      outputs         Массив выборок выходных данных. Каждый элемент массива представляет образец другого виртуального датчика.
+@param[in,out]   n_outputs       [in] Количество выделенных выходных структур, [out] количество возвращенных выходов
+
+Возвращает 0 в случае успеха, иначе код ошибки
+
+code{.c}
+	// Example //
+	    
+	// Allocate input and output memory
+	bsec_input_t input[3];
+	uint8_t n_input = 3;
+	bsec_output_t output[2];
+	uint8_t  n_output=2;
+	
+	bsec_library_return_t status;
+	
+	// Populate the input structs, assuming the we have timestamp (ts), 
+	// gas sensor resistance (R), temperature (T), and humidity (rH) available
+	// as input variables
+	input[0].sensor_id = BSEC_INPUT_GASRESISTOR;
+	input[0].signal = R;
+	input[0].time_stamp= ts;   
+	input[1].sensor_id = BSEC_INPUT_TEMPERATURE;   
+	input[1].signal = T;   
+	input[1].time_stamp= ts;   
+	input[2].sensor_id = BSEC_INPUT_HUMIDITY;
+	input[2].signal = rH;
+	input[2].time_stamp= ts;   
+	
+	    
+	// Invoke main processing BSEC function
+	status = bsec_do_steps( input, n_input, output, &n_output );
+	
+	// Iterate through the BSEC output data, if the call succeeded
+	if(status == BSEC_OK)
+	{
+	    for(int i = 0; i < n_output; i++)
+	    {   
+	        switch(output[i].sensor_id)
+	        {
+	            case BSEC_OUTPUT_IAQ:
+	                // Retrieve the IAQ results from output[i].signal
+	                // and do something with the data
+	                break;
+	            case BSEC_OUTPUT_STATIC_IAQ:
+	                // Retrieve the static IAQ results from output[i].signal
+	                // and do something with the data
+	                break;
+	            
+	        }
+	    }
+	}
+endcode
+ 
+********************************************************************************************
+
+bsec_library_return_t bsec_reset_output(uint8_t sensor_id);
+
+Сброс определенного выходного виртуального датчика
+
+Эта функция позволяет сбросить определенные выходные данные виртуальных датчиков. Значение «сброса» зависит от конкретного выхода. В случае выхода IAQ сброс означает обнуление выхода до текущих условий окружающей среды.
+
+@param[in]       sensor_id           Виртуальный датчик для сброса
+
+Возвращает 0 в случае успеха, иначе код ошибки
+
+code{.c}
+    // Example // 
+    bsec_reset_output(BSEC_OUTPUT_IAQ);
+endcode
+
+********************************************************************************************
+
+bsec_library_return_t bsec_set_configuration(const uint8_tconst serialized_settings,
+                const uint32_t n_serialized_settings, uint8_twork_buffer,
+                const uint32_t n_work_buffer_size);
+
+Параметры конфигурации алгоритма обновления
+
+BSEC использует конфигурацию по умолчанию для модулей и общих настроек. Начальную конфигурацию можно настроить с помощью bsec_set_configuration(). 
+Это необязательный шаг.
+
+Требуется рабочий буфер достаточного размера, который должен быть предоставлен вызывающей стороной для декомпозиции сериализации и применения ее к библиотеке и ее модулям. Пожалуйста, используйте #BSEC_MAX_PROPERTY_BLOB_SIZE для выделения буфера необходимого размера.
+
+@param[in]       serialized_settings     Параметры, сериализованные в двоичный BLOB-объекта
+@param[in]       n_serialized_settings   Размер BLOB-объекта настроек
+@param[in,out]   work_buffer             Рабочий буфер, используемый для анализа BLOB-объекта
+@param[in]       n_work_buffer_size      Длина рабочего буфера, доступного для анализа BLOB-объекта
+
+Возвращает 0 в случае успеха, иначе код ошибки
+
+code{.c}
+    // Example // 
+    
+    // Allocate variables
+    uint8_t serialized_settings[BSEC_MAX_PROPERTY_BLOB_SIZE];
+    uint32_t n_serialized_settings_max = BSEC_MAX_PROPERTY_BLOB_SIZE;
+    uint8_t work_buffer[BSEC_MAX_WORKBUFFER_SIZE];
+    uint32_t n_work_buffer = BSEC_MAX_WORKBUFFER_SIZE;
+
+    // Here we will load a provided config string into serialized_settings 
+    
+    // Apply the configuration
+    bsec_set_configuration(serialized_settings, n_serialized_settings_max, work_buffer, n_work_buffer);
+endcode
+
+********************************************************************************************
+
+bsec_library_return_t bsec_set_state(const uint8_tconst serialized_state, const uint32_t n_serialized_state,
+                uint8_twork_buffer, const uint32_t n_work_buffer_size);
+
+Восстановить внутреннее состояние библиотеки
+
+BSEC использует состояние по умолчанию для всех модулей обработки сигналов и модуля BSEC. Для обеспечения оптимальной работы, особенно функциональности датчика газа, рекомендуется получить состояние с помощью bsec_get_state() перед выгрузкой библиотеки, сохранить ее в какой-либо форме энергонезависимой памяти и установить с помощью bsec_set_state() перед возобновлением дальнейшей работы. библиотеки.
+
+Требуется рабочий буфер достаточного размера, который должен быть предоставлен вызывающей стороной для декомпозиции сериализации и применения ее к библиотеке и ее модулям. Пожалуйста, используйте #BSEC_MAX_STATE_BLOB_SIZE для выделения необходимого размера.
+
+@param[in]       serialized_state        Состояния, сериализованные в двоичный BLOB-объект
+@param[in]       n_serialized_state      Размер BLOB-объекта состояния
+@param[in,out]   work_buffer             Рабочий буфер, используемый для анализа BLOB-объекта
+@param[in]       n_work_buffer_size      Длина рабочего буфера, доступного для анализа BLOB-объекта
+
+Возвращает 0 в случае успеха, иначе код ошибки
+
+code{.c}
+    // Example // 
+  
+    // Allocate variables
+    uint8_t serialized_state[BSEC_MAX_PROPERTY_BLOB_SIZE];
+    uint32_t  n_serialized_state = BSEC_MAX_PROPERTY_BLOB_SIZE;
+    uint8_t work_buffer_state[BSEC_MAX_WORKBUFFER_SIZE];
+    uint32_t  n_work_buffer_size = BSEC_MAX_WORKBUFFER_SIZE;
+
+    // Here we will load a state string from a previous use of BSEC
+
+    // Apply the previous state to the current BSEC session
+    bsec_set_state(serialized_state, n_serialized_state, work_buffer_state, n_work_buffer_size);
+
+endcode
+
+********************************************************************************************
+
+bsec_library_return_t bsec_get_configuration(const uint8_t config_id, uint8_tserialized_settings, const uint32_t n_serialized_settings_max,
+                uint8_twork_buffer, const uint32_t n_work_buffer, uint32_tn_serialized_settings);
+
+
+Получить текущую конфигурацию библиотеки
+
+BSEC позволяет получить текущую конфигурацию с помощью bsec_get_configuration(). Возвращает двоичный двоичный объект, кодирующий текущие параметры конфигурации библиотеки в формате, совместимом с bsec_set_configuration().
+
+Примечание: Функцию bsec_get_configuration() необходимо использовать только в целях отладки.
+
+Требуется рабочий буфер достаточного размера, который должен быть предоставлен вызывающей стороной для декомпозиции сериализации и применения ее к библиотеке и ее модулям. Пожалуйста, используйте #BSEC_MAX_PROPERTY_BLOB_SIZE для выделения необходимого размера.
+
+@param[in]       config_id                   Идентификатор возвращаемого набора параметров конфигурации; должен быть равен нулю, чтобы получить все настройки конфигурации
+@param[out]      serialized_settings         Буфер для хранения сериализованного BLOB-объекта конфигурации
+@param[in]       n_serialized_settings_max   Максимально доступный размер сериализованных настроек
+@param[in,out]   work_buffer                 Рабочий буфер, используемый для анализа BLOB-объекта
+@param[in]       n_work_buffer               Длина рабочего буфера, доступного для анализа BLOB-объекта
+@param[out]      n_serialized_settings       Фактический размер возвращаемого сериализованного BLOB-объекта
+
+Возвращает 0 в случае успеха, иначе код ошибки
+
+code{.c}
+    // Example //
+ 
+    // Allocate variables
+    uint8_t serialized_settings[BSEC_MAX_PROPERTY_BLOB_SIZE];
+    uint32_t n_serialized_settings_max = BSEC_MAX_PROPERTY_BLOB_SIZE;
+    uint8_t work_buffer[BSEC_MAX_WORKBUFFER_SIZE];
+    uint32_t n_work_buffer = BSEC_MAX_WORKBUFFER_SIZE;
+    uint32_t n_serialized_settings = 0;
+    
+    // Configuration of BSEC algorithm is stored in 'serialized_settings'
+    bsec_get_configuration(0, serialized_settings, n_serialized_settings_max, work_buffer, n_work_buffer, &n_serialized_settings);
+
+endcode
+
+********************************************************************************************
+
+bsec_library_return_t bsec_get_state(const uint8_t state_set_id, uint8_tserialized_state,
+                const uint32_t n_serialized_state_max, uint8_twork_buffer, const uint32_t n_work_buffer,
+                uint32_tn_serialized_state);
+
+Получить текущее состояние внутренней библиотеки
+
+BSEC позволяет получать текущие состояния всех модулей обработки сигналов и модуля BSEC с помощью bsec_get_state(). Это позволяет перезапустить обработку после перезагрузки системы, вызвав bsec_set_state().
+
+Требуется рабочий буфер достаточного размера, который должен быть предоставлен вызывающей стороной для декомпозиции сериализации и применения ее к библиотеке и ее модулям. Пожалуйста, используйте #BSEC_MAX_STATE_BLOB_SIZE для выделения необходимого размера.
+
+@param[in]       state_set_id                Идентификатор возвращаемого набора состояний; должен быть равен нулю, чтобы получить все состояния.
+@param[out]      serialized_state            Буфер для хранения сериализованного BLOB-объекта состояний
+@param[in]       n_serialized_state_max      Максимально доступный размер сериализованных состояний
+@param[in,out]   work_buffer                 Рабочий буфер, используемый для анализа BLOB-объекта
+@param[in]       n_work_buffer               Длина рабочего буфера, доступного для анализа BLOB-объекта
+@param[out]      n_serialized_state          Фактический размер возвращаемого сериализованного BLOB-объекта
+
+Возвращает 0 в случае успеха, иначе код ошибки
+
+code{.c}
+    // Example //
+ 
+    // Allocate variables
+    uint8_t serialized_state[BSEC_MAX_STATE_BLOB_SIZE];
+    uint32_t n_serialized_state_max = BSEC_MAX_STATE_BLOB_SIZE;
+    uint32_t  n_serialized_state = BSEC_MAX_STATE_BLOB_SIZE;
+    uint8_t work_buffer_state[BSEC_MAX_WORKBUFFER_SIZE];
+    uint32_t  n_work_buffer_size = BSEC_MAX_WORKBUFFER_SIZE;
+    
+    // Algorithm state is stored in 'serialized_state'
+    bsec_get_state(0, serialized_state, n_serialized_state_max, work_buffer_state, n_work_buffer_size, &n_serialized_state);
+endcode
+
+********************************************************************************************
+
+bsec_library_return_t bsec_sensor_control(const int64_t time_stamp, bsec_bme_settings_t *sensor_settings);
+
+Получить инструкции датчика BMExxx
+
+Интерфейс bsec_sensor_control() является ключевой особенностью BSEC, поскольку он позволяет библиотеке обработки сигналов легко управлять работой датчика BME. Это важно, поскольку поведение датчика газа в основном определяется конфигурацией встроенного нагревателя. Чтобы обеспечить легкую интеграцию BSEC в любую систему, bsec_sensor_control() предоставит вызывающей стороне информацию о текущей конфигурации датчика, которая необходима для выполнения входных требований, полученных из текущих выходных данных, запрошенных через bsec_update_subscription().
+
+На практике использование этой функции должно быть следующим:
+- Вызов bsec_sensor_control(), который возвращает структуру bsec_bme_settings_t.
+- На основании информации, содержащейся в этой структуре, настраивается датчик, и по запросу bsec_sensor_control() запускается измерение в принудительном режиме.
+- Как только это принудительное измерение завершено, сигналы, указанные в этой структуре, должны быть переданы в bsec_do_steps() для выполнения обработки сигналов.
+- После обработки процесс должен заснуть до тех пор, пока не будет достигнута временная метка bsec_bme_settings_t::next_call.
+
+@param [in]      time_stamp                Текущая метка времени в [ns]
+@param[out]      sensor_settings           Настройки, которые необходимо передать в API для работы датчика в данный момент времени
+
+Возвращает 0 в случае успеха, иначе код ошибки
