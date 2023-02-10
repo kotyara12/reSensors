@@ -111,7 +111,7 @@ sensor_status_t AHT1x::sensorReset()
 uint8_t AHT1x::readStatus() 
 {
   uint8_t status;
-  i2c_cmd_handle_t cmd = prepareI2C(_I2C_addr, false);
+  i2c_cmd_handle_t cmd = prepareI2C(_I2C_num, _I2C_addr, false);
   i2c_master_read_byte(cmd, &status, I2C_MASTER_NACK);
   if (execI2C(_I2C_num, cmd, AHTXX_TIMEOUT) == ESP_OK) {
     return status;
