@@ -121,10 +121,10 @@ uint8_t AHT1x::readStatus()
 
 uint8_t AHT1x::waitBusy(uint32_t delay)
 {
-  vTaskDelay(delay / portTICK_RATE_MS);
+  sys_delay_ms(delay);
   uint8_t status = readStatus();
   while ((status != AHTXX_ERROR) && (status & AHTXX_STATUS_CTRL_BUSY)) {
-    vTaskDelay(AHTXX_BUSY_DELAY / portTICK_RATE_MS);
+    sys_delay_ms(AHTXX_BUSY_DELAY);
     status = readStatus();
   };
   return status;
@@ -166,7 +166,7 @@ sensor_status_t AHT1x::softReset(const AHT1x_MODE sensorMode)
   SENSOR_ERR_CHECK(writeI2C(_I2C_num, _I2C_addr, _rawCmdBuffer, 1, nullptr, 0, AHTXX_TIMEOUT), RSENSOR_LOG_MSG_RESET_FAILED);
   rlog_i(logTAG, RSENSOR_LOG_MSG_RESET, _name);
   // Wait for sensor to initialize 
-  vTaskDelay(AHTXX_SOFT_RESET_DELAY / portTICK_RATE_MS);
+  sys_delay_ms(AHTXX_SOFT_RESET_DELAY);
   // Set operation mode
   return setMode(_sensorMode);
 }
