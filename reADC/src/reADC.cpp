@@ -118,21 +118,37 @@ bool reADC::initItem()
   // Configure calibration
   if (_cal_handle == nullptr) {
     if (_cal_enabled) {
-      adc_cali_line_fitting_config_t calCfg;
-      memset(&calCfg, 0, sizeof(calCfg));
-      calCfg.atten = _atten;
-      calCfg.bitwidth = _bitwidth;
-      calCfg.unit_id = _unit;
-      calCfg.default_vref = ADC_CALI_VREF;
-      _cal_enabled = adc_cali_create_scheme_line_fitting(&calCfg, &_cal_handle) == ESP_OK;
+      bool calibrated = false;
+      #if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED      
+        if (!calibrated) {
+          adc_cali_curve_fitting_config_t calCfg;
+          memset(&calCfg, 0, sizeof(calCfg));
+          calCfg.atten = _atten;
+          calCfg.bitwidth = _bitwidth;
+          calCfg.unit_id = _unit;
+          calibrated = adc_cali_create_scheme_curve_fitting(&calCfg, &_cal_handle) == ESP_OK;
+        };
+      #endif
+      #if ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED      
+        if (!calibrated) {
+          adc_cali_line_fitting_config_t calCfg;
+          memset(&calCfg, 0, sizeof(calCfg));
+          calCfg.atten = _atten;
+          calCfg.bitwidth = _bitwidth;
+          calCfg.unit_id = _unit;
+          calCfg.default_vref = ADC_CALI_VREF;
+          calibrated = adc_cali_create_scheme_line_fitting(&calCfg, &_cal_handle) == ESP_OK;
+        };
+      #endif
+      _cal_enabled = calibrated;
     };
   };
 
   // Logging
   if (_cal_enabled) {
-    rlog_i(logTAG, "ADC1 channel [ %s ] initialized, calibration enabled", getName());
+    rlog_i(logTAG, "ADC channel [ %s ] initialized, calibration enabled", getName());
   } else {
-    rlog_w(logTAG, "ADC1 channel [ %s ] initialized, calibration disabled", getName());
+    rlog_w(logTAG, "ADC channel [ %s ] initialized, calibration disabled", getName());
   };
 
   // Inherited init
