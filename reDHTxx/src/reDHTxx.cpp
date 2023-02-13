@@ -3,6 +3,7 @@
 #include "rLog.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <rom/ets_sys.h>
 #include <driver/gpio.h>
 #include <time.h>
 #include "soc/rtc.h" 
@@ -78,7 +79,7 @@ sensor_status_t DHTxx::sensorReset()
   if ((_resetGPIO > GPIO_NUM_NC) && ((_resetTime == 0) || (time(nullptr) - _resetTime) >= DHT_MIN_RESET_INTERVAL)) {
     rlog_w(logTAG, RSENSOR_LOG_MSG_RESET_POWER, _name);
     time(&_resetTime);
-    gpio_pad_select_gpio(_resetGPIO);
+    gpio_reset_pin(_resetGPIO);
     SENSOR_ERR_CHECK(gpio_set_direction(_resetGPIO, GPIO_MODE_OUTPUT), RSENSOR_LOG_MSG_INIT_FAILED);
     SENSOR_ERR_CHECK(gpio_set_level(_resetGPIO, (_resetLevel == 0) ? 0 : 1), RSENSOR_LOG_MSG_INIT_FAILED);
     vTaskDelay(pdMS_TO_TICKS(2500));
@@ -87,7 +88,7 @@ sensor_status_t DHTxx::sensorReset()
   };
 
   // Initialize GPIO
-  gpio_pad_select_gpio(_sensorGPIO);
+  gpio_reset_pin(_sensorGPIO);
   // Set pullup, if needed
   SENSOR_ERR_CHECK(gpio_pulldown_dis(_sensorGPIO), RSENSOR_LOG_MSG_INIT_FAILED);
   if (_gpioPullup) {

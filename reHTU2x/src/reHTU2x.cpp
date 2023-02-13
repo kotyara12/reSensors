@@ -139,7 +139,7 @@ sensor_status_t HTU2x::softReset()
 {
   SENSOR_ERR_CHECK(sendCommand(HTU2X_SOFT_RESET), RSENSOR_LOG_MSG_RESET_FAILED);
   rlog_i(logTAG, RSENSOR_LOG_MSG_RESET, _name);
-  vTaskDelay(HTU2X_SOFT_RESET_DELAY / portTICK_RATE_MS);
+  sys_delay_ms(HTU2X_SOFT_RESET_DELAY);
 	return SENSOR_STATUS_OK;
 }
 
