@@ -15,18 +15,17 @@
 #include "esp_adc/adc_cali.h"
 #include <reParams.h>
 #include <reSensor.h>
-#include "project_config.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-class reADC: public rSensorItem {
+class reADCItem: public rSensorItem {
   public:
-    reADC(rSensor *sensor, const char* itemName, 
-      const int io_num, const adc_ulp_mode_t ulp_mode, 
-      const adc_atten_t atten, const adc_bitwidth_t bitwidth, 
-      const bool cal_enabled, const double coefficient,
+    reADCItem(rSensor *sensor, const char* itemName, 
+      const adc_oneshot_unit_handle_t adc_unit_handle, const adc_cali_handle_t adc_cali_handle,
+      const adc_channel_t channel, const adc_atten_t atten, const adc_bitwidth_t bitwidth, 
+      const double coefficient,
       const sensor_filter_t filterMode, const uint16_t filterSize,
       const char* formatNumeric, const char* formatString 
       #if CONFIG_SENSOR_TIMESTAMP_ENABLE
@@ -36,40 +35,46 @@ class reADC: public rSensorItem {
       , const char* formatTimestampValue, const char* formatStringTimeValue
       #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
       );
-    reADC(rSensor *sensor, const char* itemName, 
-      const adc_unit_t unit, const adc_channel_t channel, const adc_ulp_mode_t ulp_mode, 
-      const adc_atten_t atten, const adc_bitwidth_t bitwidth, 
-      const bool cal_enabled, const double coefficient,
-      const sensor_filter_t filterMode, const uint16_t filterSize,
-      const char* formatNumeric, const char* formatString 
-      #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-      , const char* formatTimestamp
-      #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-      #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-      , const char* formatTimestampValue, const char* formatStringTimeValue
-      #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-      );
-    virtual ~reADC();
     bool initItem() override;
-    adc_unit_t getUnit();
     value_t convertValue(const value_t rawValue) override;
   protected:
+    adc_channel_t getChannel();
+    adc_atten_t getAtten();
+    adc_bitwidth_t getBitwidth();
+    void setChannel(adc_oneshot_unit_handle_t unit_handle, adc_channel_t channel);
+
     void registerItemParameters(paramsGroup_t * group) override;
     sensor_status_t getRawValue(value_t * rawValue) override;
   private:
-    adc_unit_t      _unit;
-    adc_channel_t   _channel;
-    adc_ulp_mode_t  _ulp_mode;
-    adc_atten_t     _atten;
-    adc_bitwidth_t  _bitwidth;
-    double          _coefficient = 1.0;
-    bool            _cal_enabled = false;
-    adc_oneshot_unit_handle_t _adc_handle = nullptr;
-    adc_cali_handle_t _cal_handle = nullptr;
-    
-    void initADC(const adc_unit_t unit, const adc_channel_t channel, const adc_ulp_mode_t ulp_mode, 
+    adc_oneshot_unit_handle_t _unit_handle = nullptr;
+    adc_cali_handle_t         _cali_handle = nullptr;
+    adc_channel_t             _channel;
+    adc_atten_t               _atten;
+    adc_bitwidth_t            _bitwidth;
+    double                    _coefficient = 1.0;
+};
+
+class reADCGpio: public reADCItem {
+  public: 
+    reADCGpio(rSensor *sensor, const char* itemName, 
+      const int adc_gpio, const bool use_calibration,
       const adc_atten_t atten, const adc_bitwidth_t bitwidth, 
-      const bool cal_enabled, const double coefficient);
+      const double coefficient,
+      const sensor_filter_t filterMode, const uint16_t filterSize,
+      const char* formatNumeric, const char* formatString 
+      #if CONFIG_SENSOR_TIMESTAMP_ENABLE
+      , const char* formatTimestamp
+      #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
+      #if CONFIG_SENSOR_TIMESTRING_ENABLE  
+      , const char* formatTimestampValue, const char* formatStringTimeValue
+      #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
+      );
+    ~reADCGpio();
+    bool initItem() override;
+  private:
+    int _adc_gpio = -1;
+    bool _calibration = false;
+    adc_cali_handle_t _cali_handle = nullptr;
 };
 
 #ifdef __cplusplus

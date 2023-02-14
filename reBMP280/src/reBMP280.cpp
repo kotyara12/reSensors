@@ -7,6 +7,7 @@
 #include "rLog.h"
 #include "string.h"
 #include "driver/i2c.h"
+#include "rom/ets_sys.h"
 #include "def_consts.h"
 
 #define BMP280_I2C_TIMEOUT    3000

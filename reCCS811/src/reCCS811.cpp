@@ -6,6 +6,7 @@
 #include "reParams.h"
 #include "rLog.h"
 #include "string.h"
+#include "rom/ets_sys.h"
 #include "driver/i2c.h"
 #include "def_consts.h"
 
@@ -366,7 +367,7 @@ sensor_status_t CCS811::sensorReset()
 {
   // Init wakeup GPIO
   if (_wakePin != GPIO_NUM_NC) {
-    gpio_pad_select_gpio(_wakePin);
+    gpio_reset_pin(_wakePin);
     SENSOR_ERR_CHECK(gpio_set_direction(_wakePin, GPIO_MODE_OUTPUT), "Failed to set wakeup GPIO mode for sensor [%s]: %d %s");
   };
 

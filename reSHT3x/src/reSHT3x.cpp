@@ -3,6 +3,7 @@
 #include "rLog.h"
 #include "reEsp32.h"
 #include "reI2C.h"
+#include "rom/ets_sys.h"
 #include "driver/i2c.h"
 
 #define SHT3xD_CMD_READ_SERIAL_NUMBER 0x3780

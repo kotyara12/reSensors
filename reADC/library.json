@@ -1,7 +1,8 @@
 {
-  "name": "sensors",
-  "version": "4.2.0",
-  "description": "Drivers for various sensors for ESP-IDF",
+  "name": "reADC",
+  "version": "3.0.0",
+  "description": "Sensor objects for ADC",
+  "keywords": "ADC",
   "authors":
   [
     {

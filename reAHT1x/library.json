@@ -1,7 +1,8 @@
 {
-  "name": "sensors",
-  "version": "4.2.0",
-  "description": "Drivers for various sensors for ESP-IDF",
+  "name": "reAHT1X",
+  "version": "1.3.0",
+  "description": "Driver for receiving data from ASAIR AHT10/AHT15/AHT20 sensors from ESP32",
+  "keywords": "AHT10,AHT15,AHT20",
   "authors":
   [
     {

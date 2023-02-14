@@ -1,8 +1,8 @@
 /* 
-   Модуль для получения данных с датчиков ASAIR AHT10/AHT15/AHT20 из ESP32
+   Драйвер для получения данных с датчиков ASAIR AHT10/AHT15/AHT20 из ESP32
    Основан на библиотеке от enjoyneering79 (https://github.com/enjoyneering/)
    --------------------------
-   (с) 2021 Разживин Александр | Razzhivin Alexander
+   (с) 2021-2023 Разживин Александр | Razzhivin Alexander
    kotyara12@yandex.ru | https://kotyara12.ru | tg: @kotyara1971
 */
 
