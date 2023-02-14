@@ -1,0 +1,17 @@
+{
+  "name": "reHTU2x",
+  "version": "2.1.0",
+  "description": "Driver for sensors HTU2xD / SHT2x / Si7021 from ESP32",
+  "keywords": "HTU2xD,SHT2x,Si7021",
+  "authors":
+  [
+    {
+      "name": "Alexander Razzhivin",
+      "email": "kotyara12@yandex.ru",
+      "url": "https://kotyara12.ru"
+    }
+  ],
+  "license": "MIT",
+  "frameworks": ["arduino", "espidf"],
+  "platforms": ["espressif32"]
+}

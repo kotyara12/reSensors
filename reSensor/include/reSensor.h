@@ -1,5 +1,5 @@
 /* 
-   EN: A unified base sensor class used by the sensor libraries
+   EN: Unified sensor base class used by sensor libraries
    RU: Унифицированный базовый класс сенсора, используемый библиотеками сенсоров
    --------------------------
    (с) 2021-2023 Разживин Александр | Razzhivin Alexander
