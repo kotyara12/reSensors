@@ -1,7 +1,7 @@
 {
   "name": "reAM232x",
   "version": "1.0.0",
-  "description": "AM2320/AM2321",
+  "description": "Driver for sensors AM2320/AM2321 on ESP32 & ESP-IDF",
   "keywords": "AM2320,AM2321",
   "authors":
   [

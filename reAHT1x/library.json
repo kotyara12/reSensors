@@ -1,7 +1,7 @@
 {
   "name": "reAHT1X",
   "version": "1.3.0",
-  "description": "Driver for receiving data from ASAIR AHT10/AHT15/AHT20 sensors from ESP32",
+  "description": "Driver for ASAIR AHT10/AHT15/AHT20 sensors on ESP32",
   "keywords": "AHT10,AHT15,AHT20",
   "authors":
   [

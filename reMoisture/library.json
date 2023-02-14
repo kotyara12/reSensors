@@ -1,8 +1,8 @@
 {
-  "name": "reBSEC68x",
-  "version": "1.1.0",
-  "description": "Driver BME680 and BME688 sensors for ESP32 and ESP-IDF framework. Based on Bosch API & BSEC2",
-  "keywords": "BME680,BME688,BSEC,BSEC2",
+  "name": "reMoisture",
+  "version": "3.0.0",
+  "description": "Driver for Capacitive Soil Moisture Sensor v1.2 (or similar) on ESP32 & ESP-IDF",
+  "keywords": "Capacitive Soil Moisture Sensor",
   "authors":
   [
     {
