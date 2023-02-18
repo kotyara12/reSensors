@@ -11,10 +11,16 @@
 
 #include <stdint.h>
 #include <driver/gpio.h>
-#include "esp_adc/adc_oneshot.h"
-#include "esp_adc/adc_cali.h"
 #include <reParams.h>
 #include <reSensor.h>
+#if ESP_IDF_VERSION_MAJOR < 5
+  #include <driver/adc.h>
+  #include "esp_adc_cal.h"
+#else
+  #include "esp_adc/adc_oneshot.h"
+  #include "esp_adc/adc_cali.h"
+  #include "reADCIntf.h"
+#endif // ESP_IDF_VERSION_MAJOR
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,8 +29,12 @@ extern "C" {
 class reADCItem: public rSensorItem {
   public:
     reADCItem(rSensor *sensor, const char* itemName, 
-      const adc_oneshot_unit_handle_t adc_unit_handle, const adc_cali_handle_t adc_cali_handle,
-      const adc_channel_t channel, const adc_atten_t atten, const adc_bitwidth_t bitwidth, 
+      #if ESP_IDF_VERSION_MAJOR < 5
+        const adc1_channel_t channel, const adc_atten_t atten, const adc_bits_width_t bitwidth, const bool cal_enabled, 
+      #else
+        const adc_oneshot_unit_handle_t adc_unit_handle, const adc_cali_handle_t adc_cali_handle,
+        const adc_channel_t channel, const adc_atten_t atten, const adc_bitwidth_t bitwidth, 
+      #endif // ESP_IDF_VERSION_MAJOR
       const double coefficient,
       const sensor_filter_t filterMode, const uint16_t filterSize,
       const char* formatNumeric, const char* formatString 
@@ -38,21 +48,36 @@ class reADCItem: public rSensorItem {
     bool initItem() override;
     value_t convertValue(const value_t rawValue) override;
   protected:
-    adc_channel_t getChannel();
+    #if ESP_IDF_VERSION_MAJOR < 5
+      adc1_channel_t getChannel();
+      void setChannel(adc1_channel_t channel);
+      adc_bits_width_t getBitwidth();
+    #else
+      adc_channel_t getChannel();
+      void setChannel(adc_oneshot_unit_handle_t unit_handle, adc_channel_t channel);
+      adc_bitwidth_t getBitwidth();
+    #endif // ESP_IDF_VERSION_MAJOR 
     adc_atten_t getAtten();
-    adc_bitwidth_t getBitwidth();
-    void setChannel(adc_oneshot_unit_handle_t unit_handle, adc_channel_t channel);
 
     void registerItemParameters(paramsGroup_t * group) override;
     sensor_status_t getRawValue(value_t * rawValue) override;
   private:
-    adc_oneshot_unit_handle_t _unit_handle = nullptr;
-    adc_cali_handle_t         _cali_handle = nullptr;
-    adc_channel_t             _channel;
+    #if ESP_IDF_VERSION_MAJOR < 5
+      adc1_channel_t _channel;
+      bool _cal_enable = false;
+      adc_bits_width_t         _bitwidth;
+      esp_adc_cal_characteristics_t _chars;
+    #else
+      adc_oneshot_unit_handle_t _unit_handle = nullptr;
+      adc_cali_handle_t         _cali_handle = nullptr;
+      adc_channel_t             _channel;
+      adc_bitwidth_t            _bitwidth;
+    #endif // ESP_IDF_VERSION_MAJOR 
     adc_atten_t               _atten;
-    adc_bitwidth_t            _bitwidth;
     double                    _coefficient = 1.0;
 };
+
+#if ESP_IDF_VERSION_MAJOR >= 5
 
 class reADCGpio: public reADCItem {
   public: 
@@ -76,6 +101,8 @@ class reADCGpio: public reADCItem {
     bool _calibration = false;
     adc_cali_handle_t _cali_handle = nullptr;
 };
+
+#endif // ESP_IDF_VERSION_MAJOR
 
 #ifdef __cplusplus
 }

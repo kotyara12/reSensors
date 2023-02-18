@@ -1,6 +1,6 @@
 {
   "name": "reSensor",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Unified sensor base class used by sensor libraries",
   "keywords": "sensors",
   "authors":

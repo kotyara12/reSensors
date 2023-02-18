@@ -1,6 +1,6 @@
 {
   "name": "reADC",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Driver for internal ADC inputs on ESP32",
   "keywords": "ADC",
   "authors":

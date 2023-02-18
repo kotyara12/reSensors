@@ -495,11 +495,6 @@ char* rSensorItem::jsonDataValue(bool brackets, const char* format, const value_
 
 #if CONFIG_SENSOR_TIMESTAMP_ENABLE
 
-char* rSensorItem::asTimestamp(sensor_value_t *data)
-{
-  return malloc_timestr_empty(_fmtTimestamp, data->timestamp);
-}
-
 #if CONFIG_SENSOR_AS_PLAIN
 
 bool rSensorItem::publishTimestamp(const char* topic, sensor_value_t *data)
@@ -508,7 +503,9 @@ bool rSensorItem::publishTimestamp(const char* topic, sensor_value_t *data)
   if (_owner != nullptr) {
     char* _topicValue = mqttGetSubTopic(topic, CONFIG_SENSOR_TIMESTAMP);
     if (_topicValue != nullptr) {
-      ret = _owner->publish(_topicValue, asTimestamp(data), true);
+      char _time[CONFIG_FORMAT_STRFTIME_BUFFER_SIZE]};
+      time2str_empty(_fmtTimestamp, &(data->timestamp), &_time[0], sizeof(_time));
+      ret = _owner->publish(_topicValue, _time, false);
       free(_topicValue);
     };
   };
@@ -521,13 +518,9 @@ bool rSensorItem::publishTimestamp(const char* topic, sensor_value_t *data)
 
 char* rSensorItem::jsonTimestamp(sensor_value_t *data)
 {
-  char* ret = nullptr;
-  char* _time = asTimestamp(data);
-  if (_time != nullptr) {
-    ret = malloc_stringf("\"%s\":\"%s\"", CONFIG_SENSOR_TIMESTAMP, _time);
-    free(_time);
-  };
-  return ret;
+  char _time[CONFIG_FORMAT_STRFTIME_BUFFER_SIZE];
+  time2str_empty(_fmtTimestamp, &(data->timestamp), &_time[0], sizeof(_time));
+  return malloc_stringf("\"%s\":\"%s\"", CONFIG_SENSOR_TIMESTAMP, _time);
 }
 
 #endif // CONFIG_SENSOR_AS_JSON
@@ -547,12 +540,12 @@ char* rSensorItem::asStringTimeValue(sensor_value_t *data)
     ret = malloc_stringf("%s", CONFIG_FORMAT_EMPTY);
   } else {
     char* _string = asString(_fmtString, data->filteredValue, false);
-    char* _time = malloc_timestr_empty(_fmtTimestampValue, data->timestamp);
-    if ((_string != nullptr) && (_time != nullptr)) {
+    if (_string != nullptr) {
+      char _time[CONFIG_FORMAT_STRFTIME_BUFFER_SIZE];
+      time2str_empty(_fmtTimestampValue, &(data->timestamp), &_time[0], sizeof(_time));
       ret = malloc_stringf(_fmtStringTimeValue, _string, _time);
     };
     if (_string != nullptr) free(_string);
-    if (_time != nullptr) free(_time);
   };
   return ret;
 }

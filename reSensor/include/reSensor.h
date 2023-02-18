@@ -282,7 +282,6 @@ class rSensorItem {
     #endif // CONFIG_SENSOR_AS_JSON
 
     // Publishing timestamp
-    char* asTimestamp(sensor_value_t *data);
     #if CONFIG_SENSOR_TIMESTAMP_ENABLE
     #if CONFIG_SENSOR_AS_PLAIN
     bool publishTimestamp(const char* topic, sensor_value_t *data);
