@@ -62,7 +62,7 @@ sensor_status_t xyMD02::sensorReset()
  * */
 sensor_status_t xyMD02::readRawData()
 {
-  uint16_t value[2];
+  uint16_t values[2];
 
   mb_param_request_t _request = {
     .slave_addr = _address,
@@ -70,7 +70,7 @@ sensor_status_t xyMD02::readRawData()
     .reg_start  = 0x0001,
     .reg_size   = 2
   };
-  esp_err_t err = mbc_master_send_request(&_request, &value[0]);
+  esp_err_t err = mbc_master_send_request(&_request, &values[0]);
 
   if (err != ESP_OK) {
     rlog_e(logTAG, RSENSOR_LOG_MSG_READ_DATA_FAILED, _name, err, esp_err_to_name(err));
@@ -78,5 +78,5 @@ sensor_status_t xyMD02::readRawData()
   };
 
   // Store values in sensors
-  return setRawValues((float)value[1]/10.0, (float)value[0]/10.0);
+  return setRawValues((float)values[1]/10.0, (float)values[0]/10.0);
 };
