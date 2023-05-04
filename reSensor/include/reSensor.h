@@ -209,6 +209,7 @@ typedef struct {
 } sensor_data_t;
 typedef sensor_data_t * sensor_handle_t;
 
+double calcAbsoluteHumidity(float temp, float humd);
 value_t calcDewPoint(value_t tempValue, value_t humidityValue);
 value_t calcDewPointSlow(value_t tempValue, value_t humidityValue);
 

@@ -8,6 +8,12 @@ static const char* logTAG = "SENS";
 // =======================================================================================================================
 // =======================================================================================================================
 
+double calcAbsoluteHumidity(float temp, float humd)
+{
+  // return humd * 10 * ((6.112 * 100.0 * exp((17.67 * temp)/(243.12 + temp)))/(461.52 * (temp + 273.15)));
+  return 6.112 * exp((17.67 * temp)/(temp + 243.5)) * humd * 2.1674 / (273.15 + temp);
+}
+
 value_t calcDewPoint(value_t tempValue, value_t humidityValue) 
 {
   double a = 17.271;
