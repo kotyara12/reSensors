@@ -1,6 +1,6 @@
-# Driver XY-MD02 for ESP32 and ESP-IDF framework
+# Driver CWT-Soil-THCPH-S for ESP32 and ESP-IDF framework
 
-Sensor driver XY-MD02 (SHT20 over RS485) for ESP32-based devices running FreeRTOS
+Sensor driver CWT-Soil-THCPH-S (connection via RS485 Modbus RTU) for ESP32-based devices running FreeRTOS
 
 ## Dependencies:
   - https://github.com/kotyara12/rLog

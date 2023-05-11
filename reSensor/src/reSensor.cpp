@@ -1997,18 +1997,18 @@ bool rSensorX2::setFilterMode2(const sensor_filter_t filterMode, const uint16_t 
 // Writing measured RAW values to internal items
 sensor_status_t rSensorX2::setRawValues(const value_t newValue1, const value_t newValue2)
 {
-  sensor_status_t ret = SENSOR_STATUS_NO_DATA;
-  if (_item1) {
+  time_t timestamp = time(nullptr);
+  sensor_status_t ret = SENSOR_STATUS_OK;
+  if ((_item1) && (ret == SENSOR_STATUS_OK)) {
     ret = _item1->checkValue(newValue1);
     if (ret == SENSOR_STATUS_OK) {
-      time_t timestamp = time(nullptr);
       _item1->setRawValue(newValue1, timestamp);
-      if (_item2) {
-        ret = _item2->checkValue(newValue2);
-        if (ret == SENSOR_STATUS_OK) {
-          _item2->setRawValue(newValue2, timestamp);
-        };
-      };
+    };
+  };
+  if ((_item2) && (ret == SENSOR_STATUS_OK)) {
+    ret = _item2->checkValue(newValue2);
+    if (ret == SENSOR_STATUS_OK) {
+      _item2->setRawValue(newValue2, timestamp);
     };
   };
   return ret;
@@ -2443,24 +2443,24 @@ bool rSensorX3::setFilterMode3(const sensor_filter_t filterMode, const uint16_t 
 // Writing measured RAW values to internal items
 sensor_status_t rSensorX3::setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3)
 {
-  sensor_status_t ret = SENSOR_STATUS_NO_DATA;
-  if (_item1) {
+  time_t timestamp = time(nullptr);
+  sensor_status_t ret = SENSOR_STATUS_OK;
+  if ((_item1) && (ret == SENSOR_STATUS_OK)) {
     ret = _item1->checkValue(newValue1);
     if (ret == SENSOR_STATUS_OK) {
-      time_t timestamp = time(nullptr);
       _item1->setRawValue(newValue1, timestamp);
-      if (_item2) {
-        ret = _item2->checkValue(newValue2);
-        if (ret == SENSOR_STATUS_OK) {
-          _item2->setRawValue(newValue2, timestamp);
-          if (_item3) {
-            ret = _item3->checkValue(newValue3);
-            if (ret == SENSOR_STATUS_OK) {
-              _item3->setRawValue(newValue3, timestamp);
-            };
-          };
-        };
-      };
+    };
+  };
+  if ((_item2) && (ret == SENSOR_STATUS_OK)) {
+    ret = _item2->checkValue(newValue2);
+    if (ret == SENSOR_STATUS_OK) {
+      _item2->setRawValue(newValue2, timestamp);
+    };
+  };
+  if ((_item3) && (ret == SENSOR_STATUS_OK)) {
+    ret = _item3->checkValue(newValue3);
+    if (ret == SENSOR_STATUS_OK) {
+      _item3->setRawValue(newValue3, timestamp);
     };
   };
   return ret;
@@ -2883,30 +2883,30 @@ bool rSensorX4::setFilterMode4(const sensor_filter_t filterMode, const uint16_t 
 // Writing measured RAW values to internal items
 sensor_status_t rSensorX4::setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4)
 {
-  sensor_status_t ret = SENSOR_STATUS_NO_DATA;
-  if (_item1) {
+  time_t timestamp = time(nullptr);
+  sensor_status_t ret = SENSOR_STATUS_OK;
+  if ((_item1) && (ret == SENSOR_STATUS_OK)) {
     ret = _item1->checkValue(newValue1);
     if (ret == SENSOR_STATUS_OK) {
-      time_t timestamp = time(nullptr);
       _item1->setRawValue(newValue1, timestamp);
-      if (_item2) {
-        ret = _item2->checkValue(newValue2);
-        if (ret == SENSOR_STATUS_OK) {
-          _item2->setRawValue(newValue2, timestamp);
-          if (_item3) {
-            ret = _item3->checkValue(newValue3);
-            if (ret == SENSOR_STATUS_OK) {
-              _item3->setRawValue(newValue3, timestamp);
-              if (_item4) {
-                ret = _item4->checkValue(newValue4);
-                if (ret == SENSOR_STATUS_OK) {
-                  _item4->setRawValue(newValue4, timestamp);
-                };
-              };
-            };
-          };
-        };
-      };
+    };
+  };
+  if ((_item2) && (ret == SENSOR_STATUS_OK)) {
+    ret = _item2->checkValue(newValue2);
+    if (ret == SENSOR_STATUS_OK) {
+      _item2->setRawValue(newValue2, timestamp);
+    };
+  };
+  if ((_item3) && (ret == SENSOR_STATUS_OK)) {
+    ret = _item3->checkValue(newValue3);
+    if (ret == SENSOR_STATUS_OK) {
+      _item3->setRawValue(newValue3, timestamp);
+    };
+  };
+  if ((_item4) && (ret == SENSOR_STATUS_OK)) {
+    ret = _item4->checkValue(newValue4);
+    if (ret == SENSOR_STATUS_OK) {
+      _item4->setRawValue(newValue4, timestamp);
     };
   };
   return ret;
@@ -3428,36 +3428,36 @@ bool rSensorX5::setFilterMode5(const sensor_filter_t filterMode, const uint16_t 
 // Writing measured RAW values to internal items
 sensor_status_t rSensorX5::setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4, const value_t newValue5)
 {
-  sensor_status_t ret = SENSOR_STATUS_NO_DATA;
-  if (_item1) {
+  time_t timestamp = time(nullptr);
+  sensor_status_t ret = SENSOR_STATUS_OK;
+  if ((_item1) && (ret == SENSOR_STATUS_OK)) {
     ret = _item1->checkValue(newValue1);
     if (ret == SENSOR_STATUS_OK) {
-      time_t timestamp = time(nullptr);
       _item1->setRawValue(newValue1, timestamp);
-      if (_item2) {
-        ret = _item2->checkValue(newValue2);
-        if (ret == SENSOR_STATUS_OK) {
-          _item2->setRawValue(newValue2, timestamp);
-          if (_item3) {
-            ret = _item3->checkValue(newValue3);
-            if (ret == SENSOR_STATUS_OK) {
-              _item3->setRawValue(newValue3, timestamp);
-              if (_item4) {
-                ret = _item4->checkValue(newValue4);
-                if (ret == SENSOR_STATUS_OK) {
-                  _item4->setRawValue(newValue4, timestamp);
-                  if (_item5) {
-                    ret = _item5->checkValue(newValue5);
-                    if (ret == SENSOR_STATUS_OK) {
-                      _item5->setRawValue(newValue5, timestamp);
-                    };
-                  };
-                };
-              };
-            };
-          };
-        };
-      };
+    };
+  };
+  if ((_item2) && (ret == SENSOR_STATUS_OK)) {
+    ret = _item2->checkValue(newValue2);
+    if (ret == SENSOR_STATUS_OK) {
+      _item2->setRawValue(newValue2, timestamp);
+    };
+  };
+  if ((_item3) && (ret == SENSOR_STATUS_OK)) {
+    ret = _item3->checkValue(newValue3);
+    if (ret == SENSOR_STATUS_OK) {
+      _item3->setRawValue(newValue3, timestamp);
+    };
+  };
+  if ((_item4) && (ret == SENSOR_STATUS_OK)) {
+    ret = _item4->checkValue(newValue4);
+    if (ret == SENSOR_STATUS_OK) {
+      _item4->setRawValue(newValue4, timestamp);
+    };
+  };
+  if ((_item5) && (ret == SENSOR_STATUS_OK)) {
+    ret = _item5->checkValue(newValue5);
+    if (ret == SENSOR_STATUS_OK) {
+      _item5->setRawValue(newValue5, timestamp);
     };
   };
   return ret;

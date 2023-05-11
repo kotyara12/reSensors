@@ -1,0 +1,100 @@
+﻿body {
+    margin: 0px;
+    padding: 0px;
+    background-color: lightblue;
+    color: #5f5d5e;
+    min-height: 500px;
+    min-width: 960px;
+}
+
+select {
+    white-space: pre;
+}
+
+/*顶部*/
+#com {
+    background-color: #63B8FF;
+    height: 40px;
+    align-content: center;
+    text-align: center;
+    padding-top: 15px;
+}
+
+    #com div {
+        float: left;
+        margin-left: 30px;
+        align-content: center;
+    }
+
+    #com select {
+        width: 120px;
+    }
+
+#btnOpen {
+    width: 80px;
+    margin-top: -2px;
+    color: red;
+}
+
+#refresh {
+    position: absolute;
+    width: 30px;
+    right: 20px;
+    top: 10px;
+}
+/*主体*/
+#main {
+    width: 100%;
+    float: left;
+}
+/*传感器图片div*/
+#div_sensorImg {
+    width: 45%;
+    float: left;
+    height: 480px;
+    margin-top: 15px;
+    position: relative;
+}
+
+/*传感器图片*/
+#sensorImg {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    max-height: 80%;
+    max-width: 90%;
+    transform: translate(-50%,-50%);
+}
+
+#tips {
+    width: 100%;
+    text-align: center;
+    white-space: pre;
+    position: absolute;
+    margin-top: 15px;
+}
+/*参数设置div*/
+#set {
+    margin-top: 15px;
+    width: 600px;
+    min-height: 400px;
+    padding: 20px;
+    float: left;
+}
+
+    #set select, input, textarea {
+        box-sizing: border-box;
+        width: 280px;
+    }
+
+    #set div {
+        margin-top: 15px;
+    }
+
+    #set label {
+        width: 140px;
+        display: inline-block;
+    }
+
+#btnWriteRegister {
+}

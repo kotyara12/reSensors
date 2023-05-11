@@ -1,0 +1,25 @@
+T=Temperature
+H=Humidity(moisture)
+C=Conductivity(EC)
+PH=PH
+N=Nitrogen
+P=Phosphorus
+K=Potassium
+
+
+
+H-S and TH-S can read ¡¶THC-S manual¡·
+
+
+
+
+
+NPK type with 5pin probe
+
+NPKTHPH-S
+NPKTHC-S
+NPKPH-S
+NPKPHC-S
+NPKPHCTH-S
+
+read ¡¶NPK type (5Pin probe) manual¡·

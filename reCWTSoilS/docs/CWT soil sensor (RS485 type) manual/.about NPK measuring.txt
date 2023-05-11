@@ -1,0 +1,7 @@
+
+
+
+The measurement of NPK adopts the general rapid detection method, so there are certain error, Use with caution for planting reference.
+
+However, the sensor supports the function of writing NPK data. You can use standard instruments to measure NPK then write in to provide data for monitoring system.
+

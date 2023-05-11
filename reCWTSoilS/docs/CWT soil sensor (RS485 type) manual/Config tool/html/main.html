@@ -1,0 +1,123 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>CWT-Modbus sensor tool</title>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <!--[if lt IE 9]><script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script><script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script><![endif]-->
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="js/cwt.tool.js"></script>
+    <script src="js/cwt.modbus.js"></script>
+    <script src="js/cwt.sensortool.js"></script>
+    <script src="js/cwt.rtu.js"></script>
+    <script src="js/cwt.sensors.js"></script>
+    <script src="js/cwt.ieee754.js"></script>
+    <script src="js/cwt.main.js"></script>
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+    <div id="com">
+        <div id="div_comPort">
+            COM:
+            <select id="comPort">
+                <option value="">None</option>
+            </select>
+        </div>
+        <div id="div_bps">
+            BPS:
+            <select id="bps">
+                <option value="4800">4800</option>
+                <option value="9600" selected>9600</option>
+                <option value="19200">19200</option>
+                <option value="115200">115200</option>
+            </select>
+        </div>
+        <div id="div_parity">
+            Parity:
+            <select id="parity">
+                <option value="None" selected>None</option>
+                <option value="Odd">Odd</option>
+                <option value="Even">Even</option>
+                <option value="Mark">Mark</option>
+                <option value="Space">Space</option>
+            </select>
+        </div>
+        <div>
+            <button id="btnOpen">Open</button>
+        </div>
+        <div>
+            <img id="refresh" src="images/refresh.png" title="F5"/>
+        </div>
+    </div>
+    <div id="main">
+        <div id="div_sensorImg">
+            <div>
+                <label id="tips"></label>
+            </div>
+            <div>
+                <img id="sensorImg" />
+            </div>
+        </div>
+        <div id="set">
+            <div>
+                <label>Sensor：</label>
+                <select id="sensorType"></select>
+            </div>
+            <div>
+                <label>Slave address：</label>
+                <input id="slaveAddr" type="text" value="1" placeholder="0-255"/>
+                <button id="btnReadAddr">Read</button>
+            </div>
+            <div>
+                <label>Slave new address：</label>
+                <input id="slaveNewAddr" type="text" value="" placeholder="0-255"/>
+                <button id="btnWriteAddr">Write</button>
+            </div>
+            <div>
+                <label>Register address：</label>
+                <input id="regAddr" type="text" value="1" />
+            </div>
+            <div>
+                <label>Register type：</label>
+                <select id="regType">
+                    <option value="0">0xxxx:Coil</option>
+                    <option value="1">1xxxx:Discrete input</option>
+                    <option value="3" selected>3xxxx:Input register</option>
+                    <option value="4">4xxxx:Holding|Keep</option>
+                </select>
+            </div>
+            <div>
+                <label>Value type：</label>
+                <select id="valueType">
+                    <option value="0">Signed</option>
+                    <option value="1">Unsigned</option>
+                    <option value="2">Long</option>
+                    <option value="3">Long Inverse</option>
+                    <option value="4">Float</option>
+                    <option value="5">Float Inverse</option>
+                </select>
+            </div>
+            <div>
+                <label>Value scale：</label>
+                <input id="valueScale" type="text" value="1" />
+            </div>
+            <div>
+                <label>Register value：</label>
+                <input id="regValue" type="text" value="" />
+                <button id="btnReadRegister">Read</button>
+                <button id="btnWriteRegister">Write</button>
+            </div>            
+            <div>
+                <label>Log：</label>
+                <textarea id="textLog" rows="8"></textarea>
+                <button id="btnClearLog">Clear</button>
+            </div>
+            <!-- <div>
+                <label>Hex：</label>
+                <input id="hexData" type="text" placeholder="xx xx xx .." />
+                <button id="sendHex">Send</button>
+            </div> -->
+        </div>
+    </div>
+</body>
+</html>

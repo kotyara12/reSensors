@@ -1,0 +1,8 @@
+T=temperature
+H=humidity
+C=Conductivity (EC)
+PH=PH
+
+analog type include 4-20mA, 0-5V, 0-10V output.
+
+note: 0-10V output type power supply need DC18-30V
