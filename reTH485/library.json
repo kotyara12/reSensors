@@ -1,0 +1,17 @@
+{
+  "name": "reTH485",
+  "version": "1.1.0",
+  "description": "Universal driver for temperature and humidity sensors operating via RS485 bus and ModbusRTU protocol",
+  "keywords": "XY-MD02, RS-WS-N01-2D",
+  "authors":
+  [
+    {
+      "name": "Alexander Razzhivin",
+      "email": "kotyara12@yandex.ru",
+      "url": "https://kotyara12.ru"
+    }
+  ],
+  "license": "MIT",
+  "frameworks": ["arduino", "espidf"],
+  "platforms": ["espressif32"]
+}
