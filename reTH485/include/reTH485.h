@@ -52,7 +52,7 @@ class reTH485 : public rSensorHT {
     sensor_status_t sensorReset() override;
 
     // Update (read / write) modbus register
-    esp_err_t callModbusRegister(uint8_t cmd, uint16_t reg, uint16_t* value);
+    esp_err_t callModbusRegister(uint8_t cmd, uint16_t reg, int16_t* value);
   protected:
     sensor_status_t readRawData() override;  
   private:

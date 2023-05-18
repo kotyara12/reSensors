@@ -65,7 +65,7 @@ sensor_status_t reTH485::sensorReset()
 /**
  * Update (read / write) modbus register
  * */
-esp_err_t reTH485::callModbusRegister(uint8_t cmd, uint16_t reg, uint16_t* value)
+esp_err_t reTH485::callModbusRegister(uint8_t cmd, uint16_t reg, int16_t* value)
 {
   mb_param_request_t _request = {
     .slave_addr = _address,
@@ -81,8 +81,11 @@ esp_err_t reTH485::callModbusRegister(uint8_t cmd, uint16_t reg, uint16_t* value
  * */
 sensor_status_t reTH485::readRawData()
 {
-  uint16_t _temp, _humd;
+  int16_t _temp = 0;
+  int16_t _humd = 0;
   RE_OK_CHECK(callModbusRegister(_command, _reg_humd, &_humd), return SENSOR_STATUS_CONN_ERROR);
+  rlog_d(logTAG, "Read register humd %d: %d", _reg_humd, _humd);
   RE_OK_CHECK(callModbusRegister(_command, _reg_temp, &_temp), return SENSOR_STATUS_CONN_ERROR);
+  rlog_d(logTAG, "Read register temp %d: %d", _reg_temp, _temp);
   return setRawValues((float)_humd/10.0, (float)_temp/10.0);
 };
