@@ -85,7 +85,9 @@ sensor_status_t reTH485::readRawData()
   int16_t _humd = 0;
   RE_OK_CHECK(callModbusRegister(_command, _reg_humd, &_humd), return SENSOR_STATUS_CONN_ERROR);
   rlog_d(logTAG, "Read register humd %d: %d", _reg_humd, _humd);
+  vTaskDelay(1);
   RE_OK_CHECK(callModbusRegister(_command, _reg_temp, &_temp), return SENSOR_STATUS_CONN_ERROR);
   rlog_d(logTAG, "Read register temp %d: %d", _reg_temp, _temp);
+  vTaskDelay(1);
   return setRawValues((float)_humd/10.0, (float)_temp/10.0);
 };

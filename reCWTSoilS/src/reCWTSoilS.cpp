@@ -232,18 +232,22 @@ sensor_status_t reCWTSoilS::readRawData()
   // Humidity (moisture)
   if ((_item2) && (err == ESP_OK)) {
     err = readModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_HUMIDITY, &bufH);
+    vTaskDelay(1);
   };
   // Temperature
   if ((_item1) && (err == ESP_OK)) {
     err = readModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_TEMPERATURE, &bufT);
+    vTaskDelay(1);
   };
   // Conductivity
   if ((_item3) && (err == ESP_OK)) {
     err = readModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_CONDUCTIVITY, &bufC);
+    vTaskDelay(1);
   };
   // PH
   if ((_item4) && (err == ESP_OK)) {
     err = readModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_PH, &bufP);
+    vTaskDelay(1);
   };
 
   // Check exit code
