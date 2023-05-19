@@ -65,7 +65,7 @@ sensor_status_t reTH485::sensorReset()
 /**
  * Update (read / write) modbus register
  * */
-esp_err_t reTH485::callModbusRegister(uint8_t cmd, uint16_t reg, int16_t* value)
+esp_err_t reTH485::callModbusRegister(uint8_t cmd, uint16_t reg, void* value)
 {
   mb_param_request_t _request = {
     .slave_addr = _address,
@@ -73,7 +73,7 @@ esp_err_t reTH485::callModbusRegister(uint8_t cmd, uint16_t reg, int16_t* value)
     .reg_start  = reg,
     .reg_size   = 1
   };
-  return mbc_master_send_request(&_request, (void*)value);
+  return mbc_master_send_request(&_request, value);
 }
 
 /**
@@ -81,13 +81,22 @@ esp_err_t reTH485::callModbusRegister(uint8_t cmd, uint16_t reg, int16_t* value)
  * */
 sensor_status_t reTH485::readRawData()
 {
-  int16_t _temp = 0;
   int16_t _humd = 0;
-  RE_OK_CHECK(callModbusRegister(_command, _reg_humd, &_humd), return SENSOR_STATUS_CONN_ERROR);
-  rlog_d(logTAG, "Read register humd %d: %d", _reg_humd, _humd);
-  vTaskDelay(1);
-  RE_OK_CHECK(callModbusRegister(_command, _reg_temp, &_temp), return SENSOR_STATUS_CONN_ERROR);
-  rlog_d(logTAG, "Read register temp %d: %d", _reg_temp, _temp);
-  vTaskDelay(1);
+  int16_t _temp = 0;
+  // uart_flush_input();
+
+  // Read registers
+  esp_err_t err = callModbusRegister(_command, _reg_humd, (void*)&_humd);
+  if (err == ESP_OK) {
+    esp_err_t err = callModbusRegister(_command, _reg_temp, (void*)&_temp);
+  };
+
+  // Check exit code
+  if (err != ESP_OK) {
+    rlog_e(logTAG, RSENSOR_LOG_MSG_READ_DATA_FAILED, _name, err, esp_err_to_name(err));
+    return convertEspError(err);
+  };
+
+  // Store values in sensors
   return setRawValues((float)_humd/10.0, (float)_temp/10.0);
 };
