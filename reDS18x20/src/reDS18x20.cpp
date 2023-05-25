@@ -117,6 +117,7 @@ bool DS18x20::initExtItems(const char* sensorName, const char* topicName, const 
     if (_address == ONEWIRE_NONE) {
       return scanDevices(index) && sensorStart();
     } else {
+      _model = (DS18x20_MODEL)_address;
       return readROM(true) && sensorStart();
     };
   } else rlog_e(logTAG, "Failed to reset 1-Wire bus");
@@ -207,16 +208,18 @@ bool DS18x20::validAddress(uint8_t* rom_code)
 bool DS18x20::readROM(bool storeAddress)
 {
   if (addressSelect() && onewire_write(_pin, DS18x20_READROM)) {
-    uint8_t rom_code[8];
-    for (int i = 0; i < 8; i++)
+    uint8_t rom_code[8] = {0};
+    for (int i = 0; i < 8; i++) {
       rom_code[i] = onewire_read(_pin);
+    };
     if (validAddress(rom_code) && validFamily(rom_code[0])) {
       _model = (DS18x20_MODEL)rom_code[0];
       if (storeAddress) {
         _address = (onewire_addr_t)rom_code[0];
       };
+      return true;
     } else {
-      rlog_e(logTAG, "Invalid address: %16X", *rom_code);
+      rlog_e(logTAG, "Invalid address: %08x%08x", (uint32_t)(*rom_code >> 32), (uint32_t)(*rom_code));
     };
   };
   return false;

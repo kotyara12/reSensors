@@ -225,13 +225,10 @@ bool onewire_read_bytes(gpio_num_t pin, uint8_t *buf, size_t count)
 
 bool onewire_select(gpio_num_t pin, onewire_addr_t addr)
 {
-    uint8_t i;
-
     if (!onewire_write(pin, ONEWIRE_SELECT_ROM))
         return false;
 
-    for (i = 0; i < 8; i++)
-    {
+    for (uint8_t i = 0; i < 8; i++) {
         if (!onewire_write(pin, addr & 0xff))
             return false;
         addr >>= 8;
