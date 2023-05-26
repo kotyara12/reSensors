@@ -219,7 +219,7 @@ bool DS18x20::readROM(bool storeAddress)
       };
       return true;
     } else {
-      rlog_e(logTAG, "Invalid address: %08x%08x", (uint32_t)(*rom_code >> 32), (uint32_t)(*rom_code));
+      rlog_e(logTAG, "Invalid ROM address!");
     };
   };
   return false;
