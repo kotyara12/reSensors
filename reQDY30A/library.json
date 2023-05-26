@@ -1,0 +1,17 @@
+{
+  "name": "reQDY30A",
+  "version": "1.0.0",
+  "description": "Sensor driver QDY30A (connection via RS485 Modbus RTU) for ESP32-based devices running FreeRTOS",
+  "keywords": "QDY30A",
+  "authors":
+  [
+    {
+      "name": "Alexander Razzhivin",
+      "email": "kotyara12@yandex.ru",
+      "url": "https://kotyara12.ru"
+    }
+  ],
+  "license": "MIT",
+  "frameworks": ["arduino", "espidf"],
+  "platforms": ["espressif32"]
+}
