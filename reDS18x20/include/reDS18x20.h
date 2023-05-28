@@ -86,7 +86,7 @@ class DS18x20 : public rSensorX1 {
 
     bool validFamily(uint8_t faminly_byte);
     bool validAddress(uint8_t* rom_code);
-    bool readROM(bool storeAddress);
+    bool readROM(uint64_t *rom_code);
     bool scanDevices(uint8_t index);
 
     sensor_status_t readScratchpad(uint8_t *buffer);
