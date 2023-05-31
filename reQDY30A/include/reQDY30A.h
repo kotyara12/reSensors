@@ -61,6 +61,9 @@ class reQDY30A : public rSensorX1 {
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
 
     sensor_status_t sensorReset() override;
+    
+    void setAirPressureMmHg(float value);
+    void setAirPressureKPa(float value);
   protected:
     void createSensorItems(const sensor_filter_t filterMode = SENSOR_FILTER_RAW, const uint16_t filterSize = 0);
     void registerItemsParameters(paramsGroupHandle_t parent_group) override;
@@ -68,10 +71,11 @@ class reQDY30A : public rSensorX1 {
   private:
     void*            _modbus = nullptr;
     uint8_t          _address = 1;
+    float            _offset = 0.0;
     QDY30A_UNITS     _units = QDY30A_NONE;
     QDY30A_PRECISION _prec = QDY30A_INTEGER;
     
-    esp_err_t readModbusRegister(uint8_t cmd, uint16_t reg, int16_t* value);
+    esp_err_t callModbusRegister(uint8_t cmd, uint16_t reg, int16_t* value);
 };
 
 #ifdef __cplusplus

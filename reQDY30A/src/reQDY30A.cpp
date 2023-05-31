@@ -92,16 +92,23 @@ void reQDY30A::registerItemsParameters(paramsGroupHandle_t parent_group)
   };
 }
 
-// Start device
 sensor_status_t reQDY30A::sensorReset()
 {
-  return SENSOR_STATUS_OK;
+  int16_t buf = (int16_t)_units;
+  esp_err_t err = callModbusRegister(FUNCTION_CODE_STATUS_WRITE, REG_STATUS_UNITS, &buf);
+  if (err != ESP_OK) {
+    rlog_e(logTAG, "Failed to set units!");
+  } else {
+    buf = (int16_t)_prec;
+    err = callModbusRegister(FUNCTION_CODE_STATUS_WRITE, REG_STATUS_PRECISION, &buf);
+    if (err != ESP_OK) {
+      rlog_e(logTAG, "Failed to set precision!");
+    };
+  };
+  return convertEspError(err);
 };
 
-/**
- * Read status register
- * */
-esp_err_t reQDY30A::readModbusRegister(uint8_t cmd, uint16_t reg, int16_t* value)
+esp_err_t reQDY30A::callModbusRegister(uint8_t cmd, uint16_t reg, int16_t* value)
 {
   mb_param_request_t _request = {
     .slave_addr = _address,
@@ -112,17 +119,23 @@ esp_err_t reQDY30A::readModbusRegister(uint8_t cmd, uint16_t reg, int16_t* value
   return mbc_master_send_request(&_request, (void*)value);
 }
 
-/**
- * Read humidity and temperature data
- * */
+void reQDY30A::setAirPressureMmHg(float value)
+{
+  setAirPressureKPa(value * 0.133322);
+}
+
+void reQDY30A::setAirPressureKPa(float value)
+{
+  _offset = value - 100.0; // ~750 mmhg
+}
+
 sensor_status_t reQDY30A::readRawData()
 {
   esp_err_t err = ESP_OK;
-  int16_t bufL = 0;
+  int16_t buf = 0;
 
-  // Level
   if ((_item) && (err == ESP_OK)) {
-    err = readModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_OUTPUT, &bufL);
+    err = callModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_OUTPUT, &buf);
   };
 
   // Check exit code
@@ -131,6 +144,13 @@ sensor_status_t reQDY30A::readRawData()
     return convertEspError(err);
   };
 
-  // Store values in sensors
-  return setRawValues((float)bufL);
+  float value = (float)buf;
+  if (_prec == QDY30A_FLOAT1) {
+    value = value / 10.0;
+  } else if (_prec == QDY30A_FLOAT2) {
+    value = value / 100.0;
+  } else if (_prec == QDY30A_FLOAT3) {
+    value = value / 1000.0;
+  };
+  return setRawValues(value + _offset);
 };
