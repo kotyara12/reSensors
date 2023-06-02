@@ -93,7 +93,9 @@ bool DS18x20::initIntItems(const char* sensorName, const char* topicName, const 
         return sensorStart();
       };
     };
-  } else rlog_e(logTAG, "Failed to reset 1-Wire bus");
+  } else {
+    rlog_e(logTAG, "Failed to reset 1-Wire bus");
+  };
   return false;
 }
 
@@ -120,7 +122,9 @@ bool DS18x20::initExtItems(const char* sensorName, const char* topicName, const 
       _model = (DS18x20_MODEL)_address;
       return sensorStart();
     };
-  } else rlog_e(logTAG, "Failed to reset 1-Wire bus");
+  } else {
+    rlog_e(logTAG, "Failed to reset 1-Wire bus");
+  };
   return false;
 }
 
