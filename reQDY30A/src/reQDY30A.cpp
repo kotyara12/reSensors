@@ -27,15 +27,13 @@ reQDY30A::reQDY30A(uint8_t eventId):rSensorX1(eventId)
 
 // Dynamically creating internal items on the heap
 bool reQDY30A::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,
-  void* modbus, const uint8_t address, const QDY30A_UNITS units, const QDY30A_PRECISION prec,
+  void* modbus, const uint8_t address, 
   const sensor_filter_t filterMode, const uint16_t filterSize, 
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
 {
   _modbus = modbus;
   _address = address;
-  _units = units;
-  _prec = prec;
   // Initialize properties
   initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   // Initialize internal items
@@ -48,15 +46,13 @@ bool reQDY30A::initIntItems(const char* sensorName, const char* topicName, const
 
 // Connecting external previously created items, for example statically declared
 bool reQDY30A::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
-  void* modbus, const uint8_t address, const QDY30A_UNITS units, const QDY30A_PRECISION prec,
+  void* modbus, const uint8_t address, 
   rSensorItem* item, 
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
 {
   _modbus = modbus;
   _address = address;
-  _units = units;
-  _prec = prec;
   // Initialize properties
   initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
   // Assign items
@@ -94,18 +90,7 @@ void reQDY30A::registerItemsParameters(paramsGroupHandle_t parent_group)
 
 sensor_status_t reQDY30A::sensorReset()
 {
-  int16_t buf = (int16_t)_units;
-  esp_err_t err = callModbusRegister(FUNCTION_CODE_STATUS_WRITE, REG_STATUS_UNITS, &buf);
-  if (err != ESP_OK) {
-    rlog_e(logTAG, "Failed to set units!");
-  } else {
-    buf = (int16_t)_prec;
-    err = callModbusRegister(FUNCTION_CODE_STATUS_WRITE, REG_STATUS_PRECISION, &buf);
-    if (err != ESP_OK) {
-      rlog_e(logTAG, "Failed to set precision!");
-    };
-  };
-  return convertEspError(err);
+  return SENSOR_STATUS_OK;
 };
 
 esp_err_t reQDY30A::callModbusRegister(uint8_t cmd, uint16_t reg, int16_t* value)
@@ -119,23 +104,16 @@ esp_err_t reQDY30A::callModbusRegister(uint8_t cmd, uint16_t reg, int16_t* value
   return mbc_master_send_request(&_request, (void*)value);
 }
 
-void reQDY30A::setAirPressureMmHg(float value)
-{
-  setAirPressureKPa(value * 0.133322);
-}
-
-void reQDY30A::setAirPressureKPa(float value)
-{
-  _offset = value - 100.0; // ~750 mmhg
-}
-
 sensor_status_t reQDY30A::readRawData()
 {
+  int16_t value, precs = 0;
   esp_err_t err = ESP_OK;
-  int16_t buf = 0;
 
-  if ((_item) && (err == ESP_OK)) {
-    err = callModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_OUTPUT, &buf);
+  if (_item) {
+    err = callModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_OUTPUT, &value);
+    if (err != ESP_OK) {
+      err = callModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_PRECISION, &precs);
+    };
   };
 
   // Check exit code
@@ -144,13 +122,10 @@ sensor_status_t reQDY30A::readRawData()
     return convertEspError(err);
   };
 
-  float value = (float)buf;
-  if (_prec == QDY30A_FLOAT1) {
-    value = value / 10.0;
-  } else if (_prec == QDY30A_FLOAT2) {
-    value = value / 100.0;
-  } else if (_prec == QDY30A_FLOAT3) {
-    value = value / 1000.0;
-  };
-  return setRawValues(value + _offset);
+  switch (precs) {
+    case 1:  return setRawValues((value_t)value/10.0);    // 1-###.#
+    case 2:  return setRawValues((value_t)value/100.0);   // 2-##.##
+    case 3:  return setRawValues((value_t)value/1000.0);  // 3-#.###
+    default: return setRawValues((value_t)value);         // 0-####
+  }
 };
