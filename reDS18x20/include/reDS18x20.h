@@ -71,6 +71,10 @@ class DS18x20 : public rSensorX1 {
     void createSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize) override;
     void registerItemsParameters(paramsGroupHandle_t parent_group) override;
     sensor_status_t readRawData() override;
+
+    #if CONFIG_SENSOR_AS_JSON
+    char* jsonCustomValues() override;
+    #endif // CONFIG_SENSOR_AS_JSON
   private:
     typedef uint8_t scratchpad[9];
 
