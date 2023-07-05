@@ -317,7 +317,7 @@ sensor_status_t DS18x20::readScratchpad(uint8_t *buffer)
         rlog_e(logTAG, "Sensor [%s]: failed to read scratchpad: CRC failed "
           "(temp: %02X %02X, alarm: %02X %02X, config: %02X, reserved: %02X %02X %02X, crc: %02X (expected: %02X))", 
           getName(), buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6], buffer[7], crc, expected_crc);
-        return SENSOR_STATUS_CRC_ERROR;
+        return SENSOR_STATUS_CONN_ERROR;
       };
     };
     rlog_e(logTAG, "Sensor [%s]: failed to read scratchpad", getName());
@@ -393,44 +393,45 @@ sensor_status_t DS18x20::getResolution(DS18x20_RESOLUTION *resolution)
 
 sensor_status_t DS18x20::setResolution(DS18x20_RESOLUTION resolution)
 {
-  if (_check_resolution(resolution)) {
-    // DS1820 and DS18S20 have no resolution configuration register
-    if (_model == MODEL_DS18S20) {
-      return SENSOR_STATUS_NOT_SUPPORTED;
-    };
+  // DS1820 and DS18S20 have no resolution configuration register
+  if (_model == MODEL_DS18S20) {
+    return SENSOR_STATUS_OK;
+  };
+  if (!_check_resolution(resolution)) {
+    rlog_e(logTAG, "Sensor [%s]: unsupported resolution %d", getName(), resolution);
+    return SENSOR_STATUS_NOT_SUPPORTED;
+  };
 
-    // Read scratchpad up to and including configuration register
-    uint8_t scratchpad[9];
-    sensor_status_t rslt = readScratchpad(scratchpad);
+  // Read scratchpad up to and including configuration register
+  uint8_t scratchpad[9];
+  sensor_status_t rslt = readScratchpad(scratchpad);
+  if (rslt == SENSOR_STATUS_OK) {
+    // Check current resolution
+    _resolution = (DS18x20_RESOLUTION)(((scratchpad[SP_CONFIGURATION] >> 5) & 0x03) + (uint8_t)DS18x20_RESOLUTION_9_BIT);
+    if (_check_resolution(_resolution) && (_resolution == resolution)) {
+      rlog_i(logTAG, "Sensor [%s]: resolution already set to %d bits", getName(), (int)_resolution);
+      return SENSOR_STATUS_OK;
+    };
+    // Modify configuration register to set resolution
+    scratchpad[SP_CONFIGURATION] = ((((uint8_t)resolution - 1) & 0x03) << 5) | 0x1f;
+    // Write bytes 2, 3 and 4 of scratchpad
+    rslt = writeScratchpad(scratchpad);
     if (rslt == SENSOR_STATUS_OK) {
-      // Check current resolution
-      _resolution = (DS18x20_RESOLUTION)(((scratchpad[SP_CONFIGURATION] >> 5) & 0x03) + (uint8_t)DS18x20_RESOLUTION_9_BIT);
-      if (_check_resolution(_resolution) && (_resolution == resolution)) {
-        rlog_i(logTAG, "Sensor [%s]: resolution already set to %d bits", getName(), (int)_resolution);
-        return SENSOR_STATUS_OK;
-      };
-      // Modify configuration register to set resolution
-      scratchpad[SP_CONFIGURATION] = ((((uint8_t)resolution - 1) & 0x03) << 5) | 0x1f;
-      // Write bytes 2, 3 and 4 of scratchpad
-      rslt = writeScratchpad(scratchpad);
+      // Verify changes
+      rslt = getResolution(nullptr);
       if (rslt == SENSOR_STATUS_OK) {
-        // Verify changes
-        rslt = getResolution(nullptr);
-        if (rslt == SENSOR_STATUS_OK) {
-          if (_resolution == resolution) {
-            rlog_i(logTAG, "Sensor [%s]: resolution set to %d bits", getName(), (int)_resolution);
-            return SENSOR_STATUS_OK;
-          } else {
-            // Resolution change failed - update the info resolution with the value read from configuration
-            rlog_w(logTAG, "Sensor [%s]: resolution consistency lost - refreshed from device: %d", getName(), (int)_resolution);
-            return SENSOR_STATUS_ERROR;
-          };
+        if (_resolution == resolution) {
+          rlog_i(logTAG, "Sensor [%s]: resolution set to %d bits", getName(), (int)_resolution);
+          return SENSOR_STATUS_OK;
+        } else {
+          // Resolution change failed - update the info resolution with the value read from configuration
+          rlog_w(logTAG, "Sensor [%s]: resolution consistency lost - refreshed from device: %d", getName(), (int)_resolution);
+          return SENSOR_STATUS_ERROR;
         };
       };
     };
   };
-  rlog_e(logTAG, "Sensor [%s]: unsupported resolution %d", getName(), resolution);
-  return SENSOR_STATUS_ERROR;
+  return rslt;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------
