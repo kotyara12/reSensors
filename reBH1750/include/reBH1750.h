@@ -49,7 +49,7 @@ class BH1750 : public rSensorX1 {
     // Dynamically creating internal items on the heap
     bool initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,  
       // hardware properties
-      const int numI2C, const uint8_t addrI2C, const bh1750_mode_t mode = BH1750_MODE_ONE_TIME, const bh1750_resolution_t resolution = BH1750_RES_HIGH,
+      const i2c_port_t numI2C, const uint8_t addrI2C, const bh1750_mode_t mode = BH1750_MODE_ONE_TIME, const bh1750_resolution_t resolution = BH1750_RES_HIGH,
       // illumination filter
       const sensor_filter_t filterMode = SENSOR_FILTER_RAW, const uint16_t filterSize = 0,
       // limits
@@ -60,7 +60,7 @@ class BH1750 : public rSensorX1 {
     // Connecting external previously created items, for example statically declared
     bool initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
       // hardware properties
-      const int numI2C, const uint8_t addrI2C, const bh1750_mode_t mode = BH1750_MODE_ONE_TIME, const bh1750_resolution_t resolution = BH1750_RES_HIGH,
+      const i2c_port_t numI2C, const uint8_t addrI2C, const bh1750_mode_t mode = BH1750_MODE_ONE_TIME, const bh1750_resolution_t resolution = BH1750_RES_HIGH,
       // illumination filter
       rSensorItem* item = nullptr,
       // limits
@@ -79,7 +79,7 @@ class BH1750 : public rSensorX1 {
     void registerItemsParameters(paramsGroupHandle_t parent_group) override;
     sensor_status_t readRawData() override;
   private:
-    int                      _I2C_num;
+    i2c_port_t               _I2C_num;
     uint8_t                  _I2C_address;
     uint8_t                  _meas_time = 0;
     bh1750_mode_t            _mode = BH1750_MODE_ONE_TIME;

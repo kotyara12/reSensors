@@ -22,7 +22,7 @@ static const char * logTAG = "BH1750";
 
 BH1750::BH1750(uint8_t eventId):rSensorX1(eventId)
 {
-  _I2C_num = 0;
+  _I2C_num = I2C_NUM_0;
   _I2C_address = 0;
   _mode = BH1750_MODE_ONE_TIME;
   _resolution = BH1750_RES_HIGH;
@@ -48,7 +48,7 @@ void BH1750::createSensorItems(const sensor_filter_t filterMode, const uint16_t 
 
 // Dynamically creating internal items on the heap
 bool BH1750::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,  
-  const int numI2C, const uint8_t addrI2C, const bh1750_mode_t mode, const bh1750_resolution_t resolution,
+  const i2c_port_t numI2C, const uint8_t addrI2C, const bh1750_mode_t mode, const bh1750_resolution_t resolution,
   const sensor_filter_t filterMode, const uint16_t filterSize,
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
@@ -69,7 +69,7 @@ bool BH1750::initIntItems(const char* sensorName, const char* topicName, const b
 
 // Connecting external previously created items, for example statically declared
 bool BH1750::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
-  const int numI2C, const uint8_t addrI2C, const bh1750_mode_t mode, const bh1750_resolution_t resolution,
+  const i2c_port_t numI2C, const uint8_t addrI2C, const bh1750_mode_t mode, const bh1750_resolution_t resolution,
   rSensorItem* item,
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)

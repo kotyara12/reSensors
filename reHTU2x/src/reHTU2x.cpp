@@ -58,7 +58,7 @@ HTU2x::HTU2x(uint8_t eventId):rSensorHT(eventId)
 
 // Dynamically creating internal items on the heap
 bool HTU2x::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,
-  const int numI2C, const HTU2X_RESOLUTION resolution, bool compensated_humidity,
+  const i2c_port_t numI2C, const HTU2X_RESOLUTION resolution, bool compensated_humidity,
   const sensor_filter_t filterMode1, const uint16_t filterSize1, 
   const sensor_filter_t filterMode2, const uint16_t filterSize2,
   const uint32_t minReadInterval, const uint16_t errorLimit,
@@ -79,7 +79,7 @@ bool HTU2x::initIntItems(const char* sensorName, const char* topicName, const bo
 
 // Connecting external previously created items, for example statically declared
 bool HTU2x::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
-  const int numI2C, const HTU2X_RESOLUTION resolution, bool compensated_humidity,
+  const i2c_port_t numI2C, const HTU2X_RESOLUTION resolution, bool compensated_humidity,
   rSensorItem* item1, rSensorItem* item2,
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)

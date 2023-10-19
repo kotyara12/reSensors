@@ -92,9 +92,9 @@ bool DS18x20::initIntItems(const char* sensorName, const char* topicName, const 
       } else {
         return sensorStart();
       };
+    } else {
+      rlog_e(logTAG, "Failed to reset 1-Wire bus");
     };
-  } else {
-    rlog_e(logTAG, "Failed to reset 1-Wire bus");
   };
   return false;
 }

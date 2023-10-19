@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <esp_err.h>
 #include <reSensor.h>
+#include "driver/i2c.h"
 
 #define HTU2X_ADDRESS               0x40       // chip i2c address
 #define HTU2X_ERROR                 0xFF       // returns 255, if communication error is occurred
@@ -47,7 +48,7 @@ class HTU2x : public rSensorHT {
     // Dynamically creating internal items on the heap
     bool initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,  
       // hardware properties
-      const int numI2C, const HTU2X_RESOLUTION resolution, bool compensated_humidity,
+      const i2c_port_t numI2C, const HTU2X_RESOLUTION resolution, bool compensated_humidity,
       // humidity filter
       const sensor_filter_t filterMode1 = SENSOR_FILTER_RAW, const uint16_t filterSize1 = 0, 
       // temperature filter
@@ -60,7 +61,7 @@ class HTU2x : public rSensorHT {
     // Connecting external previously created items, for example statically declared
     bool initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
       // hardware properties
-      const int numI2C, const HTU2X_RESOLUTION resolution, bool compensated_humidity,
+      const i2c_port_t numI2C, const HTU2X_RESOLUTION resolution, bool compensated_humidity,
       // humidity filter
       rSensorItem* item1, 
       // temperature filter
@@ -81,7 +82,7 @@ class HTU2x : public rSensorHT {
   protected:
     sensor_status_t readRawData() override;  
   private:
-    int              _I2C_num;
+    i2c_port_t       _I2C_num;
     HTU2X_RESOLUTION _resolution;
     bool             _compensated;
     bool             _heater;

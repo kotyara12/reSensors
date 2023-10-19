@@ -94,7 +94,7 @@ class SHT3xD : public rSensorHT {
     // Clear status register
     sensor_status_t clearStatusRegister();
     // Built-in heater control
-    sensor_status_t setHeaterEx(bool heaterMode);
+    sensor_status_t setHeaterEx(bool heaterMode, bool checkStatus);
     sensor_status_t setHeater(bool heaterMode);
     bool isHeaterEnabled();
     // After issuing the ART command the sensor will start acquiring data with a frequency of 4Hz

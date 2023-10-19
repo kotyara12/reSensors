@@ -11,6 +11,7 @@
 
 #include <stdint.h>
 #include <reSensor.h>
+#include "driver/i2c.h"
 
 #define AHT10_ADDRESS_0X38         0x38  // chip I2C address no.1 for AHT10/AHT15/AHT20, address pin connected to GND
 #define AHT10_ADDRESS_0X39         0x39  // chip I2C address no.2 for AHT10 only, address pin connected to Vcc
@@ -37,7 +38,7 @@ class AHT1x : public rSensorHT {
     // Dynamically creating internal items on the heap
     bool initIntItems(const char* sensorName, const char* topicName, const bool topicLocal, 
       // hardware properties
-      ASAIR_I2C_SENSOR sensorType, const int numI2C, const uint8_t addrI2C, const AHT1x_MODE sensorMode,
+      ASAIR_I2C_SENSOR sensorType, const i2c_port_t numI2C, const uint8_t addrI2C, const AHT1x_MODE sensorMode,
       // humidity filter
       const sensor_filter_t filterMode1 = SENSOR_FILTER_RAW, const uint16_t filterSize1 = 0, 
       // temperature filter
@@ -50,7 +51,7 @@ class AHT1x : public rSensorHT {
     // Connecting external previously created items, for example statically declared
     bool initExtItems(const char* sensorName, const char* topicName, const bool topicLocal, 
       // hardware properties
-      ASAIR_I2C_SENSOR sensorType, const int numI2C, const uint8_t addrI2C, const AHT1x_MODE sensorMode,
+      ASAIR_I2C_SENSOR sensorType, const i2c_port_t numI2C, const uint8_t addrI2C, const AHT1x_MODE sensorMode,
       // humidity filter
       rSensorItem* item1, 
       // temperature filter
@@ -65,7 +66,7 @@ class AHT1x : public rSensorHT {
   protected:
     sensor_status_t readRawData() override;  
   private:
-    int              _I2C_num;
+    i2c_port_t       _I2C_num;
     uint8_t          _I2C_addr;
     ASAIR_I2C_SENSOR _sensorType;
     AHT1x_MODE       _sensorMode = AHT1x_MODE_NORMAL;

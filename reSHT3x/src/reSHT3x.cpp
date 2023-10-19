@@ -64,6 +64,7 @@
 #define SHT3xD_DELAY_MEASURE_L	      4500
 #define SHT3xD_DELAY_MEASURE_M	      6500
 #define SHT3xD_DELAY_MEASURE_H	      15500
+#define SHT3xD_DELAY_HEATER						500
 
 static const char* logTAG = "SHT3x";
 
@@ -136,7 +137,7 @@ sensor_status_t SHT3xD::sensorReset()
 		if (status == SENSOR_STATUS_OK) {
 			status = clearStatusRegister();
 			if (status == SENSOR_STATUS_OK) {
-				status = setHeaterEx(false);
+				status = setHeaterEx(false, false);
 			};
 		};
 	};
@@ -236,26 +237,32 @@ sensor_status_t SHT3xD::readStatusRegister(SHT3xD_STATUS* status)
  * It can be switched on and off by command. The status is listed in the status register. 
  * After a reset the heater is disabled (default condition).
  * */
-sensor_status_t SHT3xD::setHeaterEx(bool heaterMode)
+sensor_status_t SHT3xD::setHeaterEx(bool heaterMode, bool checkStatus)
 {
 	// Send heater status
 	SENSOR_ERR_CHECK(sendCommand(heaterMode ? SHT3xD_CMD_HEATER_ENABLE : SHT3xD_CMD_HEATER_DISABLE), RSENSOR_LOG_MSG_HEATER_SET_FAILED);
-	// Check heater status
-	SENSOR_ERR_CHECK(readBuffer(SHT3xD_CMD_READ_STATUS, 0, 3), RSENSOR_LOG_MSG_READ_STATUS_FAILED);
-	// BIT13 - Heater status :: ‘0’ : Heater OFF / ‘1’ : Heater ON
-	_heater = _bufData[0] & BIT13;
-	if (_heater == heaterMode) {
-		rlog_i(logTAG, RSENSOR_LOG_MSG_HEATER_STATE, _name, _heater ? RSENSOR_LOG_MSG_HEATER_ON : RSENSOR_LOG_MSG_HEATER_OFF);
-		return SENSOR_STATUS_OK;
+	if (checkStatus) {
+		sys_delay_ms(SHT3xD_DELAY_HEATER);
+		// Check heater status
+		SENSOR_ERR_CHECK(readBuffer(SHT3xD_CMD_READ_STATUS, 0, 3), RSENSOR_LOG_MSG_READ_STATUS_FAILED);
+		// BIT13 - Heater status :: ‘0’ : Heater OFF / ‘1’ : Heater ON
+		_heater = _bufData[0] & BIT13;
+		if (_heater == heaterMode) {
+			rlog_i(logTAG, RSENSOR_LOG_MSG_HEATER_STATE, _name, _heater ? RSENSOR_LOG_MSG_HEATER_ON : RSENSOR_LOG_MSG_HEATER_OFF);
+			return SENSOR_STATUS_OK;
+		} else {
+			rlog_i(logTAG, RSENSOR_LOG_MSG_HEATER_UNCONFIRMED, _name);
+			return SENSOR_STATUS_BAD_DATA;
+		};
 	} else {
-		rlog_i(logTAG, RSENSOR_LOG_MSG_HEATER_UNCONFIRMED, _name);
-		return SENSOR_STATUS_ERROR;
+		rlog_i(logTAG, RSENSOR_LOG_MSG_HEATER_STATE, _name, heaterMode ? RSENSOR_LOG_MSG_HEATER_ON : RSENSOR_LOG_MSG_HEATER_OFF);
+		return SENSOR_STATUS_OK;
 	};
 }
 
 sensor_status_t SHT3xD::setHeater(bool heaterMode)
 {
-	sensor_status_t ret = setHeaterEx(heaterMode);
+	sensor_status_t ret = setHeaterEx(heaterMode, false);
 	setRawStatus(ret, false);
 	return ret;
 }
