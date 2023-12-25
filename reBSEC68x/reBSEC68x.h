@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <esp_err.h>
 #include <reSensor.h>
+#include "driver/i2c.h"
 #include "bme68x/bme68x.h"
 #include "bme68x/bme68x_defs.h"
 #include "bsec2/include/bsec_datatypes.h"
@@ -79,7 +80,7 @@ class BSEC68x : public rSensorX4 {
     // Dynamically creating internal items on the heap
     bool initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,  
       // hardware properties
-      const int numI2C, const uint8_t addrI2C, 
+      const i2c_port_t numI2C, const uint8_t addrI2C, 
       // BME680 properies
       BME68x_STANDBYTIME odr = BME68x_STANDBY_590us, BME68x_IIR_FILTER filter = BME68x_FILTER_OFF,
       BME68x_OVERSAMPLING osPress = BME68x_OS_X1, BME68x_OVERSAMPLING osTemp = BME68x_OS_X1, BME68x_OVERSAMPLING osHum = BME68x_OS_X1,
@@ -101,7 +102,7 @@ class BSEC68x : public rSensorX4 {
     // Connecting external previously created items, for example statically declared
     bool initExtItems(const char* sensorName, const char* topicName, const bool topicLocal, 
       // hardware properties
-      const int numI2C, const uint8_t addrI2C, 
+      const i2c_port_t numI2C, const uint8_t addrI2C, 
       // BME680 properies
       BME68x_STANDBYTIME odr = BME68x_STANDBY_590us, BME68x_IIR_FILTER filter = BME68x_FILTER_OFF,
       BME68x_OVERSAMPLING osPress = BME68x_OS_X1, BME68x_OVERSAMPLING osTemp = BME68x_OS_X1, BME68x_OVERSAMPLING osHum = BME68x_OS_X1,
@@ -121,7 +122,7 @@ class BSEC68x : public rSensorX4 {
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
 
     // Get I2C parameters
-    int getI2CNum();
+    i2c_port_t getI2CNum();
     uint8_t getI2CAddress();
 
     // Soft reset
@@ -150,7 +151,7 @@ class BSEC68x : public rSensorX4 {
     char* jsonCustomValues() override; 
     #endif // CONFIG_SENSOR_AS_JSON
   private:
-    int                         _I2C_num;
+    i2c_port_t                  _I2C_num;
     uint8_t                     _I2C_address;
     struct bme68x_dev           _dev;
     bme68x_conf                 _dev_conf;
@@ -168,7 +169,6 @@ class BSEC68x : public rSensorX4 {
     uint32_t getMeasureDuration(uint8_t op_mode);
     sensor_status_t setInitConfiguration();
     sensor_status_t setBsecConfiguration();
-    sensor_status_t setHeaterProfForced();
 
     sensor_status_t updateSubscription();
 };

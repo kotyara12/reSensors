@@ -113,7 +113,7 @@ static const char* logTAG = "CCS811";
 
 CCS811::CCS811(uint8_t eventId):rSensorX2(eventId)
 {
-  _I2C_num = 0;
+  _I2C_num = I2C_NUM_0;
   _I2C_address = 0;
   _wakePin = GPIO_NUM_NC;
 }
@@ -127,7 +127,7 @@ CCS811::~CCS811()
  * Dynamically creating internal items on the heap
  * */
 bool CCS811::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-  const int numI2C, const uint8_t addrI2C, const ccs811_mode_t mode, const gpio_num_t wake_pin,
+  const i2c_port_t numI2C, const uint8_t addrI2C, const ccs811_mode_t mode, const gpio_num_t wake_pin,
   sensor_filter_t filterMode1, uint16_t filterSize1, 
   sensor_filter_t filterMode2, uint16_t filterSize2,
   const uint32_t minReadInterval, const uint16_t errorLimit,
@@ -151,7 +151,7 @@ bool CCS811::initIntItems(const char* sensorName, const char* topicName, const b
  * Connecting external previously created items, for example statically declared
  * */
 bool CCS811::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-  const int numI2C, const uint8_t addrI2C, const ccs811_mode_t mode, const gpio_num_t wake_pin,
+  const i2c_port_t numI2C, const uint8_t addrI2C, const ccs811_mode_t mode, const gpio_num_t wake_pin,
   rSensorItem* item1, rSensorItem* item2,
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)

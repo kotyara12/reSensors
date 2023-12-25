@@ -11,6 +11,7 @@
 
 #include <stdint.h>
 #include "driver/gpio.h"
+#include "driver/i2c.h"
 #include "reParams.h"
 #include "reSensor.h"
 #include "project_config.h"
@@ -36,7 +37,7 @@ class CCS811 : public rSensorX2 {
     // Dynamically creating internal items on the heap
     bool initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,  
       // hardware properties
-      const int numI2C, const uint8_t addrI2C, const ccs811_mode_t mode = CCS811_MODE_10S, const gpio_num_t wake_pin = GPIO_NUM_NC,
+      const i2c_port_t numI2C, const uint8_t addrI2C, const ccs811_mode_t mode = CCS811_MODE_10S, const gpio_num_t wake_pin = GPIO_NUM_NC,
       // IAQ TVOC filter
       sensor_filter_t filterMode1 = SENSOR_FILTER_RAW, uint16_t filterSize1 = 0,
       // eCO2 filter
@@ -49,7 +50,7 @@ class CCS811 : public rSensorX2 {
     // Connecting external previously created items, for example statically declared
     bool initExtItems(const char* sensorName, const char* topicName, const bool topicLocal, 
       // hardware properties
-      const int numI2C, const uint8_t addrI2C, const ccs811_mode_t mode = CCS811_MODE_10S, const gpio_num_t wake_pin = GPIO_NUM_NC,
+      const i2c_port_t numI2C, const uint8_t addrI2C, const ccs811_mode_t mode = CCS811_MODE_10S, const gpio_num_t wake_pin = GPIO_NUM_NC,
       // IAQ TVOC filter
       rSensorItem* item1 = nullptr,
       // eCO2 filter
@@ -87,7 +88,7 @@ class CCS811 : public rSensorX2 {
     char* getDisplayValue() override;
     #endif // CONFIG_SENSOR_DISPLAY_ENABLED
   private:
-    int                      _I2C_num;
+    i2c_port_t               _I2C_num;
     uint8_t                  _I2C_address;
     ccs811_mode_t            _mode = CCS811_MODE_IDLE;
     gpio_num_t               _wakePin = GPIO_NUM_NC;

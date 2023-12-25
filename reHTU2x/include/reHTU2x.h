@@ -90,7 +90,6 @@ class HTU2x : public rSensorHT {
     HTU2X_TYPE       _deviceType = HTU2X_NULL;
 
     sensor_status_t readDeviceID(void);
-    bool initHardware(const int numI2C, const HTU2X_RESOLUTION resolution, bool compensated_humidity);
     esp_err_t sendCommand(uint8_t command);
     esp_err_t sendU8(uint8_t command, uint8_t data);
     esp_err_t readU8(uint8_t command, const uint32_t usWaitData, uint8_t* value);

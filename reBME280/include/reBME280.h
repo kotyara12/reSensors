@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <esp_err.h>
 #include <reSensor.h>
+#include "driver/i2c.h"
 #include "bme280/bme280.h"
 #include "bme280/bme280_defs.h"
 
@@ -66,7 +67,7 @@ class BME280 : public rSensorX3 {
     // Dynamically creating internal items on the heap
     bool initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,  
       // hardware properties
-      const int numI2C, const uint8_t addrI2C, 
+      const i2c_port_t numI2C, const uint8_t addrI2C, 
       BME280_MODE mode = BME280_MODE_FORCED, BME280_STANDBYTIME odr = BME280_STANDBY_1000ms, BME280_IIR_FILTER filter = BME280_FLT_NONE,
       BME280_OVERSAMPLING osPress = BME280_OSM_X1, BME280_OVERSAMPLING osTemp = BME280_OSM_X1, BME280_OVERSAMPLING osHumd = BME280_OSM_X1,
       // pressure filter
@@ -83,7 +84,7 @@ class BME280 : public rSensorX3 {
     // Connecting external previously created items, for example statically declared
     bool initExtItems(const char* sensorName, const char* topicName, const bool topicLocal, 
       // hardware properties
-      const int numI2C, const uint8_t addrI2C, 
+      const i2c_port_t numI2C, const uint8_t addrI2C, 
       BME280_MODE mode = BME280_MODE_FORCED, BME280_STANDBYTIME odr = BME280_STANDBY_1000ms, BME280_IIR_FILTER filter = BME280_FLT_NONE,
       BME280_OVERSAMPLING osPress = BME280_OSM_X1, BME280_OVERSAMPLING osTemp = BME280_OSM_X1, BME280_OVERSAMPLING osHumd = BME280_OSM_X1,
       // pressure filter
@@ -98,7 +99,7 @@ class BME280 : public rSensorX3 {
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
 
     // Get I2C parameters
-    int getI2CNum();
+    i2c_port_t getI2CNum();
     uint8_t getI2CAddress();
 
     // Sensor reset
@@ -131,7 +132,7 @@ class BME280 : public rSensorX3 {
     char* jsonCustomValues() override; 
     #endif // CONFIG_SENSOR_AS_JSON
   private:
-    int                      _I2C_num;
+    i2c_port_t               _I2C_num;
     uint8_t                  _I2C_address;
     uint8_t                  _meas_wait;
     struct bme280_dev        _dev;

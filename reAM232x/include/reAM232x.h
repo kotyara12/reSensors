@@ -11,6 +11,7 @@
 
 #include <stdint.h>
 #include <esp_err.h>
+#include "driver/i2c.h"
 #include <reSensor.h>
 
 #define AM232x_ADDRESS        0x5C // I2C fixed address
@@ -32,7 +33,7 @@ class AM232x : public rSensorHT {
     // Dynamically creating internal items on the heap
     bool initIntItems(const char* sensorName, const char* topicName, 
       // hardware properties
-      const int numI2C, 
+      const i2c_port_t numI2C, 
       // humidity filter
       const sensor_filter_t filterMode1 = SENSOR_FILTER_RAW, const uint16_t filterSize1 = 0, 
       // temperature filter
@@ -45,7 +46,7 @@ class AM232x : public rSensorHT {
     // Connecting external previously created items, for example statically declared
     bool initExtItems(const char* sensorName, const char* topicName, 
       // hardware properties
-      const int numI2C, 
+      const i2c_port_t numI2C, 
       // humidity filter
       rSensorItem* item1, 
       // temperature filter
@@ -57,7 +58,7 @@ class AM232x : public rSensorHT {
   protected:
     sensor_status_t readRawData() override;  
   private:
-    int              _I2C_num;
+    i2c_port_t        _I2C_num;
     am232x_dev_info_t _devInfo;
     
     bool initHardware(const int numI2C);

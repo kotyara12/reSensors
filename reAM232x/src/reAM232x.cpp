@@ -13,14 +13,14 @@
 
 AM232x::AM232x():rSensorHT()
 {
-  _I2C_num = 0;
+  _I2C_num = I2C_NUM_0;
 }
 
 /**
  * Dynamically creating internal items on the heap
  * */
 bool AM232x::initIntItems(const char* sensorName, const char* topicName, 
-  const int numI2C, 
+  const i2c_port_t numI2C, 
   const sensor_filter_t filterMode1, const uint16_t filterSize1, 
   const sensor_filter_t filterMode2, const uint16_t filterSize2,
   const uint32_t minReadInterval, const uint16_t errorLimit,
@@ -40,7 +40,7 @@ bool AM232x::initIntItems(const char* sensorName, const char* topicName,
  * Connecting external previously created items, for example statically declared
  * */
 bool AM232x::initExtItems(const char* sensorName, const char* topicName, 
-  const int numI2C, 
+  const i2c_port_t numI2C, 
   rSensorItem* item1, rSensorItem* item2,
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)

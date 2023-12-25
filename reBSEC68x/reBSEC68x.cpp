@@ -74,7 +74,7 @@ static void BME68x_delay_us(uint32_t period, void *intf_ptr)
 
 BSEC68x::BSEC68x(uint8_t eventId):rSensorX4(eventId)
 {
-  _I2C_num = 0;
+  _I2C_num = I2C_NUM_0;
   _I2C_address = 0;
 
   _filter = BME68X_FILTER_OFF;
@@ -159,7 +159,7 @@ char* BSEC68x::jsonCustomValues()
  * Dynamically creating internal items on the heap
  * */
 bool BSEC68x::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-  const int numI2C, const uint8_t addrI2C, 
+  const i2c_port_t numI2C, const uint8_t addrI2C, 
   BME68x_STANDBYTIME odr, BME68x_IIR_FILTER filter, BME68x_OVERSAMPLING osPress, BME68x_OVERSAMPLING osTemp, BME68x_OVERSAMPLING osHum,
   BME68x_BSEC2_OUTPUT bsec_output, float bsec_rate,
   sensor_filter_t filterMode1, uint16_t filterSize1, 
@@ -280,7 +280,7 @@ void BSEC68x::registerItemsParameters(paramsGroupHandle_t parent_group)
  * Connecting external previously created items, for example statically declared
  * */
 bool BSEC68x::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-  const int numI2C, const uint8_t addrI2C, 
+  const i2c_port_t numI2C, const uint8_t addrI2C, 
   BME68x_STANDBYTIME odr, BME68x_IIR_FILTER filter, BME68x_OVERSAMPLING osPress, BME68x_OVERSAMPLING osTemp, BME68x_OVERSAMPLING osHum,
   BME68x_BSEC2_OUTPUT bsec_output, float bsec_rate,
   rSensorItem* item1, rSensorItem* item2, rSensorItem* item3, rSensorItem* item4,
@@ -309,7 +309,7 @@ bool BSEC68x::initExtItems(const char* sensorName, const char* topicName, const 
 /**
  * Get I2C parameters
  * */
-int BSEC68x::getI2CNum()
+i2c_port_t BSEC68x::getI2CNum()
 {
   return _I2C_num;
 }

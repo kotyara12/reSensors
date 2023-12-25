@@ -20,12 +20,12 @@ static const char* logTAG = "BMP280";
 
 static int8_t BMP280_i2c_read(uint8_t i2c_addr, uint8_t reg_addr, uint8_t *reg_data, uint16_t length)
 {
-  return readI2C(i2c_addr >> 7, i2c_addr & 0x7F, &reg_addr, sizeof(reg_addr), reg_data, length, 0, BMP280_I2C_TIMEOUT); 
+  return readI2C((i2c_port_t)(i2c_addr >> 7), i2c_addr & 0x7F, &reg_addr, sizeof(reg_addr), reg_data, length, 0, BMP280_I2C_TIMEOUT); 
 }
 
 static int8_t BMP280_i2c_write(uint8_t i2c_addr, uint8_t reg_addr, uint8_t *reg_data, uint16_t length)
 {
-  return writeI2C(i2c_addr >> 7, i2c_addr & 0x7F, &reg_addr, sizeof(reg_addr), (uint8_t*)reg_data, length, BMP280_I2C_TIMEOUT); 
+  return writeI2C((i2c_port_t)(i2c_addr >> 7), i2c_addr & 0x7F, &reg_addr, sizeof(reg_addr), (uint8_t*)reg_data, length, BMP280_I2C_TIMEOUT); 
 }
 
 static void BMP280_delay_ms(uint32_t period_ms)

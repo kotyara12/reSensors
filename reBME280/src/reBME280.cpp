@@ -57,7 +57,7 @@ static void BME280_delay_us(uint32_t period, void *intf_ptr)
 
 BME280::BME280(uint8_t eventId):rSensorX3(eventId)
 {
-  _I2C_num = 0;
+  _I2C_num = I2C_NUM_0;
   _I2C_address = 0;
 
   memset(&_dev, 0, sizeof(_dev));
@@ -79,7 +79,7 @@ BME280::~BME280()
  * Dynamically creating internal items on the heap
  * */
 bool BME280::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-  const int numI2C, const uint8_t addrI2C, 
+  const i2c_port_t numI2C, const uint8_t addrI2C, 
   BME280_MODE mode, BME280_STANDBYTIME odr, BME280_IIR_FILTER filter,
   BME280_OVERSAMPLING osPress, BME280_OVERSAMPLING osTemp, BME280_OVERSAMPLING osHumd,
   sensor_filter_t filterMode1, uint16_t filterSize1, 
@@ -110,7 +110,7 @@ bool BME280::initIntItems(const char* sensorName, const char* topicName, const b
  * Connecting external previously created items, for example statically declared
  * */
 bool BME280::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-  const int numI2C, const uint8_t addrI2C, 
+  const i2c_port_t numI2C, const uint8_t addrI2C, 
   BME280_MODE mode, BME280_STANDBYTIME odr, BME280_IIR_FILTER filter,
   BME280_OVERSAMPLING osPress, BME280_OVERSAMPLING osTemp, BME280_OVERSAMPLING osHumd,
   rSensorItem* item1, rSensorItem* item2, rSensorItem* item3,
@@ -203,7 +203,7 @@ void BME280::registerItemsParameters(paramsGroupHandle_t parent_group)
 /**
  * Get I2C parameters
  * */
-int BME280::getI2CNum()
+i2c_port_t BME280::getI2CNum()
 {
   return _I2C_num;
 }
