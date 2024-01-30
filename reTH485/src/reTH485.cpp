@@ -63,33 +63,21 @@ sensor_status_t reTH485::sensorReset()
 };
 
 /**
- * Update (read / write) modbus register
- * */
-esp_err_t reTH485::callModbusRegister(uint8_t cmd, uint16_t reg, void* value)
-{
-  mb_param_request_t _request = {
-    .slave_addr = _address,
-    .command    = cmd,
-    .reg_start  = reg,
-    .reg_size   = 1
-  };
-  return mbc_master_send_request(&_request, value);
-}
-
-/**
  * Read humidity and temperature data
  * */
 sensor_status_t reTH485::readRawData()
 {
-  int16_t _humd = 0;
-  int16_t _temp = 0;
-  // uart_flush_input();
+  int16_t _data[2] = {0};
+
+  mb_param_request_t _request = {
+    .slave_addr = _address,
+    .command    = _command,
+    .reg_start  = _reg_humd < _reg_temp ? _reg_humd : _reg_temp,
+    .reg_size   = 2
+  };
 
   // Read registers
-  esp_err_t err = callModbusRegister(_command, _reg_humd, (void*)&_humd);
-  if (err == ESP_OK) {
-    esp_err_t err = callModbusRegister(_command, _reg_temp, (void*)&_temp);
-  };
+  esp_err_t err = mbc_master_send_request(&_request, (void*)&_data[0]);
 
   // Check exit code
   if (err != ESP_OK) {
@@ -98,5 +86,9 @@ sensor_status_t reTH485::readRawData()
   };
 
   // Store values in sensors
-  return setRawValues((float)_humd/10.0, (float)_temp/10.0);
+  if (_reg_humd < _reg_temp) {
+    return setRawValues((float)_data[0]/10.0, (float)_data[1]/10.0);
+  } else {
+    return setRawValues((float)_data[1]/10.0, (float)_data[0]/10.0);
+  };
 };

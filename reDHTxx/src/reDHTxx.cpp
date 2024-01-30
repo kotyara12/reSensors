@@ -195,15 +195,18 @@ sensor_status_t DHTxx::readRawData()
   float tempValue = 0.0;
   switch (_sensorType) {
     case DHT_DHT11:
-      humdValue = data[0] + data[1] * 0.1;
+      humdValue = data[0];
       tempValue = data[2];
-      if (data[3] & 0x80) tempValue = -1-tempValue;
-      tempValue += (data[3] & 0x0F) * 0.1;
       break;
     case DHT_DHT12:
       humdValue = data[0] + data[1] * 0.1;
-      tempValue = data[2] + (data[3] & 0x0F) * 0.1;
-      if (data[2] & 0x80) tempValue = -tempValue;
+      tempValue = data[2] + data[3] * 0.1;
+      if (data[3] & 0x80) tempValue = -tempValue;
+      break;
+    case DHT_MW33:
+      humdValue = data[0] + data[1] * 0.1;
+      tempValue = data[2] + (data[3] & 0x7F) * 0.1;
+      if (data[3] & 0x80) tempValue = -tempValue;
       break;
     default:
       humdValue = ((uint16_t)data[0] << 8 | data[1]) * 0.1;

@@ -1,0 +1,17 @@
+{
+  "name": "reHDC1080",
+  "version": "1.0.0",
+  "description": "Driver for sensors HDC1080 on ESP32 & ESP-IDF",
+  "keywords": "HDC1080",
+  "authors":
+  [
+    {
+      "name": "Alexander Razzhivin",
+      "email": "kotyara12@yandex.ru",
+      "url": "https://kotyara12.ru"
+    }
+  ],
+  "license": "MIT",
+  "frameworks": ["espidf"],
+  "platforms": ["espressif32"]
+}

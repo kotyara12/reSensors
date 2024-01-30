@@ -1,0 +1,10 @@
+*~
+*#
+.#*
+*.swp
+*.o
+
+sdkconfig*
+build
+.DS_Store
+

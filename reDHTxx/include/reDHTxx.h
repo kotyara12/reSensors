@@ -20,7 +20,9 @@ typedef enum {
   DHT_DHT11         = 0,  // DHT11
   DHT_DHT12         = 1,  // DHT12
   DHT_DHT21         = 2,  // DHT21 / AM2301
-  DHT_DHT22         = 3   // DHT22 / AM2302
+  DHT_DHT22         = 3,  // DHT22 / AM2302
+  DHT_AM2320        = 4,  // AM2320
+  DHT_MW33          = 5,  // MW33
 } DHTxx_TYPE;
 
 #ifdef __cplusplus
