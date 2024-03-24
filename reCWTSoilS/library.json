@@ -1,6 +1,6 @@
 {
   "name": "reCWTSoilS",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Sensor driver CWT-Soil-THCPH-S (connection via RS485 Modbus RTU) for ESP32-based devices running FreeRTOS",
   "keywords": "CWT-Soil-THCPH-S, CWT-Soil-TH-S, CWT-Soil-PH-S, CWT-Soil-THC-S",
   "authors":

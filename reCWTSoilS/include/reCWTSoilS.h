@@ -87,7 +87,7 @@ class reCWTSoilS : public rSensorX4 {
     uint8_t         _address = 1;
     cwt_soil_type_t _type = CWTS_H;
     
-    esp_err_t readModbusRegister(uint8_t cmd, uint16_t reg, uint16_t* value);
+    esp_err_t readModbusRegister(uint8_t cmd, uint16_t reg, int16_t* value);
 };
 
 #ifdef __cplusplus

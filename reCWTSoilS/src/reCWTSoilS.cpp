@@ -210,7 +210,7 @@ sensor_status_t reCWTSoilS::sensorReset()
 /**
  * Read status register
  * */
-esp_err_t reCWTSoilS::readModbusRegister(uint8_t cmd, uint16_t reg, uint16_t* value)
+esp_err_t reCWTSoilS::readModbusRegister(uint8_t cmd, uint16_t reg, int16_t* value)
 {
   mb_param_request_t _request = {
     .slave_addr = _address,
@@ -227,7 +227,7 @@ esp_err_t reCWTSoilS::readModbusRegister(uint8_t cmd, uint16_t reg, uint16_t* va
 sensor_status_t reCWTSoilS::readRawData()
 {
   esp_err_t err = ESP_OK;
-  uint16_t bufH, bufT, bufC, bufP = 0;
+  int16_t bufH, bufT, bufC, bufP = 0;
 
   // Humidity (moisture)
   if ((_item2) && (err == ESP_OK)) {
