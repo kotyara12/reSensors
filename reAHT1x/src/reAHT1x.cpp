@@ -48,49 +48,20 @@
 
 static const char* logTAG = "AHT1x";
 
-AHT1x::AHT1x(uint8_t eventId):rSensorHT(eventId) 
-{
-}
-
-// Dynamically creating internal items on the heap
-bool AHT1x::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-  ASAIR_I2C_SENSOR sensorType, const i2c_port_t numI2C, const uint8_t addrI2C, const AHT1x_MODE sensorMode,
-  const sensor_filter_t filterMode1, const uint16_t filterSize1, 
-  const sensor_filter_t filterMode2, const uint16_t filterSize2,
+AHT1x::AHT1x(uint8_t eventId, 
+  const ASAIR_I2C_SENSOR sensorType, const i2c_port_t numI2C, const uint8_t addrI2C, const AHT1x_MODE sensorMode,
+  const char* sensorName, const char* topicName, const bool topicLocal, 
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+:rSensorHT(eventId, 
+  sensorName, topicName, topicLocal, 
+  minReadInterval, errorLimit,
+  cb_status, cb_publish)
 {
   _I2C_num = numI2C;
   _I2C_addr = addrI2C;
   _sensorType = sensorType;
   _sensorMode = sensorMode;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Initialize internal items
-  if (this->rSensorX2::initSensorItems(filterMode1, filterSize1, filterMode2, filterSize2)) {
-    // Start device
-    return sensorStart();
-  };
-  return false;
-}
-
-// Connecting external previously created items, for example statically declared
-bool AHT1x::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,  
-  ASAIR_I2C_SENSOR sensorType, const i2c_port_t numI2C, const uint8_t addrI2C, const AHT1x_MODE sensorMode,
-  rSensorItem* item1, rSensorItem* item2,
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
-{
-  _I2C_num = numI2C;
-  _I2C_addr = addrI2C;
-  _sensorType = sensorType;
-  _sensorMode = sensorMode;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Assign items
-  this->rSensorX2::setSensorItems(item1, item2);
-  // Start device
-  return sensorStart();
 }
 
 // Start device

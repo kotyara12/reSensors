@@ -20,77 +20,25 @@ static const char * logTAG = "BH1750";
 
 #define BH1750_I2C_TIMEOUT 3000
 
-BH1750::BH1750(uint8_t eventId):rSensorX1(eventId)
-{
-  _I2C_num = I2C_NUM_0;
-  _I2C_address = 0;
-  _mode = BH1750_MODE_ONE_TIME;
-  _resolution = BH1750_RES_HIGH;
-}
-
-void BH1750::createSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize)
-{
-  // Temperature
-  _item = new rSensorItem(this, CONFIG_SENSOR_LIGHT_NAME,
-    filterMode, filterSize,
-    CONFIG_FORMAT_LIGHT_VALUE, CONFIG_FORMAT_LIGHT_STRING
-    #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-    , CONFIG_FORMAT_TIMESTAMP_L
-    #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-    #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-    , CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
-    #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-  );
-  if (_item) {
-    rlog_d(_name, RSENSOR_LOG_MSG_CREATE_ITEM, _item->getName(), _name);
-  };
-}
-
-// Dynamically creating internal items on the heap
-bool BH1750::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,  
+BH1750::BH1750(uint8_t eventId, 
   const i2c_port_t numI2C, const uint8_t addrI2C, const bh1750_mode_t mode, const bh1750_resolution_t resolution,
-  const sensor_filter_t filterMode, const uint16_t filterSize,
+  const char* sensorName, const char* topicName, const bool topicLocal, 
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+:rSensor(eventId, 1,
+  sensorName, topicName, topicLocal, 
+  minReadInterval, errorLimit,
+  cb_status, cb_publish)
 {
   _I2C_num = numI2C;
   _I2C_address = addrI2C;
   _mode = mode;
   _resolution = resolution;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Initialize internal items
-  if (this->rSensorX1::initSensorItems(filterMode, filterSize)) {
-    // Start device
-    return sensorStart();
-  };
-  return false;
 }
 
-// Connecting external previously created items, for example statically declared
-bool BH1750::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
-  const i2c_port_t numI2C, const uint8_t addrI2C, const bh1750_mode_t mode, const bh1750_resolution_t resolution,
-  rSensorItem* item,
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+void BH1750::setSensorItems(rSensorItem* itemIllumination)
 {
-  _I2C_num = numI2C;
-  _I2C_address = addrI2C;
-  _mode = mode;
-  _resolution = resolution;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Assign items
-  this->rSensorX1::setSensorItems(item);
-  // Start device
-  return sensorStart();
-}
-
-void BH1750::registerItemsParameters(paramsGroupHandle_t parent_group)
-{
-  if (_item) {
-    _item->registerParameters(parent_group, CONFIG_SENSOR_LIGHT_KEY, CONFIG_SENSOR_LIGHT_NAME, CONFIG_SENSOR_LIGHT_FRIENDLY);
-  };
+  setSensorItem(0, itemIllumination);
 }
 
 sensor_status_t BH1750::sensorReset()
@@ -185,6 +133,10 @@ sensor_status_t BH1750::readRawData()
   if (_resolution == BH1750_RES_HIGH2) level /= 2;
 
   // Convert to LUX
-  return setRawValues(((value_t)level * 10) / 12);
+  return setRawValue(0, ((value_t)level * 10.0) / 12.0);
 }
 
+sensor_value_t BH1750::getIllumination(const bool readSensor)
+{
+  return getItemValue(0, readSensor);
+}

@@ -37,14 +37,24 @@ static void BMP280_delay_ms(uint32_t period_ms)
 // ------------------------------------------------------- BMP280 --------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
 
-BMP280::BMP280(uint8_t eventId):rSensorX2(eventId)
+BMP280::BMP280(uint8_t eventId,
+  const i2c_port_t numI2C, const uint8_t addrI2C, 
+  BMP280_MODE mode, BMP280_STANDBYTIME odr, BMP280_IIR_FILTER filter,
+  BMP280_OVERSAMPLING osPress, BMP280_OVERSAMPLING osTemp,
+  const char* sensorName, const char* topicName, const bool topicLocal, 
+  const uint32_t minReadInterval, const uint16_t errorLimit,
+  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+:rSensor(eventId, 2, 
+  sensorName, topicName, topicLocal, 
+  minReadInterval, errorLimit,
+  cb_status, cb_publish)
 {
-  _I2C_num = 0;
-  _I2C_address = 0;
+  _I2C_num = numI2C;
+  _I2C_address = addrI2C;
   _meas_wait = 16;
+
   memset(&_dev, 0, sizeof(_dev));
   memset(&_conf, 0, sizeof(_conf));
-
   _dev.chip_id = 0;
   _dev.intf = BMP280_I2C_INTF;
   _dev.read = &BMP280_i2c_read;
@@ -52,110 +62,10 @@ BMP280::BMP280(uint8_t eventId):rSensorX2(eventId)
   _dev.delay_ms = &BMP280_delay_ms;
 }
 
-// Destructor
-BMP280::~BMP280()
+void BMP280::setSensorItems(rSensorItem* itemPressure, rSensorItem* itemTemperature)
 {
-}
-
-/**
- * Dynamically creating internal items on the heap
- * */
-bool BMP280::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-  const int numI2C, const uint8_t addrI2C, 
-  BMP280_MODE mode, BMP280_STANDBYTIME odr, BMP280_IIR_FILTER filter,
-  BMP280_OVERSAMPLING osPress, BMP280_OVERSAMPLING osTemp,
-  sensor_filter_t filterMode1, uint16_t filterSize1, 
-  sensor_filter_t filterMode2, uint16_t filterSize2,
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
-{
-  _I2C_num = numI2C;
-  _I2C_address = addrI2C;
-  _mode = mode;
-  _conf.odr = odr;
-  _conf.filter = filter;
-  _conf.os_pres = osPress;
-  _conf.os_temp = osTemp;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Initialize internal items
-  if (this->rSensorX2::initSensorItems(filterMode1, filterSize1, filterMode2, filterSize2)) {
-    // Start device
-    return sensorStart();
-  };
-  return false;
-}
-
-/**
- * Connecting external previously created items, for example statically declared
- * */
-bool BMP280::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-  const int numI2C, const uint8_t addrI2C, 
-  BMP280_MODE mode, BMP280_STANDBYTIME odr, BMP280_IIR_FILTER filter,
-  BMP280_OVERSAMPLING osPress, BMP280_OVERSAMPLING osTemp,
-  rSensorItem* item1, rSensorItem* item2,
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
-{
-  _I2C_num = numI2C;
-  _I2C_address = addrI2C;
-  _mode = mode;
-  _conf.odr = odr;
-  _conf.filter = filter;
-  _conf.os_pres = osPress;
-  _conf.os_temp = osTemp;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Assign items
-  this->rSensorX2::setSensorItems(item1, item2);
-  // Start device
-  return sensorStart();
-}
-
-void BMP280::createSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1,
-                               const sensor_filter_t filterMode2, const uint16_t filterSize2)
-{
-  // Pressure
-  _item1 = new rPressureItem(this, CONFIG_SENSOR_PRESSURE_NAME, CONFIG_FORMAT_PRESSURE_UNIT,
-    filterMode1, filterSize1,
-    CONFIG_FORMAT_PRESSURE_VALUE, CONFIG_FORMAT_PRESSURE_STRING,
-    #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-    CONFIG_FORMAT_TIMESTAMP_L, 
-    #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-    #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-    CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
-    #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-  );
-  if (_item1) {
-    rlog_d(_name, RSENSOR_LOG_MSG_CREATE_ITEM, _item1->getName(), _name);
-  };
-
-  // Temperature
-  _item2 = new rTemperatureItem(this, CONFIG_SENSOR_TEMP_NAME, CONFIG_FORMAT_TEMP_UNIT,
-    filterMode2, filterSize2,
-    CONFIG_FORMAT_TEMP_VALUE, CONFIG_FORMAT_TEMP_STRING,
-    #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-    CONFIG_FORMAT_TIMESTAMP_L, 
-    #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-    #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-    CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
-    #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-  );
-  if (_item2) {
-    rlog_d(_name, RSENSOR_LOG_MSG_CREATE_ITEM, _item2->getName(), _name);
-  };
-}
-
-void BMP280::registerItemsParameters(paramsGroupHandle_t parent_group)
-{
-  // Pressure
-  if (_item1) {
-    _item1->registerParameters(parent_group, CONFIG_SENSOR_PRESSURE_KEY, CONFIG_SENSOR_PRESSURE_NAME, CONFIG_SENSOR_PRESSURE_FRIENDLY);
-  };
-  // Temperature
-  if (_item2) {
-    _item2->registerParameters(parent_group, CONFIG_SENSOR_TEMP_KEY, CONFIG_SENSOR_TEMP_NAME, CONFIG_SENSOR_TEMP_FRIENDLY);
-  };
+  setSensorItem(0, itemPressure);
+  setSensorItem(1, itemTemperature);
 }
 
 // Displaying multiple values in one topic
@@ -164,11 +74,11 @@ void BMP280::registerItemsParameters(paramsGroupHandle_t parent_group)
 char* BMP280::getDisplayValue()
 {
   char* ret = nullptr;
-  if (_item1) { 
-    ret = _item1->getStringFiltered(); 
+  if (_items[0]) { 
+    ret = _items[0]->getStringFiltered(); 
   };
-  if (_item2) {
-    ret = concat_strings_div(ret, _item2->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+  if (_items[1]) {
+    ret = concat_strings_div(ret, _items[1]->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
   };
   return ret;
 }
@@ -297,6 +207,19 @@ bool BMP280::setODR(BMP280_STANDBYTIME odr)
 /**
  * Reading values from sensor
  * */
+sensor_status_t BMP280::setRawValues(const value_t newPressure, const value_t newTemperature)
+{
+  sensor_status_t ret = SENSOR_STATUS_NO_INIT;
+  if (_items[0] && _items[1]) {
+    time_t now = time(nullptr);
+    ret = _items[0]->setRawValue(newPressure, now);
+    if (ret == SENSOR_STATUS_OK) {
+      ret = _items[1]->setRawValue(newTemperature, now);
+    };
+  };
+  return ret;
+}
+
 sensor_status_t BMP280::readRawData()
 {
   sensor_status_t rslt;
@@ -331,3 +254,13 @@ sensor_status_t BMP280::readRawData()
   };
   return setRawValues(pressure, temperature);
 };
+
+sensor_value_t BMP280::getPressure(const bool readSensor)
+{
+  return getItemValue(0, readSensor);
+}
+
+sensor_value_t BMP280::getTemperature(const bool readSensor)
+{
+  return getItemValue(1, readSensor);
+}

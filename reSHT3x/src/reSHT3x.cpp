@@ -68,61 +68,22 @@
 
 static const char* logTAG = "SHT3x";
 
-SHT3xD::SHT3xD(uint8_t eventId):rSensorHT(eventId)
-{
-  _I2C_num = I2C_NUM_0;
-  _I2C_address = 0;
-	_frequency = SHT3xD_SINGLE;
-	_mode = SHT3xD_MODE_NOHOLD;
-	_repeatability = SHT3xD_REPEATABILITY_MEDIUM;
-	_heater = false;
-}
-
-/**
- * Dynamically creating internal items on the heap
- * */
-bool SHT3xD::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,
-  const i2c_port_t numI2C, const uint8_t addrI2C, const SHT3xD_FREQUENCY frequency, const SHT3xD_MODE mode, const SHT3xD_REPEATABILITY repeatability, 
-  const sensor_filter_t filterMode1, const uint16_t filterSize1, 
-  const sensor_filter_t filterMode2, const uint16_t filterSize2,
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
-{
-  _I2C_num = numI2C;
-  _I2C_address = addrI2C;
-	_frequency = frequency;
-	_mode = mode;
-	_repeatability = repeatability;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Initialize internal items
-  if (this->rSensorX2::initSensorItems(filterMode1, filterSize1, filterMode2, filterSize2)) {
-    // Start device
-    return sensorStart();
-  };
-  return false;
-}
-
-/**
- * Connecting external previously created items, for example statically declared
- * */
-bool SHT3xD::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
+SHT3xD::SHT3xD(uint8_t eventId,
   const i2c_port_t numI2C, const uint8_t addrI2C, const SHT3xD_FREQUENCY frequency, const SHT3xD_MODE mode, const SHT3xD_REPEATABILITY repeatability,
-  rSensorItem* item1, rSensorItem* item2,
+  const char* sensorName, const char* topicName, const bool topicLocal, 
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+:rSensorHT(eventId, 
+  sensorName, topicName, topicLocal, 
+  minReadInterval, errorLimit,
+  cb_status, cb_publish)
 {
   _I2C_num = numI2C;
   _I2C_address = addrI2C;
 	_frequency = frequency;
 	_mode = mode;
 	_repeatability = repeatability;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Assign items
-  this->rSensorX2::setSensorItems(item1, item2);
-  // Start device
-  return sensorStart();
+	_heater = false;
 }
 
 /**

@@ -38,38 +38,22 @@ typedef enum {
 extern "C" {
 #endif
 
-class DS18x20 : public rSensorX1 {
+class DS18x20 : public rSensor {
   public:
-    DS18x20(uint8_t eventId);
-    
-    // Dynamically creating internal items on the heap
-    bool initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,  
-      // hardware properties
+    DS18x20(uint8_t eventId, 
       gpio_num_t pin, onewire_addr_t address, int8_t index, DS18x20_RESOLUTION resolution, bool saveScratchPad,
-      // temperature filter
-      const sensor_filter_t filterMode = SENSOR_FILTER_RAW, const uint16_t filterSize = 0,
-      // limits
-      const uint32_t minReadInterval = 2000, const uint16_t errorLimit = 0,
-      // callbacks
+      const char* sensorName, const char* topicName, const bool topicLocal, 
+      const uint32_t minReadInterval = 1000, const uint16_t errorLimit = 0,
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
-    
-    // Connecting external previously created items, for example statically declared
-    bool initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
-      // hardware properties
-      gpio_num_t pin, onewire_addr_t address, int8_t index, DS18x20_RESOLUTION resolution, bool saveScratchPad,
-      // temperature filter
-      rSensorItem* item,
-      // limits
-      const uint32_t minReadInterval = 2000, const uint16_t errorLimit = 0,
-      // callbacks
-      cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
-    
+    void setSensorItems(rSensorItem* itemTemperature);
+
+    sensor_status_t sensorBusReset() override;
     sensor_status_t sensorReset() override;
     sensor_status_t getResolution(DS18x20_RESOLUTION *resolution);
     sensor_status_t setResolution(DS18x20_RESOLUTION resolution);
+    
+    sensor_value_t getTemperature(const bool readSensor);
   protected:
-    void createSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize) override;
-    void registerItemsParameters(paramsGroupHandle_t parent_group) override;
     sensor_status_t readRawData() override;
 
     #if CONFIG_SENSOR_AS_JSON
@@ -80,6 +64,7 @@ class DS18x20 : public rSensorX1 {
 
   	gpio_num_t _pin = GPIO_NUM_NC;          // The GPIO pin connected to the 1-Wire bus
     DS18x20_MODEL _model = MODEL_UNKNOWN;   // Family
+    int8_t _index = -1;                     // 1-Wire device index on bus
     onewire_addr_t _address = ONEWIRE_NONE; // 1-Wire device ROM address (64-bit)
     bool _parasitePower = false;            // Parasite power flag
     bool _saveScratchPad = false;           // Values will be saved from scratchpad to EEPROM on every scratchpad write
@@ -91,7 +76,7 @@ class DS18x20 : public rSensorX1 {
     bool validFamily(uint8_t faminly_byte);
     bool validAddress(uint8_t* rom_code);
     bool readROM(uint64_t *rom_code);
-    bool scanDevices(uint8_t index);
+    bool scanDevices();
 
     sensor_status_t readScratchpad(uint8_t *buffer);
     sensor_status_t writeScratchpad(uint8_t *buffer);

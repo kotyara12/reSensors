@@ -23,7 +23,7 @@ static const char* logTAG = "ADC";
 // ------------------------------------------------------- ADC Item ------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
 
-reADCItem::reADCItem(rSensor *sensor, const char* itemName, 
+reADCItem::reADCItem(rSensor *sensor, const char* itemKey, const char* itemName, const char* itemFriendly,
   #if ESP_IDF_VERSION_MAJOR < 5
     const adc1_channel_t channel, const adc_atten_t atten, const adc_bits_width_t bitwidth, const bool cal_enabled, 
   #else
@@ -32,22 +32,10 @@ reADCItem::reADCItem(rSensor *sensor, const char* itemName,
   #endif // ESP_IDF_VERSION_MAJOR
   const double coefficient,
   const sensor_filter_t filterMode, const uint16_t filterSize,
-  const char* formatNumeric, const char* formatString 
-  #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-  , const char* formatTimestamp
-  #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-  #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-  , const char* formatTimestampValue, const char* formatStringTimeValue
-  #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
+  const char* formatNumeric, const char* formatString)
 // inherited constructor
-):rSensorItem(sensor, itemName, filterMode, filterSize, formatNumeric, formatString
-  #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-  , formatTimestamp
-  #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-  #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-  , formatTimestampValue, formatStringTimeValue
-  #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-) {
+:rSensorItem(sensor, itemKey, itemName, itemFriendly, filterMode, filterSize, formatNumeric, formatString) 
+{
   #if ESP_IDF_VERSION_MAJOR < 5
     _cal_enable = cal_enabled;
     memset(&_chars, 0, sizeof(_chars));
@@ -188,8 +176,13 @@ value_t reADCItem::convertValue(const value_t rawValue)
       return (rawValue * 1250 / CONFIG_IDF_ADC_DMAX) * _coefficient;
     case ADC_ATTEN_DB_6:   
       return (rawValue * 1750 / CONFIG_IDF_ADC_DMAX) * _coefficient;
-    case ADC_ATTEN_DB_11:
-      return (rawValue * 2450 / CONFIG_IDF_ADC_DMAX) * _coefficient;
+    #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 2, 0)
+      case ADC_ATTEN_DB_12:
+        return (rawValue * 2750 / CONFIG_IDF_ADC_DMAX) * _coefficient;
+    #else
+      case ADC_ATTEN_DB_11:
+        return (rawValue * 2450 / CONFIG_IDF_ADC_DMAX) * _coefficient;
+    #endif
     default: 
       return (rawValue * 950 / CONFIG_IDF_ADC_DMAX) * _coefficient;
   };
@@ -201,29 +194,16 @@ value_t reADCItem::convertValue(const value_t rawValue)
 
 #if ESP_IDF_VERSION_MAJOR >= 5
 
-reADCGpio::reADCGpio(rSensor *sensor, const char* itemName, 
+reADCGpio::reADCGpio(rSensor *sensor, const char* itemKey, const char* itemName, const char* itemFriendly,
   const int adc_gpio, const bool use_calibration,
   const adc_atten_t atten, const adc_bitwidth_t bitwidth, 
   const double coefficient,
   const sensor_filter_t filterMode, const uint16_t filterSize,
-  const char* formatNumeric, const char* formatString 
-  #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-  , const char* formatTimestamp
-  #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-  #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-  , const char* formatTimestampValue, const char* formatStringTimeValue
-  #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-):reADCItem(sensor, itemName, 
+  const char* formatNumeric, const char* formatString) 
+:reADCItem(sensor, itemKey, itemName, itemFriendly,
   nullptr, nullptr, ADC_CHANNEL_0, atten, bitwidth, coefficient,
-  filterMode, filterSize, 
-  formatNumeric, formatString 
-  #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-  , formatTimestamp
-  #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-  #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-  , formatTimestampValue, formatStringTimeValue
-  #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-) { 
+  filterMode, filterSize, formatNumeric, formatString)
+{ 
   _adc_gpio = adc_gpio;
   _calibration = use_calibration;
 };

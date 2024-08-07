@@ -8,166 +8,104 @@
 static const char* logTAG = "CWTS";
 
 // Read status registers, read function code: 0x03 
-#define FUNCTION_CODE_STATUS_READ    0x03
+#define FUNCTION_CODE_STATUS_READ     0x03
 
-#define REG_STATUS_HUMIDITY          0x0000
-#define REG_STATUS_TEMPERATURE       0x0001
-#define REG_STATUS_CONDUCTIVITY      0x0002
-#define REG_STATUS_PH                0x0003
-#define REG_STATUS_SALINITY          0x0007
-#define REG_STATUS_TDS               0x0008
+#define REG_STATUS_HUMIDITY           0x0000
+#define REG_STATUS_TEMPERATURE        0x0001
+#define REG_STATUS_CONDUCTIVITY       0x0002
+#define REG_STATUS_PH                 0x0003
+#define REG_STATUS_NITROGEN           0x0004
+#define REG_STATUS_PHOSPHORUS         0x0005
+#define REG_STATUS_POTASSIUM          0x0006
+#define REG_STATUS_SALINITY           0x0007
+#define REG_STATUS_TDS                0x0008
 
-#define REG_FACTOR_CONDUCTIVITY      0x0022
-#define REG_FACTOR_SALINITY          0x0023
-#define REG_FACTOR_TDS               0x0024
+#define REG_FACTOR_CONDUCTIVITY       0x0022
+#define REG_FACTOR_SALINITY           0x0023
+#define REG_FACTOR_TDS                0x0024
 
-#define REG_CAL_TEMPERATURE          0x0050
-#define REG_CAL_HUMIDITY             0x0051
-#define REG_CAL_CONDUCTIVITY         0x0052
-#define REG_CAL_PH                   0x0053
+#define REG_CAL_TEMPERATURE           0x0050
+#define REG_CAL_HUMIDITY              0x0051
+#define REG_CAL_CONDUCTIVITY          0x0052
+#define REG_CAL_PH                    0x0053
 
 // Parameters registers, read function code: 0x03, write function code: 0x06
-#define REG_PARAM_SLAVE_ID           0x07D0
-#define REG_PARAM_BAUD_RATE          0x07D1
+#define REG_PARAM_SLAVE_ID            0x07D0
+#define REG_PARAM_BAUD_RATE           0x07D1
 
-reCWTSoilS::reCWTSoilS(uint8_t eventId):rSensorX4(eventId)
-{
-  _modbus = nullptr;
-  _address = 1;
-}
-
-// Dynamically creating internal items on the heap
-bool reCWTSoilS::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,
-  void* modbus, const uint8_t address, const cwt_soil_type_t type,
-  const sensor_filter_t filterMode1, const uint16_t filterSize1, 
-  const sensor_filter_t filterMode2, const uint16_t filterSize2,
-  const sensor_filter_t filterMode3, const uint16_t filterSize3,
-  const sensor_filter_t filterMode4, const uint16_t filterSize4,
+reCWTSoilS::reCWTSoilS(uint8_t eventId, 
+  void* modbus, const uint8_t address,
+  const char* sensorName, const char* topicName, const bool topicLocal, 
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+:rSensor(eventId, 9, 
+  sensorName, topicName, topicLocal, 
+  minReadInterval, errorLimit,
+  cb_status, cb_publish)
 {
   _modbus = modbus;
   _address = address;
-  _type = type;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Initialize internal items
-  if (this->rSensorX4::initSensorItems(filterMode1, filterSize1, filterMode2, filterSize2, filterMode3, filterSize3, filterMode4, filterSize4)) {
-    // Start device
-    return sensorStart();
-  };
-  return false;
 }
 
-// Connecting external previously created items, for example statically declared
-bool reCWTSoilS::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
-  void* modbus, const uint8_t address, const cwt_soil_type_t type,
-  rSensorItem* item1, rSensorItem* item2, rSensorItem* item3, rSensorItem* item4,
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+void reCWTSoilS::setSensorItems(rSensorItem* itemHumidity, rSensorItem* itemTemperature, 
+  rSensorItem* itemConductivity, rSensorItem* itemPH,
+  rSensorItem* itemNitrogenContent, rSensorItem* itemPhosphorusContent, rSensorItem* itemPotassiumContent,
+  rSensorItem* itemSalinity, rSensorItem* itemTDS)
 {
-  _modbus = modbus;
-  _address = address;
-  _type = type;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Assign items
-  this->rSensorX4::setSensorItems(item1, item2, item3, item4);
-  // Start device
-  return sensorStart();
+  setSensorItem(0, itemHumidity);
+  setSensorItem(1, itemTemperature);
+  setSensorItem(2, itemConductivity);
+  setSensorItem(3, itemPH);
+  setSensorItem(4, itemNitrogenContent);
+  setSensorItem(5, itemPhosphorusContent);
+  setSensorItem(6, itemPotassiumContent);
+  setSensorItem(7, itemSalinity);
+  setSensorItem(8, itemTDS);
 }
 
-// Initialization of internal items
-void reCWTSoilS::createSensorItems(
-  const sensor_filter_t filterMode1, const uint16_t filterSize1,
-  const sensor_filter_t filterMode2, const uint16_t filterSize2, 
-  const sensor_filter_t filterMode3, const uint16_t filterSize3, 
-  const sensor_filter_t filterMode4, const uint16_t filterSize4)
+sensor_value_t reCWTSoilS::getHumidity(const bool readSensor)
 {
-  // Temperature
-  if ((_type == CWTS_TH) || (_type == CWTS_THC) || (_type == CWTS_THPH) || (_type == CWTS_THCPH)) {
-    _item1 = new rTemperatureItem(this, CONFIG_SENSOR_TEMP_NAME, (unit_temperature_t)CONFIG_FORMAT_TEMP_UNIT,
-      filterMode1, filterSize1,
-      CONFIG_FORMAT_TEMP_VALUE, CONFIG_FORMAT_TEMP_STRING
-      #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-      , CONFIG_FORMAT_TIMESTAMP_L 
-      #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-      #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-      , CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
-      #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-    );
-    if (_item1) {
-      rlog_d(_name, RSENSOR_LOG_MSG_CREATE_ITEM, _item1->getName(), getName());
-    };
-  };
-  // Humidity (moisture)
-  if ((_type != CWTS_PH) && (_type != CWTS_CPH)) {
-    _item2 = new rSensorItem(this, CONFIG_SENSOR_MOISTURE_NAME, 
-      filterMode2, filterSize2,
-      CONFIG_FORMAT_MOISTURE_VALUE, CONFIG_FORMAT_MOISTURE_STRING
-      #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-      , CONFIG_FORMAT_TIMESTAMP_L 
-      #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-      #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-      , CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
-      #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-    );
-    if (_item2) {
-      rlog_d(_name, RSENSOR_LOG_MSG_CREATE_ITEM, _item2->getName(), getName());
-    };
-  };
-  // Conductivity
-  if ((_type == CWTS_HC) || (_type == CWTS_CPH) || (_type == CWTS_THC) || (_type == CWTS_THCPH)) {
-    _item3 = new rSensorItem(this, CONFIG_SENSOR_CONDUCTIVITY_NAME, 
-      filterMode3, filterSize3,
-      CONFIG_FORMAT_INTEGER_VALUE, CONFIG_FORMAT_INTEGER_STRING
-      #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-      , CONFIG_FORMAT_TIMESTAMP_L 
-      #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-      #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-      , CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
-      #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-    );
-    if (_item3) {
-      rlog_d(_name, RSENSOR_LOG_MSG_CREATE_ITEM, _item3->getName(), getName());
-    };
-  };
-  // PH
-  if ((_type == CWTS_PH) || (_type == CWTS_CPH) || (_type == CWTS_THPH) || (_type == CWTS_THCPH)) {
-    _item4 = new rSensorItem(this, CONFIG_SENSOR_PH_NAME, 
-      filterMode4, filterSize4,
-      CONFIG_FORMAT_FLOAT1_VALUE, CONFIG_FORMAT_FLOAT1_STRING
-      #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-      , CONFIG_FORMAT_TIMESTAMP_L 
-      #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-      #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-      , CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
-      #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-    );
-    if (_item4) {
-      rlog_d(_name, RSENSOR_LOG_MSG_CREATE_ITEM, _item4->getName(), getName());
-    };
-  };
+  return getItemValue(0, readSensor);
 }
-    
-void reCWTSoilS::registerItemsParameters(paramsGroupHandle_t parent_group)
+
+sensor_value_t reCWTSoilS::getTemperature(const bool readSensor)
 {
-  // Temperature
-  if (_item1) {
-    _item1->registerParameters(parent_group, CONFIG_SENSOR_TEMP_KEY, CONFIG_SENSOR_TEMP_NAME, CONFIG_SENSOR_TEMP_FRIENDLY);
-  };
-  // Humidity (moisture)
-  if (_item2) {
-    _item2->registerParameters(parent_group, CONFIG_SENSOR_MOISTURE_KEY, CONFIG_SENSOR_MOISTURE_NAME, CONFIG_SENSOR_MOISTURE_FRIENDLY);
-  };
-  // Conductivity
-  if (_item3) {
-    _item3->registerParameters(parent_group, CONFIG_SENSOR_CONDUCTIVITY_KEY, CONFIG_SENSOR_CONDUCTIVITY_NAME, CONFIG_SENSOR_CONDUCTIVITY_FRIENDLY);
-  };
-  // PH
-  if (_item4) {
-    _item4->registerParameters(parent_group, CONFIG_SENSOR_PH_KEY, CONFIG_SENSOR_PH_NAME, CONFIG_SENSOR_PH_FRIENDLY);
-  };
+  return getItemValue(1, readSensor);
+}
+
+sensor_value_t reCWTSoilS::getConductivity(const bool readSensor)
+{
+  return getItemValue(2, readSensor);
+}
+
+sensor_value_t reCWTSoilS::getPH(const bool readSensor)
+{
+  return getItemValue(3, readSensor);
+}
+
+sensor_value_t reCWTSoilS::getNitrogenContent(const bool readSensor)
+{
+  return getItemValue(4, readSensor);
+}
+
+sensor_value_t reCWTSoilS::getPhosphorusContent(const bool readSensor)
+{
+  return getItemValue(5, readSensor);
+}
+
+sensor_value_t reCWTSoilS::getPotassiumContent(const bool readSensor)
+{
+  return getItemValue(6, readSensor);
+}
+
+sensor_value_t reCWTSoilS::getSalinity(const bool readSensor)
+{
+  return getItemValue(7, readSensor);
+}
+
+sensor_value_t reCWTSoilS::getTDS(const bool readSensor)
+{
+  return getItemValue(8, readSensor);
 }
 
 #if CONFIG_SENSOR_DISPLAY_ENABLED
@@ -177,24 +115,24 @@ char* reCWTSoilS::getDisplayValue()
   char* ret = nullptr;
   uint8_t cnt = 0;
   // Humidity (moisture)
-  if (_item2) {
+  if (_items[0]) {
     cnt++;
-    ret = concat_strings_div(ret, _item2->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+    ret = concat_strings_div(ret, _items[0]->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
   };
   // Temperature
-  if ((_item1) && (cnt < 2)) {
+  if ((_items[1]) && (cnt < 2)) {
     cnt++;
-    ret = concat_strings_div(ret, _item1->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+    ret = concat_strings_div(ret, _items[1]->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
   };
   // PH
-  if ((_item4) && (cnt < 2)) {
+  if ((_items[3]) && (cnt < 2)) {
     cnt++;
-    ret = concat_strings_div(ret, _item4->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+    ret = concat_strings_div(ret, _items[3]->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
   };
   // Conductivity
-  if ((_item3) && (cnt < 2)) {
+  if ((_items[2]) && (cnt < 2)) {
     cnt++;
-    ret = concat_strings_div(ret, _item3->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+    ret = concat_strings_div(ret, _items[2]->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
   };
   return ret;
 }
@@ -226,32 +164,55 @@ esp_err_t reCWTSoilS::readModbusRegister(uint8_t cmd, uint16_t reg, int16_t* val
  * */
 sensor_status_t reCWTSoilS::readRawData()
 {
+  int16_t buffer = 0;
+  sensor_status_t ret = SENSOR_STATUS_OK;
   esp_err_t err = ESP_OK;
-  int16_t bufH, bufT, bufC, bufP = 0;
-
-  // Humidity (moisture)
-  if ((_item2) && (err == ESP_OK)) {
-    err = readModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_HUMIDITY, &bufH);
+  for (uint8_t i = 0; i < _items_count; i++) {
+    if (_items[i]) {
+      // Read register
+      switch (i) {
+        case 0:
+          err = readModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_HUMIDITY, &buffer);
+          break;
+        case 1:
+          err = readModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_TEMPERATURE, &buffer);
+          break;
+        case 2:
+          err = readModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_CONDUCTIVITY, &buffer);
+          break;
+        case 3:
+          err = readModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_PH, &buffer);
+          break;
+        case 4:
+          err = readModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_NITROGEN, &buffer);
+          break;
+        case 5:
+          err = readModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_PHOSPHORUS, &buffer);
+          break;
+        case 6:
+          err = readModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_POTASSIUM, &buffer);
+          break;
+        case 7:
+          err = readModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_SALINITY, &buffer);
+          break;
+        case 8:
+          err = readModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_TDS, &buffer);
+          break;
+        default:
+          err = ESP_ERR_NOT_SUPPORTED;
+      };
+      // Put data
+      if (err == ESP_OK) {
+        if ((i == REG_STATUS_HUMIDITY) || (i == REG_STATUS_TEMPERATURE) || (i == REG_STATUS_PH)) {
+          ret = _items[i]->setRawValue((float)buffer / 10.0, time(nullptr));
+        } else {
+          ret = _items[i]->setRawValue((float)buffer, time(nullptr));
+        };
+      } else {
+        rlog_e(logTAG, RSENSOR_LOG_MSG_READ_DATA_FAILED, _name, err, esp_err_to_name(err));
+        return convertEspError(err);
+      };
+    };
   };
-  // Temperature
-  if ((_item1) && (err == ESP_OK)) {
-    err = readModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_TEMPERATURE, &bufT);
-  };
-  // Conductivity
-  if ((_item3) && (err == ESP_OK)) {
-    err = readModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_CONDUCTIVITY, &bufC);
-  };
-  // PH
-  if ((_item4) && (err == ESP_OK)) {
-    err = readModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_PH, &bufP);
-  };
-
-  // Check exit code
-  if (err != ESP_OK) {
-    rlog_e(logTAG, RSENSOR_LOG_MSG_READ_DATA_FAILED, _name, err, esp_err_to_name(err));
-    return convertEspError(err);
-  };
-
-  // Store values in sensors
-  return setRawValues((float)bufT/10.0, (float)bufH/10.0, (float)bufC, (float)bufP/10.0);
+  return ret;
 };

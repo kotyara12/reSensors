@@ -59,44 +59,16 @@ typedef enum {
   BME280_FLT_16     = BME280_FILTER_COEFF_16            // Filter coefficient of 16
 } BME280_IIR_FILTER;
 
-class BME280 : public rSensorX3 {
+class BME280 : public rSensor {
   public:
-    BME280(uint8_t eventId);
-    ~BME280();
-
-    // Dynamically creating internal items on the heap
-    bool initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,  
-      // hardware properties
+    BME280(uint8_t eventId,
       const i2c_port_t numI2C, const uint8_t addrI2C, 
       BME280_MODE mode = BME280_MODE_FORCED, BME280_STANDBYTIME odr = BME280_STANDBY_1000ms, BME280_IIR_FILTER filter = BME280_FLT_NONE,
       BME280_OVERSAMPLING osPress = BME280_OSM_X1, BME280_OVERSAMPLING osTemp = BME280_OSM_X1, BME280_OVERSAMPLING osHumd = BME280_OSM_X1,
-      // pressure filter
-      sensor_filter_t filterMode1 = SENSOR_FILTER_RAW, uint16_t filterSize1 = 0, 
-      // temperature filter
-      sensor_filter_t filterMode2 = SENSOR_FILTER_RAW, uint16_t filterSize2 = 0,
-      // humidity filter
-      sensor_filter_t filterMode3 = SENSOR_FILTER_RAW, uint16_t filterSize3 = 0,
-      // limits
+      const char* sensorName = nullptr, const char* topicName = nullptr, const bool topicLocal = false, 
       const uint32_t minReadInterval = 1000, const uint16_t errorLimit = 0,
-      // callbacks
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
-    
-    // Connecting external previously created items, for example statically declared
-    bool initExtItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-      // hardware properties
-      const i2c_port_t numI2C, const uint8_t addrI2C, 
-      BME280_MODE mode = BME280_MODE_FORCED, BME280_STANDBYTIME odr = BME280_STANDBY_1000ms, BME280_IIR_FILTER filter = BME280_FLT_NONE,
-      BME280_OVERSAMPLING osPress = BME280_OSM_X1, BME280_OVERSAMPLING osTemp = BME280_OSM_X1, BME280_OVERSAMPLING osHumd = BME280_OSM_X1,
-      // pressure filter
-      rSensorItem* item1 = nullptr, 
-      // temperature filter
-      rSensorItem* item2 = nullptr,
-      // humidity filter
-      rSensorItem* item3 = nullptr,
-      // limits
-      const uint32_t minReadInterval = 1000, const uint16_t errorLimit = 0,
-      // callbacks
-      cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
+    void setSensorItems(rSensorItem* itemPressure, rSensorItem* itemTemperature, rSensorItem* itemHumidity);
 
     // Get I2C parameters
     i2c_port_t getI2CNum();
@@ -112,15 +84,12 @@ class BME280 : public rSensorX3 {
     bool setOversampling(BME280_OVERSAMPLING osPress = BME280_OSM_X1, BME280_OVERSAMPLING osTemp = BME280_OSM_X1, BME280_OVERSAMPLING osHumd = BME280_OSM_X1);
     bool setIIRFilterSize(BME280_IIR_FILTER filter);
     bool setODR(BME280_STANDBYTIME odr);
+
+    // Get values
+    sensor_value_t getPressure(const bool readSensor);
+    sensor_value_t getTemperature(const bool readSensor);
+    sensor_value_t getHumidity(const bool readSensor);
   protected:
-    void createSensorItems(
-      // pressure value
-      const sensor_filter_t filterMode1, const uint16_t filterSize1, 
-      // temperature value
-      const sensor_filter_t filterMode2, const uint16_t filterSize2,
-      // humidity value
-      const sensor_filter_t filterMode3, const uint16_t filterSize3) override;
-    void registerItemsParameters(paramsGroupHandle_t parent_group) override;
     sensor_status_t readRawData() override;  
     #if CONFIG_SENSOR_DISPLAY_ENABLED
     char* getDisplayValue() override;
@@ -142,6 +111,7 @@ class BME280 : public rSensorX3 {
     sensor_status_t checkApiCode(const char* api_name, int8_t rslt);
     sensor_status_t sendPowerMode(BME280_MODE mode);
     sensor_status_t sendConfiguration(uint8_t settings_sel);
+    sensor_status_t setRawValues(const value_t newPressure, const value_t newTemperature, const value_t newHumidity);
 };
 
 #endif // __RE_BME280_H__

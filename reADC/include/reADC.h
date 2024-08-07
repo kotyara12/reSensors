@@ -28,7 +28,7 @@ extern "C" {
 
 class reADCItem: public rSensorItem {
   public:
-    reADCItem(rSensor *sensor, const char* itemName, 
+    reADCItem(rSensor *sensor, const char* itemKey, const char* itemName, const char* itemFriendly,
       #if ESP_IDF_VERSION_MAJOR < 5
         const adc1_channel_t channel, const adc_atten_t atten, const adc_bits_width_t bitwidth, const bool cal_enabled, 
       #else
@@ -37,14 +37,7 @@ class reADCItem: public rSensorItem {
       #endif // ESP_IDF_VERSION_MAJOR
       const double coefficient,
       const sensor_filter_t filterMode, const uint16_t filterSize,
-      const char* formatNumeric, const char* formatString 
-      #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-      , const char* formatTimestamp
-      #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-      #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-      , const char* formatTimestampValue, const char* formatStringTimeValue
-      #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-      );
+      const char* formatNumeric, const char* formatString);
     bool initItem() override;
     value_t convertValue(const value_t rawValue) override;
   protected:
@@ -81,19 +74,12 @@ class reADCItem: public rSensorItem {
 
 class reADCGpio: public reADCItem {
   public: 
-    reADCGpio(rSensor *sensor, const char* itemName, 
+    reADCGpio(rSensor *sensor, const char* itemKey, const char* itemName, const char* itemFriendly,
       const int adc_gpio, const bool use_calibration,
       const adc_atten_t atten, const adc_bitwidth_t bitwidth, 
       const double coefficient,
       const sensor_filter_t filterMode, const uint16_t filterSize,
-      const char* formatNumeric, const char* formatString 
-      #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-      , const char* formatTimestamp
-      #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-      #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-      , const char* formatTimestampValue, const char* formatStringTimeValue
-      #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-      );
+      const char* formatNumeric, const char* formatString);
     ~reADCGpio();
     bool initItem() override;
   private:

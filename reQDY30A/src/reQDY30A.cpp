@@ -19,77 +19,31 @@ static const char* logTAG = "QDY30";
 #define REG_STATUS_ZERO              0x0005
 #define REG_STATUS_FULL              0x0006
 
-reQDY30A::reQDY30A(uint8_t eventId):rSensorX1(eventId)
+reQDY30A::reQDY30A(uint8_t eventId, 
+  void* modbus, const uint8_t address,
+  const char* sensorName, const char* topicName, const bool topicLocal, 
+  const uint32_t minReadInterval, const uint16_t errorLimit,
+  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+:rSensor(eventId, 1, 
+  sensorName, topicName, topicLocal, 
+  minReadInterval, errorLimit,
+  cb_status, cb_publish)
 {
   _modbus = nullptr;
-  _address = 1;
-}
-
-// Dynamically creating internal items on the heap
-bool reQDY30A::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,
-  void* modbus, const uint8_t address, 
-  const sensor_filter_t filterMode, const uint16_t filterSize, 
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
-{
-  _modbus = modbus;
   _address = address;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Initialize internal items
-  if (this->rSensorX1::initSensorItems(filterMode, filterSize)) {
-    // Start device
-    return sensorStart();
-  };
-  return false;
 }
 
-// Connecting external previously created items, for example statically declared
-bool reQDY30A::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
-  void* modbus, const uint8_t address, 
-  rSensorItem* item, 
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+void reQDY30A::setSensorItems(rSensorItem* itemLevel)
 {
-  _modbus = modbus;
-  _address = address;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Assign items
-  this->rSensorX1::setSensorItems(item);
-  // Start device
-  return sensorStart();
-}
-
-// Initialization of internal items
-void reQDY30A::createSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize)
-{
-  // Level
-  _item = new rSensorItem(this, CONFIG_SENSOR_LEVEL_NAME, 
-    filterMode, filterSize,
-    CONFIG_FORMAT_FLOAT2_VALUE, CONFIG_FORMAT_FLOAT2_STRING
-    #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-    , CONFIG_FORMAT_TIMESTAMP_L 
-    #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-    #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-    , CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
-    #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-  );
-  if (_item) {
-    rlog_d(_name, RSENSOR_LOG_MSG_CREATE_ITEM, _item->getName(), getName());
-  };
-}
-    
-void reQDY30A::registerItemsParameters(paramsGroupHandle_t parent_group)
-{
-  // Level
-  if (_item) {
-    _item->registerParameters(parent_group, CONFIG_SENSOR_LEVEL_KEY, CONFIG_SENSOR_LEVEL_NAME, CONFIG_SENSOR_LEVEL_FRIENDLY);
-  };
+  setSensorItem(0, itemLevel);
 }
 
 sensor_status_t reQDY30A::sensorReset()
 {
+  // int16_t value = 2;
+  // callModbusRegister(FUNCTION_CODE_STATUS_WRITE, REG_STATUS_UNITS, &value);
+  // value = 0;
+  // callModbusRegister(FUNCTION_CODE_STATUS_WRITE, REG_STATUS_PRECISION, &value);
   return SENSOR_STATUS_OK;
 };
 
@@ -106,26 +60,34 @@ esp_err_t reQDY30A::callModbusRegister(uint8_t cmd, uint16_t reg, int16_t* value
 
 sensor_status_t reQDY30A::readRawData()
 {
-  int16_t value, precs = 0;
+  int16_t value, precs, units = 0;
   esp_err_t err = ESP_OK;
 
-  if (_item) {
-    err = callModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_OUTPUT, &value);
-    if (err != ESP_OK) {
-      err = callModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_PRECISION, &precs);
-    };
-  };
-
+  err = callModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_OUTPUT, &value);
+  if (err != ESP_OK) err = callModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_PRECISION, &precs);
+  if (err != ESP_OK) err = callModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_UNITS, &units);
+  
   // Check exit code
   if (err != ESP_OK) {
     rlog_e(logTAG, RSENSOR_LOG_MSG_READ_DATA_FAILED, _name, err, esp_err_to_name(err));
     return convertEspError(err);
   };
 
+  // Check exit value
+  if (value < 0) {
+    rlog_e(logTAG, RSENSOR_LOG_MSG_BAD_VALUE, _name);
+    return SENSOR_STATUS_BAD_DATA;
+  };
+
   switch (precs) {
-    case 1:  return setRawValues((value_t)value/10.0);    // 1-###.#
-    case 2:  return setRawValues((value_t)value/100.0);   // 2-##.##
-    case 3:  return setRawValues((value_t)value/1000.0);  // 3-#.###
-    default: return setRawValues((value_t)value);         // 0-####
+    case 1:  return setRawValue(0, (value_t)value/10.0);    // 1-###.#
+    case 2:  return setRawValue(0, (value_t)value/100.0);   // 2-##.##
+    case 3:  return setRawValue(0, (value_t)value/1000.0);  // 3-#.###
+    default: return setRawValue(0, (value_t)value);         // 0-####
   }
 };
+
+sensor_value_t reQDY30A::getLevel(const bool readSensor)
+{
+  return getItemValue(0, readSensor);
+}

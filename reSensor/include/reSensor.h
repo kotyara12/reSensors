@@ -2,7 +2,7 @@
    EN: Unified sensor base class used by sensor libraries
    RU: Унифицированный базовый класс сенсора, используемый библиотеками сенсоров
    --------------------------
-   (с) 2021-2023 Разживин Александр | Razzhivin Alexander
+   (с) 2021-2024 Разживин Александр | Razzhivin Alexander
    kotyara12@yandex.ru | https://kotyara12.ru | tg: @kotyara1971
 */
 
@@ -215,7 +215,7 @@ value_t calcDewPointSlow(value_t tempValue, value_t humidityValue);
 
 class rSensor;
 class rSensorItem;
-// typedef rSensorItem * rSensorItemHandle;
+typedef rSensorItem * rSensorItemHandle;
 
 typedef void (*cb_status_changed_t) (rSensor *sensor, const sensor_status_t oldStatus, const sensor_status_t newStatus);
 typedef bool (*cb_publish_data_t) (rSensor *sensor, char* topic, char* payload, const bool free_topic, const bool free_payload);
@@ -230,45 +230,50 @@ class rSensorFilterHandler: public param_handler_t {
 
 class rSensorItem {
   public:
-    rSensorItem(rSensor *sensor, const char* itemName,
+    rSensorItem(rSensor *sensor, const char* itemKey, const char* itemName, const char* itemFriendly,
       const sensor_filter_t filterMode, const uint16_t filterSize,
-      const char* formatNumeric, const char* formatString 
-      #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-      , const char* formatTimestamp
-      #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-      #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-      , const char* formatTimestampValue, const char* formatStringTimeValue
-      #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-      );
+      const char* formatNumeric, const char* formatString);
     virtual ~rSensorItem();
 
     virtual bool initItem();
     void  setOwner(rSensor *sensor);
+
+    // Properties
+    const char* getKey();
+    const char* getName();
+    const char* getFriendly();
+
+    // Filters
     bool  setFilterMode(const sensor_filter_t filterMode, const uint16_t filterSize);
     bool  doChangeFilterMode();
+
+    // Check and write data
     void  setOffsetValue(float offsetValue);
     void  setValidRange(value_t validMin, value_t validMax);
     void  setRawAndConvertedValue(const value_t rawValue, const value_t convertedValue, const time_t rawTime);
-    void  setRawValue(const value_t rawValue, const time_t rawTime);
+    sensor_status_t setRawValue(const value_t rawValue, const time_t rawTime);
     virtual sensor_status_t checkValue(const value_t rawValue);
     virtual value_t convertValue(const value_t rawValue);
     value_t convertOffsetValue(const value_t rawValue);
-    const char* getName();
+
+    // Read data
     sensor_handle_t getHandle();
     sensor_data_t getValues();
     sensor_value_t getValue();
     char* getStringRaw();
     char* getStringFiltered();
+
+    // Extremums
+    sensor_extremums_t getExtremumsEntirely();
+    sensor_extremums_t getExtremumsWeekly();
+    sensor_extremums_t getExtremumsDaily();
     void resetExtremumsEntirely();
     void resetExtremumsWeekly();
     void resetExtremumsDaily();
     void resetExtremumsTotal();
-    sensor_extremums_t getExtremumsEntirely();
-    sensor_extremums_t getExtremumsWeekly();
-    sensor_extremums_t getExtremumsDaily();
 
     // Register internal parameters
-    void registerParameters(paramsGroupHandle_t parent_group, const char * key_name, const char * topic_name, const char * friendly_name);
+    void registerParameters(paramsGroupHandle_t parent_group);
 
     // Reading data in rSensorItem itself
     virtual sensor_status_t getRawValue(value_t * rawValue);
@@ -294,6 +299,7 @@ class rSensorItem {
 
     // Publishing "timestring" (string value and timestamp)
     char* asStringTimeValue(sensor_value_t *data);
+    char* getStringTimeValue();
     #if CONFIG_SENSOR_TIMESTRING_ENABLE
     #if CONFIG_SENSOR_AS_PLAIN
     bool publishStringTimeValue(const char* topic, sensor_value_t *data);
@@ -345,20 +351,15 @@ class rSensorItem {
     void nvsStoreExtremums(const char* nvs_space);
     void nvsRestoreExtremums(const char* nvs_space);
   protected:
+    rSensor *_owner = nullptr;
     bool _forcedRawPublish = false;
     virtual void registerItemParameters(paramsGroup_t * group);
   private:
-    rSensor *_owner = nullptr;
-    const char * _name = nullptr;
+    const char * _itemKey = nullptr;
+    const char * _itemName = nullptr;
+    const char * _itemFriendly = nullptr;
     const char * _fmtNumeric = nullptr;
     const char * _fmtString = nullptr;
-    #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-    const char * _fmtTimestamp;
-    #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-    #if CONFIG_SENSOR_TIMESTRING_ENABLE
-    const char * _fmtTimestampValue;
-    const char * _fmtStringTimeValue;
-    #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
     sensor_data_t _data;
     value_t _limitMin = 0.0;
     value_t _limitMax = 0.0;
@@ -383,16 +384,10 @@ class rSensorItem {
 
 class rTemperatureItem: public rSensorItem {
   public:
-    rTemperatureItem(rSensor *sensor, const char* itemName, const unit_temperature_t unitValue,
+    rTemperatureItem(rSensor *sensor, const char* itemKey, const char* _itemName, const char* itemFriendly,
+      const unit_temperature_t unitValue,
       const sensor_filter_t filterMode, const uint16_t filterSize,
-      const char* formatNumeric, const char* formatString 
-      #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-      , const char* formatTimestamp
-      #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-      #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-      , const char* formatTimestampValue, const char* formatStringTimeValue
-      #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-      );
+      const char* formatNumeric, const char* formatString);
     value_t convertValue(const value_t rawValue) override;
   private:
     unit_temperature_t _units;
@@ -400,35 +395,35 @@ class rTemperatureItem: public rSensorItem {
 
 class rPressureItem: public rSensorItem {
   public:
-    rPressureItem(rSensor *sensor, const char* itemName, const unit_pressure_t unitValue,
+    rPressureItem(rSensor *sensor, const char* itemKey, const char* itemName, const char* itemFriendly,
+      const unit_pressure_t unitValue,
       const sensor_filter_t filterMode, const uint16_t filterSize,
-      const char* formatNumeric, const char* formatString 
-      #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-      , const char* formatTimestamp
-      #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-      #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-      , const char* formatTimestampValue, const char* formatStringTimeValue
-      #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-      );
+      const char* formatNumeric, const char* formatString);
     value_t convertValue(const value_t rawValue) override;
   private:
     unit_pressure_t _units;
 };
 
+class rVirtualItem: public rSensorItem {
+  public:
+    rVirtualItem(rSensor *sensor, const char* itemKey, const char* itemName, const char* itemFriendly,
+      const double coefficient,
+      const sensor_filter_t filterMode, const uint16_t filterSize,
+      const char* formatNumeric, const char* formatString);
+    value_t convertValue(const value_t rawValue) override;
+  protected:
+    void registerItemParameters(paramsGroup_t * group) override;
+  private:
+    double _coefficient = 1.0;
+};
+
 class rMapItem: public rSensorItem {
   public:
-    rMapItem(rSensor *sensor, const char* itemName, 
+    rMapItem(rSensor *sensor, const char* itemKey, const char* itemName, const char* itemFriendly,
       const type_bounds_t in_bounds, const value_t in_min, const value_t in_max,
       const value_t out_min, const value_t out_max,
       const sensor_filter_t filterMode, const uint16_t filterSize,
-      const char* formatNumeric, const char* formatString 
-      #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-      , const char* formatTimestamp
-      #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-      #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-      , const char* formatTimestampValue, const char* formatStringTimeValue
-      #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-      );
+      const char* formatNumeric, const char* formatString);
 
     value_t checkBounds(value_t newValue);
     value_t convertValue(const value_t rawValue) override;
@@ -449,15 +444,16 @@ class rMapItem: public rSensorItem {
 
 class rSensor {
   public:
-    rSensor(uint8_t eventId);
+    rSensor(uint8_t eventId, const uint8_t items,
+      const char* sensorName, const char* topicName, const bool topicLocal, 
+      const uint32_t minReadInterval = 1000, const uint16_t errorLimit = 0,
+      cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
     ~rSensor();
 
-    // Initialization
-    void initProperties(const char* sensorName, const char* topicName, const bool topicLocal, 
-      const uint32_t minReadInterval = 2000, const uint16_t errorLimit = 0,
-      cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
-    bool sensorStart();
+    // Reset bus and sensor
+    virtual sensor_status_t sensorBusReset();
     virtual sensor_status_t sensorReset() = 0;
+    bool sensorStart();
 
     // Properties
     const char* getName();
@@ -465,8 +461,24 @@ class rSensor {
     void topicsFree();
     char* getTopicPub();
 
+    // Set pointer to data storage
+    void setSensorItem(const uint8_t index, rSensorItem* item);
+    
+    // Change filtering mode of one of the internal storages
+    bool setFilterMode(const uint8_t index, const sensor_filter_t filterMode, const uint16_t filterSize);
+
+    // Reading data from internal storages
+    rSensorItem* getSensorItem(const uint8_t index);
+    sensor_handle_t getHandle(const uint8_t index);
+    sensor_data_t getItemData(const uint8_t index, const bool readSensor);
+    sensor_value_t getItemValue(const uint8_t index, const bool readSensor);
+    sensor_extremums_t getItemExtremumsEntirely(const uint8_t index, const bool readSensor);
+    sensor_extremums_t getItemExtremumsWeekly(const uint8_t index, const bool readSensor);
+    sensor_extremums_t getItemExtremumsDaily(const uint8_t index, const bool readSensor);
+
     // Reading data from a physical sensor
     sensor_status_t readData();
+    sensor_status_t setRawValue(const uint8_t index, const value_t newValue);
 
     // Register internal parameters
     void registerParameters(paramsGroupHandle_t parent_group, const char * key_name, const char * topic_name, const char * friendly_name);
@@ -484,24 +496,26 @@ class rSensor {
     
     // Publishing data in JSON
     #if CONFIG_SENSOR_AS_JSON
-    virtual char* getJSON() = 0;
+    virtual char* getJSON();
     #endif // CONFIG_SENSOR_AS_JSON
 
     // Reset extremums
-    virtual void resetExtremumsEntirely() = 0;
-    virtual void resetExtremumsWeekly() = 0;
-    virtual void resetExtremumsDaily() = 0;
-    virtual void resetExtremumsTotal() = 0;
+    void resetExtremumsEntirely();
+    void resetExtremumsWeekly();
+    void resetExtremumsDaily();
+    void resetExtremumsTotal();
 
     // Store extremums
-    virtual void nvsStoreExtremums(const char* nvs_space) = 0;
-    virtual void nvsRestoreExtremums(const char* nvs_space) = 0;
+    void nvsStoreExtremums(const char* nvs_space);
+    void nvsRestoreExtremums(const char* nvs_space);
   protected:
-    const char *   _name;
-    const char *   _topicName;
-    bool           _topicLocal = false;
-    char *         _topicPub;
-    paramsGroup_t * _pgSensor = nullptr;
+    uint8_t             _items_count = 0;
+    rSensorItemHandle * _items = nullptr;
+    const char *        _name = nullptr;
+    const char *        _topicName = nullptr;
+    bool                _topicLocal = false;
+    char *              _topicPub = nullptr;
+    paramsGroup_t *     _pgSensor = nullptr;
 
     virtual sensor_status_t readRawData() = 0;
     void setRawStatus(sensor_status_t newStatus, bool forced);
@@ -511,11 +525,11 @@ class rSensor {
 
     // Register parameters of items
     virtual void registerCustomParameters(paramsGroupHandle_t sensor_group); 
-    virtual void registerItemsParameters(paramsGroupHandle_t parent_group) = 0;
+    virtual void registerItemsParameters(paramsGroupHandle_t parent_group);
 
     // Displaying multiple values in one topic
     #if CONFIG_SENSOR_DISPLAY_ENABLED
-    virtual char* getDisplayValue() = 0;
+    virtual char* getDisplayValue();
     virtual char* getDisplayValueStatus();
     #endif // CONFIG_SENSOR_DISPLAY_ENABLED
 
@@ -531,142 +545,48 @@ class rSensor {
     char* jsonDisplayAndCustomValues();
     #endif // CONFIG_SENSOR_AS_JSON
   private:
-    uint8_t         _eventId = 0;
-    uint32_t        _readInterval;
-    int64_t         _readLast;
-    sensor_status_t _lstStatus;
-    sensor_status_t _errStatus;
-    uint16_t        _errLimit;
-    unsigned long   _errCount;
+    uint8_t             _eventId = 0;
+    uint32_t            _readInterval;
+    int64_t             _readLast;
+    sensor_status_t     _lstStatus;
+    sensor_status_t     _errStatus;
+    uint16_t            _errLimit;
+    unsigned long       _errCount;
     cb_status_changed_t _cbOnChangeStatus;
-    cb_publish_data_t _cbOnPublishData;
+    cb_publish_data_t   _cbOnPublishData;
     void postEventStatus(const sensor_status_t oldStatus, const sensor_status_t newStatus);
 };
 
-class rSensorX1: public rSensor {
+class rSensorStub: public rSensor {
   public:
-    rSensorX1(uint8_t eventId); 
-    ~rSensorX1();
-    
-    bool setFilterMode(const sensor_filter_t filterMode, const uint16_t filterSize);
-
-    rSensorItem* getSensorItem();
-    sensor_handle_t getHandle();
-    sensor_data_t getValues(const bool readSensor);
-    sensor_value_t getValue(const bool readSensor);
-    sensor_extremums_t getExtremumsEntirely(const bool readSensor);
-    sensor_extremums_t getExtremumsWeekly(const bool readSensor);
-    sensor_extremums_t getExtremumsDaily(const bool readSensor);
-
-    #if CONFIG_SENSOR_AS_JSON
-    char*  getJSON() override;
-    #endif // CONFIG_SENSOR_AS_JSON
-
-    // Reset extremums
-    void resetExtremumsEntirely() override;
-    void resetExtremumsWeekly() override;
-    void resetExtremumsDaily() override;
-    void resetExtremumsTotal() override;
-
-    // Store extremums
-    void nvsStoreExtremums(const char* nvs_space) override;
-    void nvsRestoreExtremums(const char* nvs_space) override;
-  protected:
-    rSensorItem *_item;
-
+    rSensorStub(uint8_t eventId, 
+      const char* sensorName, const char* topicName, const bool topicLocal, 
+      const uint32_t minReadInterval = 1000, const uint16_t errorLimit = 0,
+      cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);  
     void setSensorItems(rSensorItem* item);
-    bool initSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize);
-    virtual void createSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize) = 0;
-    sensor_status_t setRawValues(const value_t newValue);
-    #if CONFIG_SENSOR_DISPLAY_ENABLED
-    char* getDisplayValue() override;
-    #endif // CONFIG_SENSOR_DISPLAY_ENABLED
-    #if CONFIG_SENSOR_AS_PLAIN
-    bool publishItems() override;
-    #endif // CONFIG_SENSOR_AS_PLAIN
-};
-
-class rSensorStub: public rSensorX1 {
-  public:
-    rSensorStub(uint8_t eventId);  
-    // Connecting external previously created items, for example statically declared
-    bool initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
-      rSensorItem* item, const uint32_t minReadInterval = 0, const uint16_t errorLimit = 0,
-      cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
     // Sensor reset
     sensor_status_t sensorReset() override;
     // Reading data in rSensorItem itself
     virtual sensor_status_t readRawData() override;
-  protected:
-    void createSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize) override;
-    void registerItemsParameters(paramsGroupHandle_t parent_group) override;
+    // Puty external value
+    sensor_status_t setExtValue(const value_t extValue);
+    // Get data from sensor
+    sensor_value_t getValue(const bool readSensor);
 };
 
-class rSensorX2: public rSensor {
+class rSensorHT: public rSensor {
   public:
-    rSensorX2(uint8_t eventId);
-    ~rSensorX2();
+    rSensorHT(uint8_t eventId, 
+      const char* sensorName, const char* topicName, const bool topicLocal, 
+      const uint32_t minReadInterval = 1000, const uint16_t errorLimit = 0,
+      cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
+    void setSensorItems(rSensorItem* itemHumidity, rSensorItem* itemTemperature);
 
-    bool setFilterMode1(const sensor_filter_t filterMode, const uint16_t filterSize);
-    bool setFilterMode2(const sensor_filter_t filterMode, const uint16_t filterSize);
-
-    rSensorItem* getSensorItem1();
-    rSensorItem* getSensorItem2();
-    sensor_handle_t getHandle1();
-    sensor_handle_t getHandle2();
-    sensor_data_t getValues1(const bool readSensor);
-    sensor_data_t getValues2(const bool readSensor);
-    sensor_value_t getValue1(const bool readSensor);
-    sensor_value_t getValue2(const bool readSensor);
-    sensor_extremums_t getExtremumsEntirely1(const bool readSensor);
-    sensor_extremums_t getExtremumsEntirely2(const bool readSensor);
-    sensor_extremums_t getExtremumsWeekly1(const bool readSensor);
-    sensor_extremums_t getExtremumsWeekly2(const bool readSensor);
-    sensor_extremums_t getExtremumsDaily1(const bool readSensor);
-    sensor_extremums_t getExtremumsDaily2(const bool readSensor);
-
-    #if CONFIG_SENSOR_AS_JSON
-    char*  getJSON() override;
-    #endif // CONFIG_SENSOR_AS_JSON
-
-    // Reset extremums
-    void resetExtremumsEntirely() override;
-    void resetExtremumsWeekly() override;
-    void resetExtremumsDaily() override;
-    void resetExtremumsTotal() override;
-
-    // Store extremums
-    void nvsStoreExtremums(const char* nvs_space) override;
-    void nvsRestoreExtremums(const char* nvs_space) override;
+    sensor_value_t getTemperature(const bool readSensor);
+    sensor_value_t getHumidity(const bool readSensor);
   protected:
-    rSensorItem *_item1;
-    rSensorItem *_item2;
+    sensor_status_t setRawValues(const value_t newHumidity, const value_t newTemperature);
 
-    void setSensorItems(rSensorItem* item1, rSensorItem* item2);
-    bool initSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1,
-                         const sensor_filter_t filterMode2, const uint16_t filterSize2);
-    virtual void createSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1,
-                                   const sensor_filter_t filterMode2, const uint16_t filterSize2) = 0;
-    
-    sensor_status_t setRawValues(const value_t newValue1, const value_t newValue2);
-    #if CONFIG_SENSOR_DISPLAY_ENABLED
-    char* getDisplayValue() override;
-    #endif // CONFIG_SENSOR_DISPLAY_ENABLED
-    #if CONFIG_SENSOR_AS_PLAIN
-    bool publishItems() override;
-    #endif // CONFIG_SENSOR_AS_PLAIN
-};
-
-class rSensorHT: public rSensorX2 {
-  public:
-    rSensorHT(uint8_t eventId);  
-  protected:
-    void createSensorItems(
-      // humidity value
-      const sensor_filter_t filterMode1, const uint16_t filterSize1, 
-      // temperature value
-      const sensor_filter_t filterMode2, const uint16_t filterSize2) override;
-    void registerItemsParameters(paramsGroupHandle_t parent_group) override;
     #if CONFIG_SENSOR_DISPLAY_ENABLED
     char* getDisplayValue() override;
     #endif // CONFIG_SENSOR_DISPLAY_ENABLED
@@ -676,231 +596,6 @@ class rSensorHT: public rSensorX2 {
     #if CONFIG_SENSOR_AS_JSON
     char* jsonCustomValues() override; 
     #endif // CONFIG_SENSOR_AS_JSON
-};
-
-class rSensorX3: public rSensor {
-  public:
-    rSensorX3(uint8_t eventId);
-    ~rSensorX3();
-
-    bool setFilterMode1(const sensor_filter_t filterMode, const uint16_t filterSize);
-    bool setFilterMode2(const sensor_filter_t filterMode, const uint16_t filterSize);
-    bool setFilterMode3(const sensor_filter_t filterMode, const uint16_t filterSize);
-
-    rSensorItem* getSensorItem1();
-    rSensorItem* getSensorItem2();
-    rSensorItem* getSensorItem3();
-    sensor_handle_t getHandle1();
-    sensor_handle_t getHandle2();
-    sensor_handle_t getHandle3();
-    sensor_data_t getValues1(const bool readSensor);
-    sensor_data_t getValues2(const bool readSensor);
-    sensor_data_t getValues3(const bool readSensor);
-    sensor_value_t getValue1(const bool readSensor);
-    sensor_value_t getValue2(const bool readSensor);
-    sensor_value_t getValue3(const bool readSensor);
-    sensor_extremums_t getExtremumsEntirely1(const bool readSensor);
-    sensor_extremums_t getExtremumsEntirely2(const bool readSensor);
-    sensor_extremums_t getExtremumsEntirely3(const bool readSensor);
-    sensor_extremums_t getExtremumsWeekly1(const bool readSensor);
-    sensor_extremums_t getExtremumsWeekly2(const bool readSensor);
-    sensor_extremums_t getExtremumsWeekly3(const bool readSensor);
-    sensor_extremums_t getExtremumsDaily1(const bool readSensor);
-    sensor_extremums_t getExtremumsDaily2(const bool readSensor);
-    sensor_extremums_t getExtremumsDaily3(const bool readSensor);
-
-    #if CONFIG_SENSOR_AS_JSON
-    char*  getJSON() override;
-    #endif // CONFIG_SENSOR_AS_JSON
-
-    // Reset extremums
-    void resetExtremumsEntirely() override;
-    void resetExtremumsWeekly() override;
-    void resetExtremumsDaily() override;
-    void resetExtremumsTotal() override;
-
-    // Store extremums
-    void nvsStoreExtremums(const char* nvs_space) override;
-    void nvsRestoreExtremums(const char* nvs_space) override;
-  protected:
-    rSensorItem *_item1;
-    rSensorItem *_item2;
-    rSensorItem *_item3;
-    void setSensorItems(rSensorItem* item1, rSensorItem* item2, rSensorItem* item3);
-    bool initSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1, 
-                         const sensor_filter_t filterMode2, const uint16_t filterSize2,
-                         const sensor_filter_t filterMode3, const uint16_t filterSize3);
-    virtual void createSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1,
-                                   const sensor_filter_t filterMode2, const uint16_t filterSize2,
-                                   const sensor_filter_t filterMode3, const uint16_t filterSize3) = 0;
-    sensor_status_t setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3);
-    #if CONFIG_SENSOR_DISPLAY_ENABLED
-    char* getDisplayValue() override;
-    #endif // CONFIG_SENSOR_DISPLAY_ENABLED
-    #if CONFIG_SENSOR_AS_PLAIN
-    bool publishItems() override;
-    #endif // CONFIG_SENSOR_AS_PLAIN
-};
-
-class rSensorX4: public rSensor {
-  public:
-    rSensorX4(uint8_t eventId);
-    ~rSensorX4();
-
-    bool setFilterMode1(const sensor_filter_t filterMode, const uint16_t filterSize);
-    bool setFilterMode2(const sensor_filter_t filterMode, const uint16_t filterSize);
-    bool setFilterMode3(const sensor_filter_t filterMode, const uint16_t filterSize);
-    bool setFilterMode4(const sensor_filter_t filterMode, const uint16_t filterSize);
-
-    rSensorItem* getSensorItem1();
-    rSensorItem* getSensorItem2();
-    rSensorItem* getSensorItem3();
-    rSensorItem* getSensorItem4();
-    sensor_handle_t getHandle1();
-    sensor_handle_t getHandle2();
-    sensor_handle_t getHandle3();
-    sensor_handle_t getHandle4();
-    sensor_data_t getValues1(const bool readSensor);
-    sensor_data_t getValues2(const bool readSensor);
-    sensor_data_t getValues3(const bool readSensor);
-    sensor_data_t getValues4(const bool readSensor);
-    sensor_value_t getValue1(const bool readSensor);
-    sensor_value_t getValue2(const bool readSensor);
-    sensor_value_t getValue3(const bool readSensor);
-    sensor_value_t getValue4(const bool readSensor);
-    sensor_extremums_t getExtremumsEntirely1(const bool readSensor);
-    sensor_extremums_t getExtremumsEntirely2(const bool readSensor);
-    sensor_extremums_t getExtremumsEntirely3(const bool readSensor);
-    sensor_extremums_t getExtremumsEntirely4(const bool readSensor);
-    sensor_extremums_t getExtremumsWeekly1(const bool readSensor);
-    sensor_extremums_t getExtremumsWeekly2(const bool readSensor);
-    sensor_extremums_t getExtremumsWeekly3(const bool readSensor);
-    sensor_extremums_t getExtremumsWeekly4(const bool readSensor);
-    sensor_extremums_t getExtremumsDaily1(const bool readSensor);
-    sensor_extremums_t getExtremumsDaily2(const bool readSensor);
-    sensor_extremums_t getExtremumsDaily3(const bool readSensor);
-    sensor_extremums_t getExtremumsDaily4(const bool readSensor);
-
-    #if CONFIG_SENSOR_AS_JSON
-    char*  getJSON() override;
-    #endif // CONFIG_SENSOR_AS_JSON
-
-    // Reset extremums
-    void resetExtremumsEntirely() override;
-    void resetExtremumsWeekly() override;
-    void resetExtremumsDaily() override;
-    void resetExtremumsTotal() override;
-
-    // Store extremums
-    void nvsStoreExtremums(const char* nvs_space) override;
-    void nvsRestoreExtremums(const char* nvs_space) override;
-  protected:
-    rSensorItem *_item1;
-    rSensorItem *_item2;
-    rSensorItem *_item3;
-    rSensorItem *_item4;
-    void setSensorItems(rSensorItem* item1, rSensorItem* item2, rSensorItem* item3, rSensorItem* item4);
-    bool initSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1, 
-                         const sensor_filter_t filterMode2, const uint16_t filterSize2,
-                         const sensor_filter_t filterMode3, const uint16_t filterSize3,
-                         const sensor_filter_t filterMode4, const uint16_t filterSize4);
-    virtual void createSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1,
-                                   const sensor_filter_t filterMode2, const uint16_t filterSize2,
-                                   const sensor_filter_t filterMode3, const uint16_t filterSize3,
-                                   const sensor_filter_t filterMode4, const uint16_t filterSize4) = 0;
-    sensor_status_t setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4);
-    #if CONFIG_SENSOR_DISPLAY_ENABLED
-    char* getDisplayValue() override;
-    #endif // CONFIG_SENSOR_DISPLAY_ENABLED
-    #if CONFIG_SENSOR_AS_PLAIN
-    bool publishItems() override;
-    #endif // CONFIG_SENSOR_AS_PLAIN
-};
-
-class rSensorX5: public rSensor {
-  public:
-    rSensorX5(uint8_t eventId);
-    ~rSensorX5();
-
-    bool setFilterMode1(const sensor_filter_t filterMode, const uint16_t filterSize);
-    bool setFilterMode2(const sensor_filter_t filterMode, const uint16_t filterSize);
-    bool setFilterMode3(const sensor_filter_t filterMode, const uint16_t filterSize);
-    bool setFilterMode4(const sensor_filter_t filterMode, const uint16_t filterSize);
-    bool setFilterMode5(const sensor_filter_t filterMode, const uint16_t filterSize);
-
-    rSensorItem* getSensorItem1();
-    rSensorItem* getSensorItem2();
-    rSensorItem* getSensorItem3();
-    rSensorItem* getSensorItem4();
-    rSensorItem* getSensorItem5();
-    sensor_handle_t getHandle1();
-    sensor_handle_t getHandle2();
-    sensor_handle_t getHandle3();
-    sensor_handle_t getHandle4();
-    sensor_handle_t getHandle5();
-    sensor_data_t getValues1(const bool readSensor);
-    sensor_data_t getValues2(const bool readSensor);
-    sensor_data_t getValues3(const bool readSensor);
-    sensor_data_t getValues4(const bool readSensor);
-    sensor_data_t getValues5(const bool readSensor);
-    sensor_value_t getValue1(const bool readSensor);
-    sensor_value_t getValue2(const bool readSensor);
-    sensor_value_t getValue3(const bool readSensor);
-    sensor_value_t getValue4(const bool readSensor);
-    sensor_value_t getValue5(const bool readSensor);
-    sensor_extremums_t getExtremumsEntirely1(const bool readSensor);
-    sensor_extremums_t getExtremumsEntirely2(const bool readSensor);
-    sensor_extremums_t getExtremumsEntirely3(const bool readSensor);
-    sensor_extremums_t getExtremumsEntirely4(const bool readSensor);
-    sensor_extremums_t getExtremumsEntirely5(const bool readSensor);
-    sensor_extremums_t getExtremumsWeekly1(const bool readSensor);
-    sensor_extremums_t getExtremumsWeekly2(const bool readSensor);
-    sensor_extremums_t getExtremumsWeekly3(const bool readSensor);
-    sensor_extremums_t getExtremumsWeekly4(const bool readSensor);
-    sensor_extremums_t getExtremumsWeekly5(const bool readSensor);
-    sensor_extremums_t getExtremumsDaily1(const bool readSensor);
-    sensor_extremums_t getExtremumsDaily2(const bool readSensor);
-    sensor_extremums_t getExtremumsDaily3(const bool readSensor);
-    sensor_extremums_t getExtremumsDaily4(const bool readSensor);
-    sensor_extremums_t getExtremumsDaily5(const bool readSensor);
-
-    #if CONFIG_SENSOR_AS_JSON
-    char*  getJSON() override;
-    #endif // CONFIG_SENSOR_AS_JSON
-
-    // Reset extremums
-    void resetExtremumsEntirely() override;
-    void resetExtremumsWeekly() override;
-    void resetExtremumsDaily() override;
-    void resetExtremumsTotal() override;
-
-    // Store extremums
-    void nvsStoreExtremums(const char* nvs_space) override;
-    void nvsRestoreExtremums(const char* nvs_space) override;
-  protected:
-    rSensorItem *_item1;
-    rSensorItem *_item2;
-    rSensorItem *_item3;
-    rSensorItem *_item4;
-    rSensorItem *_item5;
-    void setSensorItems(rSensorItem* item1, rSensorItem* item2, rSensorItem* item3, rSensorItem* item4, rSensorItem* item5);
-    bool initSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1, 
-                         const sensor_filter_t filterMode2, const uint16_t filterSize2,
-                         const sensor_filter_t filterMode3, const uint16_t filterSize3,
-                         const sensor_filter_t filterMode4, const uint16_t filterSize4,
-                         const sensor_filter_t filterMode5, const uint16_t filterSize5);
-    virtual void createSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1,
-                                   const sensor_filter_t filterMode2, const uint16_t filterSize2,
-                                   const sensor_filter_t filterMode3, const uint16_t filterSize3,
-                                   const sensor_filter_t filterMode4, const uint16_t filterSize4,
-                                   const sensor_filter_t filterMode5, const uint16_t filterSize5) = 0;
-    sensor_status_t setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4, const value_t newValue5);
-    #if CONFIG_SENSOR_DISPLAY_ENABLED
-    char* getDisplayValue() override;
-    #endif // CONFIG_SENSOR_DISPLAY_ENABLED
-    #if CONFIG_SENSOR_AS_PLAIN
-    bool publishItems() override;
-    #endif // CONFIG_SENSOR_AS_PLAIN
 };
 
 #ifdef __cplusplus

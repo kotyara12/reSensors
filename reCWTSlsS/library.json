@@ -1,8 +1,8 @@
 {
-  "name": "reSensor",
-  "version": "4.0.0",
-  "description": "Unified sensor base class used by sensor libraries",
-  "keywords": "sensors",
+  "name": "reCWTSlsS",
+  "version": "1.0.0",
+  "description": "Sensor driver CWT-SLS-S (connection via RS485 Modbus RTU) for ESP32-based devices running FreeRTOS",
+  "keywords": "CWT-SLS-S",
   "authors":
   [
     {

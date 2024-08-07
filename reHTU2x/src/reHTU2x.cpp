@@ -47,52 +47,22 @@
 static const char* logTAG = "HTU2x";
 static const char* HTU2X_TYPES [] = {"NULL", "SHT20", "HTU2x / SHT21", "Si7013", "Si7020", "Si7021", "Si7021 FAKE", "UNKNOWN"};
 
-HTU2x::HTU2x(uint8_t eventId):rSensorHT(eventId)
+HTU2x::HTU2x(uint8_t eventId,
+  const i2c_port_t numI2C, const HTU2X_RESOLUTION resolution, bool compensated_humidity,
+  const char* sensorName, const char* topicName, const bool topicLocal, 
+  const uint32_t minReadInterval, const uint16_t errorLimit,
+  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+:rSensorHT(eventId, 
+  sensorName, topicName, topicLocal, 
+  minReadInterval, errorLimit,
+  cb_status, cb_publish)
 {
-  _resolution = HTU2X_RES_RH12_TEMP14;
-  _compensated = false;
+  _I2C_num = numI2C;
+  _resolution = resolution;
+  _compensated = compensated_humidity;
   _heater = false;
   _deviceType = HTU2X_NULL;
   _serialB = 0;
-}
-
-// Dynamically creating internal items on the heap
-bool HTU2x::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,
-  const i2c_port_t numI2C, const HTU2X_RESOLUTION resolution, bool compensated_humidity,
-  const sensor_filter_t filterMode1, const uint16_t filterSize1, 
-  const sensor_filter_t filterMode2, const uint16_t filterSize2,
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
-{
-  _I2C_num = numI2C;
-  _resolution = resolution;
-  _compensated = compensated_humidity;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Initialize internal items
-  if (this->rSensorX2::initSensorItems(filterMode1, filterSize1, filterMode2, filterSize2)) {
-    // Start device
-    return sensorStart();
-  };
-  return false;
-}
-
-// Connecting external previously created items, for example statically declared
-bool HTU2x::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
-  const i2c_port_t numI2C, const HTU2X_RESOLUTION resolution, bool compensated_humidity,
-  rSensorItem* item1, rSensorItem* item2,
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
-{
-  _I2C_num = numI2C;
-  _resolution = resolution;
-  _compensated = compensated_humidity;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Assign items
-  this->rSensorX2::setSensorItems(item1, item2);
-  // Start device
-  return sensorStart();
 }
 
 // Start device
@@ -138,7 +108,7 @@ esp_err_t HTU2x::readU8(uint8_t command, const uint32_t usWaitData, uint8_t* val
 sensor_status_t HTU2x::softReset()
 {
   SENSOR_ERR_CHECK(sendCommand(HTU2X_SOFT_RESET), RSENSOR_LOG_MSG_RESET_FAILED);
-  rlog_i(logTAG, RSENSOR_LOG_MSG_RESET, _name);
+  rlog_i(logTAG, RSENSOR_LOG_MSG_RESET, getName());
   sys_delay_ms(HTU2X_SOFT_RESET_DELAY);
 	return SENSOR_STATUS_OK;
 }
@@ -148,7 +118,7 @@ sensor_status_t HTU2x::softReset()
  * */
 sensor_status_t HTU2x::setResolution(HTU2X_RESOLUTION sensorResolution)
 {
-  rlog_i(logTAG, RSENSOR_LOG_MSG_SET_RESOLUTION_HEADER, _name, sensorResolution);
+  rlog_i(logTAG, RSENSOR_LOG_MSG_SET_RESOLUTION_HEADER, getName(), sensorResolution);
   uint8_t data = 0;
   SENSOR_ERR_CHECK(readU8(HTU2X_USER_REGISTER_READ, 0, &data), RSENSOR_LOG_MSG_READ_RESOLUTION_FAILED);
   data &= 0x7E; // 01111110, clear D7;D0                            
@@ -175,10 +145,10 @@ sensor_status_t HTU2x::setHeater(const bool heaterMode)
   SENSOR_ERR_CHECK(sendU8(HTU2X_USER_REGISTER_WRITE, data), RSENSOR_LOG_MSG_HEATER_SET_FAILED);
   _heater = data & HTU2X_HEATER_ON;
   if (_heater == heaterMode) {
-    rlog_i(logTAG, RSENSOR_LOG_MSG_HEATER_STATE, _name, _heater ? RSENSOR_LOG_MSG_HEATER_ON : RSENSOR_LOG_MSG_HEATER_OFF);
+    rlog_i(logTAG, RSENSOR_LOG_MSG_HEATER_STATE, getName(), _heater ? RSENSOR_LOG_MSG_HEATER_ON : RSENSOR_LOG_MSG_HEATER_OFF);
     return SENSOR_STATUS_OK;
   } else {
-    rlog_i(logTAG, RSENSOR_LOG_MSG_HEATER_UNCONFIRMED, _name);
+    rlog_i(logTAG, RSENSOR_LOG_MSG_HEATER_UNCONFIRMED, getName());
     return SENSOR_STATUS_ERROR;
   };
 }
@@ -196,7 +166,7 @@ sensor_status_t HTU2x::setHeaterPower(const uint8_t heaterPower)
     readDeviceID();
   };
   if (_deviceType <= HTU2X_HTU2x) {
-    rlog_w(logTAG, RSENSOR_LOG_MSG_CMD_NOT_SUPPORTED, _name);
+    rlog_w(logTAG, RSENSOR_LOG_MSG_CMD_NOT_SUPPORTED, getName());
     return SENSOR_STATUS_NOT_SUPPORTED;
   };
   uint8_t data = 0;
@@ -204,7 +174,7 @@ sensor_status_t HTU2x::setHeaterPower(const uint8_t heaterPower)
   data &= 0xF0;  // 11110000, clear D3-D0
   data |= (heaterPower & 0x0F);
   SENSOR_ERR_CHECK(sendU8(HTU2X_HEATER_REGISTER_WRITE, data), RSENSOR_LOG_MSG_HEATER_SET_FAILED);
-  rlog_i(logTAG, "Sensor [%s]: built-in heater power is set to %d", _name, heaterPower & 0x0F);
+  rlog_i(logTAG, "Sensor [%s]: built-in heater power is set to %d", getName(), heaterPower & 0x0F);
 	return SENSOR_STATUS_OK;
 }
 
@@ -252,7 +222,7 @@ sensor_status_t HTU2x::readDeviceID(void)
   if ((CRC8(0x00, data[0], data[1]) != data[2]) || (CRC8(0x00, data[3], data[4]) != data[5])) {
     // For some reason, CRC8 returns incorrect on some instances. Probably fake sensors
     _crcIsBad = true;
-    rlog_w(logTAG, "Sensor [%s]: serial B CRC error: CRC8(0x%.2X, 0x%.2X) != 0x%.2X or CRC8(0x%.2X, 0x%.2X) != 0x%.2X!", _name, data[0], data[1], data[2], data[3], data[4], data[5]);
+    rlog_w(logTAG, "Sensor [%s]: serial B CRC error: CRC8(0x%.2X, 0x%.2X) != 0x%.2X or CRC8(0x%.2X, 0x%.2X) != 0x%.2X!", getName(), data[0], data[1], data[2], data[3], data[4], data[5]);
     // return SENSOR_STATUS_CRC_ERROR;
   };
   _serialB = (((((data[0] << 8) | data[1]) << 8) | data[3]) << 8) | data[4];
@@ -313,7 +283,7 @@ sensor_status_t HTU2x::readRawData()
 
   // It is pointless to take measurements while the heater is operating.
   if (_heater) {
-    rlog_w(logTAG, RSENSOR_LOG_MSG_HEATER_STATE, _name, RSENSOR_LOG_MSG_HEATER_ON);
+    rlog_w(logTAG, RSENSOR_LOG_MSG_HEATER_STATE, getName(), RSENSOR_LOG_MSG_HEATER_ON);
     return SENSOR_STATUS_NO_DATA;
   };
 

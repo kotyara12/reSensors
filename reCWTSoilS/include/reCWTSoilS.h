@@ -13,79 +13,43 @@
 #include <esp_err.h>
 #include <reSensor.h>
 
-typedef enum {
-  CWTS_H        = 0,  // H :: Humidity (moisture)
-  CWTS_PH       = 1,  // PH :: PH
-  CWTS_TH       = 2,  // T+H :: Temperature + Humidity (moisture)
-  CWTS_HC       = 3,  // H+C :: Humidity (moisture) + Conductivity
-  CWTS_CPH      = 4,  // C+PH :: Conductivity + PH
-  CWTS_THC      = 5,  // T+H+C :: Temperature + Humidity (moisture) + Conductivity
-  CWTS_THPH     = 6,  // T+H+PH :: Temperature + Humidity (moisture) + PH
-  CWTS_THCPH    = 7   // T+H+C+PH :: Temperature + Humidity (moisture) + Conductivity + PH
-} cwt_soil_type_t;
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-class reCWTSoilS : public rSensorX4 {
+class reCWTSoilS : public rSensor {
   public:
-    reCWTSoilS(uint8_t eventId);
+    reCWTSoilS(uint8_t eventId, 
+      void* modbus, const uint8_t address,
+      const char* sensorName, const char* topicName, const bool topicLocal, 
+      const uint32_t minReadInterval = 1000, const uint16_t errorLimit = 0,
+      cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
 
-    // Dynamically creating internal items on the heap
-    bool initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,  
-      // hardware properties
-      void* modbus, const uint8_t address, const cwt_soil_type_t type,
-      // temperature filter
-      const sensor_filter_t filterMode1 = SENSOR_FILTER_RAW, const uint16_t filterSize1 = 0,
-      // moisture filter
-      const sensor_filter_t filterMode2 = SENSOR_FILTER_RAW, const uint16_t filterSize2 = 0, 
-      // conductivity filter
-      const sensor_filter_t filterMode3 = SENSOR_FILTER_RAW, const uint16_t filterSize3 = 0, 
-      // PH filter
-      const sensor_filter_t filterMode4 = SENSOR_FILTER_RAW, const uint16_t filterSize4 = 0, 
-      // limits
-      const uint32_t minReadInterval = 1000, const uint16_t errorLimit = 0,
-      // callbacks
-      cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
-    
-    // Connecting external previously created items, for example statically declared
-    bool initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
-      // hardware properties
-      void* modbus, const uint8_t address, const cwt_soil_type_t type,
-      // temperature item
-      rSensorItem* item1, 
-      // moisture item
-      rSensorItem* item2,
-      // conductivity item
-      rSensorItem* item3,
-      // PH item
-      rSensorItem* item4,
-      // limits
-      const uint32_t minReadInterval = 1000, const uint16_t errorLimit = 0,
-      // callbacks
-      cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
+    void setSensorItems(rSensorItem* itemHumidity, rSensorItem* itemTemperature, 
+      rSensorItem* itemConductivity, rSensorItem* itemPH,
+      rSensorItem* itemNitrogenContent, rSensorItem* itemPhosphorusContent, rSensorItem* itemPotassiumContent,
+      rSensorItem* itemSalinity, rSensorItem* itemTDS);
 
     sensor_status_t sensorReset() override;
+
+    sensor_value_t getHumidity(const bool readSensor);
+    sensor_value_t getTemperature(const bool readSensor);
+    sensor_value_t getConductivity(const bool readSensor);
+    sensor_value_t getPH(const bool readSensor);
+    sensor_value_t getNitrogenContent(const bool readSensor);
+    sensor_value_t getPhosphorusContent(const bool readSensor);
+    sensor_value_t getPotassiumContent(const bool readSensor);
+    sensor_value_t getSalinity(const bool readSensor);
+    sensor_value_t getTDS(const bool readSensor);
   protected:
-    void createSensorItems(
-      // temperature filter
-      const sensor_filter_t filterMode1 = SENSOR_FILTER_RAW, const uint16_t filterSize1 = 0,
-      // moisture filter
-      const sensor_filter_t filterMode2 = SENSOR_FILTER_RAW, const uint16_t filterSize2 = 0, 
-      // conductivity filter
-      const sensor_filter_t filterMode3 = SENSOR_FILTER_RAW, const uint16_t filterSize3 = 0, 
-      // PH filter
-      const sensor_filter_t filterMode4 = SENSOR_FILTER_RAW, const uint16_t filterSize4 = 0) override;
-    void registerItemsParameters(paramsGroupHandle_t parent_group) override;
+    sensor_status_t readRawData() override;  
+
     #if CONFIG_SENSOR_DISPLAY_ENABLED
     char* getDisplayValue() override;
     #endif // CONFIG_SENSOR_DISPLAY_ENABLED
-    sensor_status_t readRawData() override;  
   private:
     void*           _modbus = nullptr;
     uint8_t         _address = 1;
-    cwt_soil_type_t _type = CWTS_H;
     
     esp_err_t readModbusRegister(uint8_t cmd, uint16_t reg, int16_t* value);
 };

@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <esp_err.h>
 #include <reSensor.h>
+#include "driver/i2c.h"
 #include "bmp280/bmp280.h"
 #include "bmp280/bmp280_defs.h"
 
@@ -58,40 +59,16 @@ typedef enum {
   BMP280_FLT_16     = BMP280_FILTER_COEFF_16      // Filter coefficient of 16
 } BMP280_IIR_FILTER;
 
-class BMP280 : public rSensorX2 {
+class BMP280 : public rSensor {
   public:
-    BMP280(uint8_t eventId);
-    ~BMP280();
-
-    // Dynamically creating internal items on the heap
-    bool initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,  
-      // hardware properties
-      const int numI2C, const uint8_t addrI2C, 
+    BMP280(uint8_t eventId,
+      const i2c_port_t numI2C, const uint8_t addrI2C, 
       BMP280_MODE mode = BMP280_MODE_FORCED, BMP280_STANDBYTIME odr = BMP280_STANDBY_1000ms, BMP280_IIR_FILTER filter = BMP280_FLT_NONE,
       BMP280_OVERSAMPLING osPress = BMP280_OSM_X1, BMP280_OVERSAMPLING osTemp = BMP280_OSM_X1,
-      // pressure filter
-      sensor_filter_t filterMode1 = SENSOR_FILTER_RAW, uint16_t filterSize1 = 0, 
-      // temperature filter
-      sensor_filter_t filterMode2 = SENSOR_FILTER_RAW, uint16_t filterSize2 = 0,
-      // limits
+      const char* sensorName = nullptr, const char* topicName = nullptr, const bool topicLocal = false, 
       const uint32_t minReadInterval = 1000, const uint16_t errorLimit = 0,
-      // callbacks
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
-    
-    // Connecting external previously created items, for example statically declared
-    bool initExtItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-      // hardware properties
-      const int numI2C, const uint8_t addrI2C, 
-      BMP280_MODE mode = BMP280_MODE_FORCED, BMP280_STANDBYTIME odr = BMP280_STANDBY_1000ms, BMP280_IIR_FILTER filter = BMP280_FLT_NONE,
-      BMP280_OVERSAMPLING osPress = BMP280_OSM_X1, BMP280_OVERSAMPLING osTemp = BMP280_OSM_X1,
-      // pressure filter
-      rSensorItem* item1 = nullptr, 
-      // temperature filter
-      rSensorItem* item2 = nullptr,
-      // limits
-      const uint32_t minReadInterval = 1000, const uint16_t errorLimit = 0,
-      // callbacks
-      cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
+    void setSensorItems(rSensorItem* itemPressure, rSensorItem* itemTemperature);
 
     // Reset hardware
     sensor_status_t sensorReset() override;
@@ -102,19 +79,17 @@ class BMP280 : public rSensorX2 {
     bool setOversampling(BMP280_OVERSAMPLING osPress = BMP280_OSM_X1, BMP280_OVERSAMPLING osTemp = BMP280_OSM_X1);
     bool setIIRFilterSize(BMP280_IIR_FILTER filter);
     bool setODR(BMP280_STANDBYTIME odr);
+
+    // Get values
+    sensor_value_t getPressure(const bool readSensor);
+    sensor_value_t getTemperature(const bool readSensor);
   protected:
-    void createSensorItems(
-      // pressure value
-      const sensor_filter_t filterMode1, const uint16_t filterSize1, 
-      // temperature value
-      const sensor_filter_t filterMode2, const uint16_t filterSize2) override;
-    void registerItemsParameters(paramsGroupHandle_t parent_group) override;
     sensor_status_t readRawData() override;  
     #if CONFIG_SENSOR_DISPLAY_ENABLED
     char* getDisplayValue() override;
     #endif // CONFIG_SENSOR_DISPLAY_ENABLED
   private:
-    int                      _I2C_num;
+    i2c_port_t               _I2C_num;
     uint8_t                  _I2C_address;
     uint8_t                  _meas_wait;
     struct bmp280_dev        _dev;
@@ -125,6 +100,7 @@ class BMP280 : public rSensorX2 {
     sensor_status_t checkApiCode(const char* api_name, int8_t rslt);
     sensor_status_t sendConfiguration();
     sensor_status_t sendPowerMode(BMP280_MODE mode);
+    sensor_status_t setRawValues(const value_t newPressure, const value_t newTemperature);
 };
 
 #endif // __RE_BMP280_H__

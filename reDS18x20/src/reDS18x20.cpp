@@ -36,100 +36,53 @@ static bool _check_resolution(DS18x20_RESOLUTION resolution)
   return (resolution >= DS18x20_RESOLUTION_9_BIT) && (resolution <= DS18x20_RESOLUTION_12_BIT);
 }
 
-DS18x20::DS18x20(uint8_t eventId):rSensorX1(eventId)
+DS18x20::DS18x20(uint8_t eventId, 
+  gpio_num_t pin, onewire_addr_t address, int8_t index, DS18x20_RESOLUTION resolution, bool saveScratchPad,
+  const char* sensorName, const char* topicName, const bool topicLocal, 
+  const uint32_t minReadInterval, const uint16_t errorLimit,
+  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+:rSensor(eventId, 1,
+  sensorName, topicName, topicLocal, 
+  minReadInterval, errorLimit,
+  cb_status, cb_publish)
 {
-  _pin = GPIO_NUM_NC;
-  _address = ONEWIRE_NONE;
+  _pin = pin;
+  _index = index;
+  _address = address;
+  _resolution = resolution;
+  _saveScratchPad = saveScratchPad;
   _model = MODEL_UNKNOWN;
-  _saveScratchPad = true;
   _parasitePower = false;
 }
 
-void DS18x20::createSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize)
+void DS18x20::setSensorItems(rSensorItem* itemTemperature)
 {
-  // Temperature
-  _item = new rTemperatureItem(this, CONFIG_SENSOR_TEMP_NAME, (unit_temperature_t)CONFIG_FORMAT_TEMP_UNIT,
-    filterMode, filterSize,
-    CONFIG_FORMAT_TEMP_VALUE, CONFIG_FORMAT_TEMP_STRING
-    #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-    , CONFIG_FORMAT_TIMESTAMP_L
-    #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-    #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-    , CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
-    #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-  );
-  if (_item) {
-    rlog_d(getName(), RSENSOR_LOG_MSG_CREATE_ITEM, _item->getName(), getName());
-  };
+  setSensorItem(0, itemTemperature);
 }
 
-void DS18x20::registerItemsParameters(paramsGroupHandle_t parent_group)
+sensor_status_t DS18x20::sensorBusReset()
 {
-  if (_item) {
-    _item->registerParameters(parent_group, CONFIG_SENSOR_TEMP_KEY, CONFIG_SENSOR_TEMP_NAME, CONFIG_SENSOR_TEMP_FRIENDLY);
-  };
-}
+  // Start bus
+  SENSOR_ERR_CHECK(gpio_reset_pin(_pin), "Failed to reset 1-Wire bus: reset GPIO!");
+  SENSOR_ERR_CHECK(gpio_set_direction(_pin, GPIO_MODE_INPUT_OUTPUT_OD), "Failed to reset 1-Wire bus: set GPIO direction!");
 
-// Dynamically creating internal items on the heap
-bool DS18x20::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,  
-  gpio_num_t pin, onewire_addr_t address, int8_t index, DS18x20_RESOLUTION resolution, bool saveScratchPad,
-  const sensor_filter_t filterMode, const uint16_t filterSize,
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
-{
-  _pin = pin;
-  _address = address;
-  _resolution = resolution;
-  _saveScratchPad = saveScratchPad;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Initialize internal items
-  if (this->rSensorX1::initSensorItems(filterMode, filterSize)) {
-    // Start device
-    if (onewire_reset(_pin)) {
-      if (_address == ONEWIRE_NONE) {
-        return scanDevices(index) && sensorStart();
-      } else {
-        return sensorStart();
-      };
-    } else {
-      rlog_e(logTAG, "Failed to reset 1-Wire bus");
-    };
-  };
-  return false;
-}
-
-// Connecting external previously created items, for example statically declared
-bool DS18x20::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
-  gpio_num_t pin, onewire_addr_t address, int8_t index, DS18x20_RESOLUTION resolution, bool saveScratchPad,
-  rSensorItem* item,
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
-{
-  _pin = pin;
-  _address = address;
-  _resolution = resolution;
-  _saveScratchPad = saveScratchPad;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Assign items
-  this->rSensorX1::setSensorItems(item);
-  // Start device
-  if (onewire_reset(_pin)) {
-    if (_address == ONEWIRE_NONE) {
-      return scanDevices(index) && sensorStart();
-    } else {
-      _model = (DS18x20_MODEL)_address;
-      return sensorStart();
-    };
+  // Found device
+  bool ret = false;
+  if (_address == ONEWIRE_NONE) {
+    ret = scanDevices();
   } else {
-    rlog_e(logTAG, "Failed to reset 1-Wire bus");
+    ret = addressSelect();
   };
-  return false;
+  if (ret) {
+    return SENSOR_STATUS_OK;
+  };
+  rlog_e(logTAG, "Failed to reset 1-Wire bus: device not found!");
+  return SENSOR_STATUS_ERROR;
 }
 
 sensor_status_t DS18x20::sensorReset()
 {
+  // Start device
   sensor_status_t rslt = readPowerSupply();
   if (rslt == SENSOR_STATUS_OK) {
     readROM(nullptr);
@@ -153,7 +106,7 @@ sensor_status_t DS18x20::readRawData()
         float value = NAN;
         rslt = readTemperature(&value);
         if (rslt == SENSOR_STATUS_OK) {
-          rslt = setRawValues(value);
+          rslt = setRawValue(0, value);
         };
       };
     };
@@ -231,36 +184,41 @@ bool DS18x20::readROM(uint64_t *rom_code)
   return false;
 }
 
-bool DS18x20::scanDevices(uint8_t index)
+bool DS18x20::scanDevices()
 {
+  rlog_i(logTAG, "Search devices...");
+
   uint16_t devicesCount = 0;
   uint16_t ds18Count = 0;
-
   _model = MODEL_UNKNOWN;
   _address = ONEWIRE_NONE;
 
-  rlog_i(logTAG, "Search devices...");
-  onewire_search_t search;
-  onewire_search_start(&search);
-  onewire_addr_t address = ONEWIRE_NONE;
-  while ((address = onewire_search_next(&search, _pin)) != ONEWIRE_NONE) {
-    devicesCount++;
-    if (validAddress((uint8_t*)&address) && validFamily((uint8_t)address)) {
-      ds18Count++;
-      char addr[17] = {0};
-      _ui64toa(address, &addr[0], 16);
-      rlog_i(logTAG, "Found device #%d : %s", ds18Count, addr);
-      if ((index == ds18Count) || ((index == 0) && (ds18Count == 1))) {
-        _model = (DS18x20_MODEL)address;
-        _address = address;
+  if (onewire_reset(_pin)) {
+    onewire_search_t search;
+    onewire_search_start(&search);
+    onewire_addr_t scan_address = ONEWIRE_NONE;
+    while ((scan_address = onewire_search_next(&search, _pin)) != ONEWIRE_NONE) {
+      devicesCount++;
+      if (validAddress((uint8_t*)&scan_address) && validFamily((uint8_t)scan_address)) {
+        ds18Count++;
+        char addr[17] = {0};
+        _ui64toa(scan_address, &addr[0], 16);
+        rlog_i(logTAG, "Found device #%d : %s", ds18Count, addr);
+        if ((_index == ds18Count) || ((_index == 0) && (ds18Count == 1))) {
+          _model = (DS18x20_MODEL)scan_address;
+          _address = scan_address;
+        };
       };
     };
+    if (devicesCount == 1) {
+      _address = ONEWIRE_NONE;
+    };
+    rlog_i(logTAG, "Found %d device%s", ds18Count, ds18Count == 1 ? "" : "s");    
+    return (ds18Count > 0) && validFamily((uint8_t)_model);
+  } else {
+    rlog_e(logTAG, "Sensor [%s]: failed to reset 1-Wire bus on GPIO %d", getName(), _pin);
+    return false;
   };
-  if (devicesCount == 1) {
-    _address = ONEWIRE_NONE;
-  };
-  rlog_i(logTAG, "Found %d device%s", ds18Count, ds18Count == 1 ? "" : "s");    
-  return (ds18Count > 0) && validFamily((uint8_t)_model);
 }
 
 #if CONFIG_SENSOR_AS_JSON
@@ -551,4 +509,9 @@ sensor_status_t DS18x20::readTemperature(float * value)
     };
   };
   return SENSOR_STATUS_CONN_ERROR;
+}
+
+sensor_value_t DS18x20::getTemperature(const bool readSensor)
+{
+  return getItemValue(0, readSensor);
 }

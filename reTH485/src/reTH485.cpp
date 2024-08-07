@@ -7,53 +7,21 @@
 
 static const char* logTAG = "TH485";
 
-reTH485::reTH485(uint8_t eventId):rSensorHT(eventId)
-{
-  _modbus = nullptr;
-  _address = 1;
-}
-
-// Dynamically creating internal items on the heap
-bool reTH485::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,
+reTH485::reTH485(uint8_t eventId, 
   void* modbus, const uint8_t address, const uint8_t read_cmd, const uint16_t reg_temp, const uint16_t reg_humd,
-  const sensor_filter_t filterMode1, const uint16_t filterSize1, 
-  const sensor_filter_t filterMode2, const uint16_t filterSize2,
+  const char* sensorName, const char* topicName, const bool topicLocal, 
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+:rSensorHT(eventId, 
+  sensorName, topicName, topicLocal, 
+  minReadInterval, errorLimit,
+  cb_status, cb_publish)
 {
   _modbus = modbus;
   _address = address;
   _command = read_cmd;
   _reg_temp = reg_temp;
   _reg_humd = reg_humd;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Initialize internal items
-  if (this->rSensorX2::initSensorItems(filterMode1, filterSize1, filterMode2, filterSize2)) {
-    // Start device
-    return sensorStart();
-  };
-  return false;
-}
-
-// Connecting external previously created items, for example statically declared
-bool reTH485::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
-  void* modbus, const uint8_t address, const uint8_t read_cmd, const uint16_t reg_temp, const uint16_t reg_humd,
-  rSensorItem* item1, rSensorItem* item2,
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
-{
-  _modbus = modbus;
-  _address = address;
-  _command = read_cmd;
-  _reg_temp = reg_temp;
-  _reg_humd = reg_humd;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Assign items
-  this->rSensorX2::setSensorItems(item1, item2);
-  // Start device
-  return sensorStart();
 }
 
 // Start device

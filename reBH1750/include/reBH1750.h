@@ -42,41 +42,23 @@ typedef enum {
 extern "C" {
 #endif
 
-class BH1750 : public rSensorX1 {
+class BH1750 : public rSensor {
   public:
-    BH1750(uint8_t eventId);
-    
-    // Dynamically creating internal items on the heap
-    bool initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,  
-      // hardware properties
-      const i2c_port_t numI2C, const uint8_t addrI2C, const bh1750_mode_t mode = BH1750_MODE_ONE_TIME, const bh1750_resolution_t resolution = BH1750_RES_HIGH,
-      // illumination filter
-      const sensor_filter_t filterMode = SENSOR_FILTER_RAW, const uint16_t filterSize = 0,
-      // limits
-      const uint32_t minReadInterval = 100, const uint16_t errorLimit = 0,
-      // callbacks
+    BH1750(uint8_t eventId, 
+      const i2c_port_t numI2C, const uint8_t addrI2C, const bh1750_mode_t mode, const bh1750_resolution_t resolution,
+      const char* sensorName, const char* topicName, const bool topicLocal, 
+      const uint32_t minReadInterval = 1000, const uint16_t errorLimit = 0,
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
-    
-    // Connecting external previously created items, for example statically declared
-    bool initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
-      // hardware properties
-      const i2c_port_t numI2C, const uint8_t addrI2C, const bh1750_mode_t mode = BH1750_MODE_ONE_TIME, const bh1750_resolution_t resolution = BH1750_RES_HIGH,
-      // illumination filter
-      rSensorItem* item = nullptr,
-      // limits
-      const uint32_t minReadInterval = 100, const uint16_t errorLimit = 0,
-      // callbacks
-      cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
+    void setSensorItems(rSensorItem* itemIllumination);
     
     sensor_status_t sensorReset() override;
-
     esp_err_t powerOn();
     esp_err_t powerOff();
     esp_err_t setup(bh1750_mode_t mode, bh1750_resolution_t resolution);
     esp_err_t setMeasurementTime(uint8_t time);
+
+    sensor_value_t getIllumination(const bool readSensor);
   protected:
-    void createSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize) override;
-    void registerItemsParameters(paramsGroupHandle_t parent_group) override;
     sensor_status_t readRawData() override;
   private:
     i2c_port_t               _I2C_num;

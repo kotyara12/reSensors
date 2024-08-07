@@ -17,36 +17,18 @@
 extern "C" {
 #endif
 
-class reQDY30A : public rSensorX1 {
+class reQDY30A : public rSensor {
   public:
-    reQDY30A(uint8_t eventId);
-
-    // Dynamically creating internal items on the heap
-    bool initIntItems(const char* sensorName, const char* topicName, const bool topicLocal,  
-      // hardware properties
+    reQDY30A(uint8_t eventId, 
       void* modbus, const uint8_t address,
-      // level filter
-      const sensor_filter_t filterMode = SENSOR_FILTER_RAW, const uint16_t filterSize = 0,
-      // limits
+      const char* sensorName, const char* topicName, const bool topicLocal, 
       const uint32_t minReadInterval = 1000, const uint16_t errorLimit = 0,
-      // callbacks
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
-    
-    // Connecting external previously created items, for example statically declared
-    bool initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
-      // hardware properties
-      void* modbus, const uint8_t address, 
-      // level item
-      rSensorItem* item, 
-      // limits
-      const uint32_t minReadInterval = 1000, const uint16_t errorLimit = 0,
-      // callbacks
-      cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
-
+    void setSensorItems(rSensorItem* itemLevel);
     sensor_status_t sensorReset() override;
+    
+    sensor_value_t getLevel(const bool readSensor);
   protected:
-    void createSensorItems(const sensor_filter_t filterMode = SENSOR_FILTER_RAW, const uint16_t filterSize = 0);
-    void registerItemsParameters(paramsGroupHandle_t parent_group) override;
     sensor_status_t readRawData() override;  
   private:
     void*            _modbus = nullptr;

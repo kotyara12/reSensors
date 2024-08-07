@@ -61,27 +61,16 @@ void rSensorFilterHandler::onChange(param_change_mode_t mode)
 // =======================================================================================================================
 
 // Constructor
-rSensorItem::rSensorItem(rSensor *sensor, const char* itemName,
+rSensorItem::rSensorItem(rSensor *sensor, const char* itemKey, const char* itemName, const char* itemFriendly,
   const sensor_filter_t filterMode, const uint16_t filterSize,
-  const char* formatNumeric, const char* formatString 
-  #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-  , const char* formatTimestamp
-  #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-  #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-  , const char* formatTimestampValue, const char* formatStringTimeValue
-  #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-) {
+  const char* formatNumeric, const char* formatString) 
+{
   _owner = sensor;
-  _name = itemName;
+  _itemKey = itemKey;
+  _itemName = itemName;
+  _itemFriendly = itemFriendly;
   _fmtNumeric = formatNumeric;
   _fmtString = formatString;
-  #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-  _fmtTimestamp = formatTimestamp;
-  #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-  #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-  _fmtTimestampValue = formatTimestampValue;
-  _fmtStringTimeValue = formatStringTimeValue;
-  #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
   _pgItem = nullptr;
   _offsetValue = 0.0;
   _deltaMax = 0.0;
@@ -118,6 +107,8 @@ void rSensorItem::setOwner(rSensor *sensor)
 
 bool rSensorItem::setFilterMode(const sensor_filter_t filterMode, const uint16_t filterSize)
 {
+  bool ret = true;
+
   if ((filterMode != _filterMode) || (_filterSize != filterSize)) {
     // Setting new values
     _filterSize = filterSize;
@@ -127,14 +118,14 @@ bool rSensorItem::setFilterMode(const sensor_filter_t filterMode, const uint16_t
     _filterBuf = nullptr;
 
     // Allocating memory for an array of filter values
-    return doChangeFilterMode();
+    ret = doChangeFilterMode();
 
     // Publish new values
-    if (_prm_filterMode) paramsValueStore(_prm_filterMode, false);
-    if (_prm_filterSize) paramsValueStore(_prm_filterSize, false);
+    if (ret && _prm_filterMode) paramsValueStore(_prm_filterMode, false);
+    if (ret && _prm_filterSize) paramsValueStore(_prm_filterSize, false);
   };
 
-  return true;
+  return ret;
 }
 
 bool rSensorItem::doChangeFilterMode()
@@ -151,17 +142,17 @@ bool rSensorItem::doChangeFilterMode()
     if (_filterBuf == nullptr) {
       _filterSize = 0;
       if (_owner) {
-        rlog_e(_owner->getName(), "Failed change data filtering mode for %s: mode=%d, size=%d!", _name, _filterMode, _filterSize);
+        rlog_e(_owner->getName(), "Failed change data filtering mode for %s: mode=%d, size=%d!", _owner->getName(), _filterMode, _filterSize);
       } else {
-        rlog_e(_name, "Failed change data filtering mode for %s: mode=%d, size=%d!", _name, _filterMode, _filterSize);
+        rlog_e(this->getName(), "Failed change data filtering mode for %s: mode=%d, size=%d!", this->getName(), _filterMode, _filterSize);
       };
       return false;
     };
   };
   if (_owner) {
-    rlog_i(_owner->getName(), "Changing data filtering mode for %s: mode=%d, size=%d", _name, _filterMode, _filterSize);
+    rlog_i(_owner->getName(), "Changing data filtering mode for %s: mode=%d, size=%d", _owner->getName(), _filterMode, _filterSize);
   } else {
-    rlog_i(_name, "Changing data filtering mode for %s: mode=%d, size=%d", _name, _filterMode, _filterSize);
+    rlog_i(this->getName(), "Changing data filtering mode for %s: mode=%d, size=%d", this->getName(), _filterMode, _filterSize);
   };
   return true;
 }
@@ -291,14 +282,29 @@ void rSensorItem::setRawAndConvertedValue(const value_t rawValue, const value_t 
   };
 }
 
-void rSensorItem::setRawValue(const value_t rawValue, const time_t rawTime)
+sensor_status_t rSensorItem::setRawValue(const value_t rawValue, const time_t rawTime)
 {
-  setRawAndConvertedValue(rawValue, convertOffsetValue(rawValue), rawTime);
+  value_t cnvValue = convertOffsetValue(rawValue);
+  sensor_status_t ret = checkValue(cnvValue);
+  if (ret == SENSOR_STATUS_OK) {
+    setRawAndConvertedValue(rawValue, (value_t)cnvValue, rawTime);
+  };
+  return ret;
+}
+
+const char* rSensorItem::getKey()
+{
+  return _itemKey;
 }
 
 const char* rSensorItem::getName()
 {
-  return _name;
+  return _itemName;
+}
+
+const char* rSensorItem::getFriendly()
+{
+  return _itemFriendly;
 }
 
 sensor_handle_t rSensorItem::getHandle()
@@ -385,12 +391,11 @@ void rSensorItem::resetExtremumsTotal()
 // --------------------------------------------- Register internal parameters --------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
 
-void rSensorItem::registerParameters(paramsGroupHandle_t parent_group, const char * key_name, const char * topic_name, const char * friendly_name)
+void rSensorItem::registerParameters(paramsGroupHandle_t parent_group)
 {
-  if ((key_name) && (topic_name) && (friendly_name)) {
+  if ((_itemKey) && (_itemName) && (_itemFriendly)) {
     if (!_pgItem) {
-      _pgItem = paramsRegisterGroup(parent_group,
-       key_name, topic_name, friendly_name);
+      _pgItem = paramsRegisterGroup(parent_group, _itemKey, _itemName, _itemFriendly);
     };
 
     if (_pgItem) {
@@ -513,7 +518,7 @@ bool rSensorItem::publishTimestamp(const char* topic, sensor_value_t *data)
     char* _topicValue = mqttGetSubTopic(topic, CONFIG_SENSOR_TIMESTAMP);
     if (_topicValue != nullptr) {
       char _time[CONFIG_FORMAT_STRFTIME_BUFFER_SIZE]};
-      time2str_empty(_fmtTimestamp, &(data->timestamp), &_time[0], sizeof(_time));
+      time2str_empty(CONFIG_FORMAT_TIMESTAMP_L, &(data->timestamp), &_time[0], sizeof(_time));
       ret = _owner->publish(_topicValue, _time, false);
       free(_topicValue);
     };
@@ -528,7 +533,7 @@ bool rSensorItem::publishTimestamp(const char* topic, sensor_value_t *data)
 char* rSensorItem::jsonTimestamp(sensor_value_t *data)
 {
   char _time[CONFIG_FORMAT_STRFTIME_BUFFER_SIZE];
-  time2str_empty(_fmtTimestamp, &(data->timestamp), &_time[0], sizeof(_time));
+  time2str_empty(CONFIG_FORMAT_TIMESTAMP_L, &(data->timestamp), &_time[0], sizeof(_time));
   return malloc_stringf("\"%s\":\"%s\"", CONFIG_SENSOR_TIMESTAMP, _time);
 }
 
@@ -551,12 +556,17 @@ char* rSensorItem::asStringTimeValue(sensor_value_t *data)
     char* _string = asString(_fmtString, data->filteredValue, false);
     if (_string != nullptr) {
       char _time[CONFIG_FORMAT_STRFTIME_BUFFER_SIZE];
-      time2str_empty(_fmtTimestampValue, &(data->timestamp), &_time[0], sizeof(_time));
-      ret = malloc_stringf(_fmtStringTimeValue, _string, _time);
+      time2str_empty(CONFIG_FORMAT_TIMESTAMP_S, &(data->timestamp), &_time[0], sizeof(_time));
+      ret = malloc_stringf(CONFIG_FORMAT_TSVALUE, _string, _time);
     };
     if (_string != nullptr) free(_string);
   };
   return ret;
+}
+
+char* rSensorItem::getStringTimeValue()
+{
+  return asStringTimeValue(&(_data.lastValue));
 }
 
 #if CONFIG_SENSOR_AS_PLAIN
@@ -674,12 +684,10 @@ bool rSensorItem::publishPartSensorValue(const char* topic, const char* type, se
   if (_topicData) {
     ret = publishValue(_topicData, data);
     #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-      if (ret) 
-        ret = publishTimestamp(_topicData, data);
+      if (ret) ret = publishTimestamp(_topicData, data);
     #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
     #if CONFIG_SENSOR_TIMESTRING_ENABLE
-      if (ret) 
-        ret = publishStringTimeValue(_topicData, data);
+      if (ret) ret = publishStringTimeValue(_topicData, data);
     #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
     free(_topicData);
   };
@@ -704,7 +712,7 @@ char* rSensorItem::jsonPartSensorValue(const char* type, sensor_value_t *data)
     #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
     if (_json_ext == nullptr) {
       // "type":{...}
-      ret = malloc_stringf("\"%s\":%s", type, _json_value);
+      ret = malloc_stringf("\"%s\":{%s}", type, _json_value);
     } else {
       // "{"type":{...},"time":"12:45:38 01.02.2021","tsv":"0.00°С 12:45 01.02"}
       ret = malloc_stringf("\"%s\":{%s,%s}", type, _json_value, _json_ext);
@@ -865,7 +873,7 @@ char* rSensorItem::jsonNamedValues()
   char* ret = nullptr;
   char* _values = jsonValues();
   if (_values) {
-    ret = malloc_stringf("\"%s\":%s", _name, _values);
+    ret = malloc_stringf("\"%s\":%s", _itemName, _values);
     free(_values);
   };
   return ret;
@@ -1022,24 +1030,13 @@ void rSensorItem::nvsRestoreExtremums(const char* nvs_space)
 // =======================================================================================================================
 
 // Constructor
-rTemperatureItem::rTemperatureItem(rSensor *sensor, const char* itemName, const unit_temperature_t unitValue,
+rTemperatureItem::rTemperatureItem(rSensor *sensor, const char* itemKey, const char* itemName, const char* itemFriendly,
+  const unit_temperature_t unitValue,
   const sensor_filter_t filterMode, const uint16_t filterSize,
-  const char* formatNumeric, const char* formatString 
-  #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-  , const char* formatTimestamp
-  #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-  #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-  , const char* formatTimestampValue, const char* formatStringTimeValue
-  #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
+  const char* formatNumeric, const char* formatString)
 // inherited constructor
-):rSensorItem(sensor, itemName, filterMode, filterSize, formatNumeric, formatString
-  #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-  , formatTimestamp
-  #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-  #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-  , formatTimestampValue, formatStringTimeValue
-  #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-) {
+:rSensorItem(sensor, itemKey, itemName, itemFriendly, filterMode, filterSize, formatNumeric, formatString) 
+{
   _units = unitValue; 
   _forcedRawPublish = true;
 };
@@ -1062,28 +1059,17 @@ value_t rTemperatureItem::convertValue(const value_t rawValue)
 // =======================================================================================================================
 
 // Constructor
-rPressureItem::rPressureItem(rSensor *sensor, const char* itemName, const unit_pressure_t unitValue,
+rPressureItem::rPressureItem(rSensor *sensor, const char* itemKey, const char* itemName, const char* itemFriendly,
+  const unit_pressure_t unitValue,
   const sensor_filter_t filterMode, const uint16_t filterSize,
-  const char* formatNumeric, const char* formatString 
-  #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-  , const char* formatTimestamp
-  #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-  #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-  , const char* formatTimestampValue, const char* formatStringTimeValue
-  #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
+  const char* formatNumeric, const char* formatString) 
 // inherited constructor
-):rSensorItem(sensor, itemName, filterMode, filterSize, formatNumeric, formatString
-  #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-  , formatTimestamp
-  #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-  #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-  , formatTimestampValue, formatStringTimeValue
-  #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-) {
+:rSensorItem(sensor, itemKey, itemName, itemFriendly, filterMode, filterSize, formatNumeric, formatString) 
+{
   _units = unitValue;
   _forcedRawPublish = true; 
   // Set default valid range: ~700 - 800 mmhg
-  setValidRange(90000, 110000); 
+  // setValidRange(90000, 110000); 
 };
 
 value_t rPressureItem::convertValue(const value_t rawValue)
@@ -1101,31 +1087,48 @@ value_t rPressureItem::convertValue(const value_t rawValue)
 
 // =======================================================================================================================
 // =======================================================================================================================
+// ==================================================== rVirtualItem =====================================================
+// =======================================================================================================================
+// =======================================================================================================================
+
+rVirtualItem::rVirtualItem(rSensor *sensor, const char* itemKey, const char* itemName, const char* itemFriendly,
+  const double coefficient,
+  const sensor_filter_t filterMode, const uint16_t filterSize,
+  const char* formatNumeric, const char* formatString)
+// inherited constructor
+:rSensorItem(sensor, itemKey, itemName, itemFriendly, filterMode, filterSize, formatNumeric, formatString) 
+{
+  _coefficient = coefficient;
+};
+
+void rVirtualItem::registerItemParameters(paramsGroup_t * group)
+{
+  rSensorItem::registerItemParameters(group);
+  paramsRegisterValue(OPT_KIND_PARAMETER, OPT_TYPE_DOUBLE, nullptr, group, 
+    CONFIG_SENSOR_PARAM_COEF_KEY, CONFIG_SENSOR_PARAM_COEF_FRIENDLY, 
+    CONFIG_MQTT_PARAMS_QOS, &_coefficient);
+}
+
+value_t rVirtualItem::convertValue(const value_t rawValue)
+{
+  return rawValue * _coefficient;
+}
+
+// =======================================================================================================================
+// =======================================================================================================================
 // ====================================================== rMapItem =======================================================
 // =======================================================================================================================
 // =======================================================================================================================
 
 // Constructor
-rMapItem::rMapItem(rSensor *sensor, const char* itemName, 
+rMapItem::rMapItem(rSensor *sensor, const char* itemKey, const char* itemName, const char* itemFriendly,
   const type_bounds_t in_bounds, const value_t in_min, const value_t in_max,
   const value_t out_min, const value_t out_max,
   const sensor_filter_t filterMode, const uint16_t filterSize,
-  const char* formatNumeric, const char* formatString 
-  #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-  , const char* formatTimestamp
-  #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-  #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-  , const char* formatTimestampValue, const char* formatStringTimeValue
-  #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
+  const char* formatNumeric, const char* formatString)
 // inherited constructor
-):rSensorItem(sensor, itemName, filterMode, filterSize, formatNumeric, formatString
-  #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-  , formatTimestamp
-  #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-  #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-  , formatTimestampValue, formatStringTimeValue
-  #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-) {
+:rSensorItem(sensor, itemKey, itemName, itemFriendly, filterMode, filterSize, formatNumeric, formatString)
+{
   _forcedRawPublish = true; 
 
   _in_bounds = in_bounds;
@@ -1222,7 +1225,7 @@ value_t rMapItem::convertValue(const value_t rawValue)
   if (isnan(rawValue) && ((_in_max - _in_min) != 0.0)) {
     return rawValue; 
   } else { 
-    return (value_t)((checkBounds(rawValue) - _in_min) / (_in_max - _in_min) * (_out_max - _out_min) + _out_min);
+    return ((checkBounds(rawValue) - (value_t)_in_min) / ((value_t)_in_max - (value_t)_in_min) * ((value_t)_out_max - (value_t)_out_min) + (value_t)_out_min);
   };
 };
 
@@ -1233,34 +1236,9 @@ value_t rMapItem::convertValue(const value_t rawValue)
 // =======================================================================================================================
 
 // Constructor
-rSensor::rSensor(uint8_t eventId)
-{
-  _name = nullptr;
-  _topicName = nullptr;
-  _topicPub =  nullptr;
-  _eventId = eventId;
-  _readInterval = 0;
-  _readLast = 0;
-  _errLimit = 0;
-  _errCount = 0;
-  _lstStatus = SENSOR_STATUS_NO_INIT;
-  _errStatus = SENSOR_STATUS_NO_INIT;
-  _cbOnChangeStatus = nullptr;
-  _cbOnPublishData = nullptr;
-}
-
-// Destructor
-rSensor::~rSensor()
-{
-  topicsFree();
-}
-
-// -----------------------------------------------------------------------------------------------------------------------
-// --------------------------------------------------- Initialization ----------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------
-
-void rSensor::initProperties(const char* sensorName, const char* topicName, const bool topicLocal, 
-  const uint32_t minReadInterval, const uint16_t errorLimit, 
+rSensor::rSensor(uint8_t eventId, const uint8_t items,
+  const char* sensorName, const char* topicName, const bool topicLocal, 
+  const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
 {
   _name = sensorName;
@@ -1276,6 +1254,19 @@ void rSensor::initProperties(const char* sensorName, const char* topicName, cons
   _errStatus = SENSOR_STATUS_NO_INIT;
   _cbOnChangeStatus = cb_status;
   _cbOnPublishData = cb_publish;
+
+  _items_count = items;
+  _items = new rSensorItemHandle[_items_count];
+  for (uint8_t i = 0; i < _items_count; i++) {
+    _items[i] = nullptr;
+  };
+}
+
+// Destructor
+rSensor::~rSensor()
+{
+  topicsFree();
+  if (_items) delete[] _items;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------
@@ -1285,7 +1276,11 @@ void rSensor::initProperties(const char* sensorName, const char* topicName, cons
 // Sensor name
 const char* rSensor::getName()
 {
-  return (_name == nullptr) ? "???" : _name;
+  if (_name != nullptr) {
+    return _name;
+  } else {
+    return "???";
+  };
 }
 
 // Mqtt topic
@@ -1313,6 +1308,102 @@ char* rSensor::getTopicPub()
 }
 
 // -----------------------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------- Data storages ----------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------
+
+void rSensor::setSensorItem(const uint8_t index, rSensorItem* item)
+{
+  if ((_items) && (index < _items_count) && (item)) {
+    _items[index] = item;
+    _items[index]->setOwner(this);
+    _items[index]->initItem();
+  };
+};
+
+// Get a pointer to storage
+rSensorItem* rSensor::getSensorItem(const uint8_t index)
+{
+  if ((_items) && (index < _items_count) && (_items[index])) {
+    return _items[index];
+  };
+  return nullptr;
+}
+
+sensor_handle_t rSensor::getHandle(const uint8_t index)
+{
+  if ((_items) && (index < _items_count) && (_items[index])) {
+    _items[index]->getHandle();
+  };
+  return nullptr;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------- Change filter mode -------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------
+
+bool rSensor::setFilterMode(const uint8_t index, const sensor_filter_t filterMode, const uint16_t filterSize)
+{
+  if ((_items) && (index < _items_count) && (_items[index])) {
+    return _items[index]->setFilterMode(filterMode, filterSize);
+  };
+  return false;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------
+// ------------------------------------------------ Get data from storages -----------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------
+
+sensor_data_t rSensor::getItemData(const uint8_t index, const bool readSensor)
+{
+  if (readSensor) readData();
+  if ((_items) && (index < _items_count) && (_items[index])) {
+    return _items[index]->getValues();
+  };
+  sensor_data_t empty_data;
+  return empty_data;
+}
+
+sensor_value_t rSensor::getItemValue(const uint8_t index, const bool readSensor)
+{
+  if (readSensor) readData();
+  if ((_items) && (index < _items_count) && (_items[index])) {
+    return _items[index]->getValue();
+  };
+  sensor_value_t empty_data;
+  return empty_data;
+}
+
+sensor_extremums_t rSensor::getItemExtremumsEntirely(const uint8_t index, const bool readSensor)
+{
+  if (readSensor) readData();
+  if ((_items) && (index < _items_count) && (_items[index])) {
+    return _items[index]->getExtremumsEntirely();
+  };
+  sensor_extremums_t empty_data;
+  return empty_data;
+}
+
+sensor_extremums_t rSensor::getItemExtremumsWeekly(const uint8_t index, const bool readSensor)
+{
+  if (readSensor) readData();
+  if ((_items) && (index < _items_count) && (_items[index])) {
+    return _items[index]->getExtremumsWeekly();
+  };
+  sensor_extremums_t empty_data;
+  return empty_data;
+}
+
+sensor_extremums_t rSensor::getItemExtremumsDaily(const uint8_t index, const bool readSensor)
+{
+  if (readSensor) readData();
+  if ((_items) && (index < _items_count) && (_items[index])) {
+    return _items[index]->getExtremumsDaily();
+  };
+  sensor_extremums_t empty_data;
+  return empty_data;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------
 // --------------------------------------------- Register internal parameters --------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
 
@@ -1330,6 +1421,17 @@ void rSensor::registerParameters(paramsGroupHandle_t parent_group, const char * 
 
 void rSensor::registerCustomParameters(paramsGroupHandle_t sensor_group)
 {
+}
+
+void rSensor::registerItemsParameters(paramsGroupHandle_t parent_group)
+{
+  if (_items) {
+    for (uint8_t i = 0; i < _items_count; i++) {
+      if (_items[i]) {
+        _items[i]->registerParameters(parent_group);
+      };
+    };
+  };
 }
 
 // -----------------------------------------------------------------------------------------------------------------------
@@ -1468,14 +1570,22 @@ const char* rSensor::getStatusString()
 // ---------------------------------------------- Communication with sensor ----------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
 
+sensor_status_t rSensor::sensorBusReset()
+{
+  return SENSOR_STATUS_OK;
+}
+
 bool rSensor::sensorStart()
 {
   rlog_d(logTAG, RSENSOR_LOG_MSG_INIT, getName());
-  sensor_status_t resetStatus = sensorReset();
+  sensor_status_t resetStatus = sensorBusReset();
   if (resetStatus == SENSOR_STATUS_OK) {
-    rlog_i(logTAG, RSENSOR_LOG_MSG_INIT_OK, getName());
-    setRawStatus(resetStatus, true);
-    return true;
+    resetStatus = sensorReset();
+    if (resetStatus == SENSOR_STATUS_OK) {
+      rlog_i(logTAG, RSENSOR_LOG_MSG_INIT_OK, getName());
+      setRawStatus(resetStatus, true);
+      return true;
+    };
   };
   setRawStatus(resetStatus, true);
   return false;
@@ -1518,11 +1628,106 @@ sensor_status_t rSensor::readData()
   return _errStatus;
 }
 
+// Writing measured RAW values to internal items
+sensor_status_t rSensor::setRawValue(const uint8_t index, const value_t newValue)
+{
+  if ((_items) && (index < _items_count) && (_items[index])) {
+    return _items[index]->setRawValue(newValue, time(nullptr));
+  } else {
+    return SENSOR_STATUS_NO_INIT;
+  };
+}
+
+// -----------------------------------------------------------------------------------------------------------------------
+// ------------------------------------------------------ Extremums ------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------
+
+void rSensor::resetExtremumsEntirely()
+{
+  for (uint8_t i = 0; i < _items_count; i++) {
+    if (_items[i]) {
+      _items[i]->resetExtremumsEntirely();
+    };
+  };
+}
+
+void rSensor::resetExtremumsWeekly()
+{
+  for (uint8_t i = 0; i < _items_count; i++) {
+    if (_items[i]) {
+      _items[i]->resetExtremumsWeekly();
+    };
+  };
+}
+
+void rSensor::resetExtremumsDaily()
+{
+  for (uint8_t i = 0; i < _items_count; i++) {
+    if (_items[i]) {
+      _items[i]->resetExtremumsDaily();
+    };
+  };
+}
+
+void rSensor::resetExtremumsTotal()
+{
+  for (uint8_t i = 0; i < _items_count; i++) {
+    if (_items[i]) {
+      _items[i]->resetExtremumsTotal();
+    };
+  };
+}
+
+void rSensor::nvsStoreExtremums(const char* nvs_space)
+{
+  for (uint8_t i = 0; i < _items_count; i++) {
+    if (_items[i]) {
+      char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, i + 1);
+      if (nvs_space_item) {
+        _items[i]->nvsStoreExtremums(nvs_space_item);
+        free(nvs_space_item);
+      };
+    };
+  };
+}
+
+void rSensor::nvsRestoreExtremums(const char* nvs_space)
+{
+  for (uint8_t i = 0; i < _items_count; i++) {
+    if (_items[i]) {
+      char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, i + 1);
+      if (nvs_space_item) {
+        _items[i]->nvsRestoreExtremums(nvs_space_item);
+        free(nvs_space_item);
+      };
+    };
+  };
+}
+
 // -----------------------------------------------------------------------------------------------------------------------
 // --------------------------------------- Displaying multiple values in one topic ---------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
 
 #if CONFIG_SENSOR_DISPLAY_ENABLED
+
+char* rSensor::getDisplayValue()
+{
+  char* ret = nullptr;
+  if (_items_count == 1) { 
+    if (_items[0]) {
+      ret = _items[0]->getStringTimeValue();
+    };
+  };
+  if (_items_count > 1) {
+    if (_items[0]) {
+      ret = _items[0]->getStringFiltered();
+    };
+    if (_items[1]) {
+      ret = concat_strings_div(ret, _items[1]->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+    };
+  };
+  return ret;
+}
 
 char* rSensor::getDisplayValueStatus()
 {
@@ -1536,6 +1741,7 @@ char* rSensor::getDisplayValueStatus()
     return getDisplayValue();
   #endif // CONFIG_SENSOR_STATUS_AS_MIXED_ON_ERROR
 }
+
 #endif // CONFIG_SENSOR_DISPLAY_ENABLED
 
 // -----------------------------------------------------------------------------------------------------------------------
@@ -1610,7 +1816,13 @@ bool rSensor::publishCustomValues()
 
 bool rSensor::publishItems()
 {
-  return true;
+  bool ret = false;
+  for (uint8_t i = 0; i < _items_count; i++) {
+    if (_items[i]) {
+      ret = _items[i]->publishNamedValues();
+    };
+  };
+  return ret;
 }
 
 #endif // CONFIG_SENSOR_AS_PLAIN
@@ -1655,154 +1867,16 @@ char* rSensor::jsonDisplayAndCustomValues()
   return ret;
 }
 
-#endif //CONFIG_SENSOR_AS_JSON
-
-// =======================================================================================================================
-// =======================================================================================================================
-// ====================================================== rSensorX1 ======================================================
-// =======================================================================================================================
-// =======================================================================================================================
-
-// Constructor
-rSensorX1::rSensorX1(uint8_t eventId):rSensor(eventId)
-{ 
-  _item = nullptr;
-}
-
-// Destructor
-rSensorX1::~rSensorX1()
-{
-  // We always delete an item, even if it is attached from the outside
-  if (_item) delete _item;
-}
-
-// Set external items
-void rSensorX1::setSensorItems(rSensorItem* item)
-{
-  _item = item;
-  if (_item) {
-    _item->setOwner(this);
-    _item->initItem();
-  };
-};
-
-// Initialization of internal items
-bool rSensorX1::initSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize)
-{
-  // Create items by default if they were not assigned externally
-  if (!_item) {
-    createSensorItems(filterMode, filterSize);
-    if (_item) {
-      _item->setOwner(this);
-      _item->initItem();
-    };
-  };
-  return true;
-}
-
-// Set filter mode
-bool rSensorX1::setFilterMode(const sensor_filter_t filterMode, const uint16_t filterSize)
-{
-  if (_item) return _item->setFilterMode(filterMode, filterSize);
-  return false;
-}
-
-// Writing measured RAW values to internal items
-sensor_status_t rSensorX1::setRawValues(const value_t newValue)
-{
-  sensor_status_t ret = SENSOR_STATUS_NO_DATA;
-  if (_item) {
-    ret = _item->checkValue(newValue);
-    if (ret == SENSOR_STATUS_OK) {
-      time_t timestamp = time(nullptr);
-      _item->setRawValue(newValue, timestamp);
-    };
-  };
-  return ret;
-}
-
-// Get a pointer to storage
-rSensorItem* rSensorX1::getSensorItem()
-{
-  return _item;
-}
-
-sensor_handle_t rSensorX1::getHandle()
-{
-  if (_item) return _item->getHandle();
-  return nullptr;
-}
-
-// Get data from storage
-sensor_data_t rSensorX1::getValues(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item) return _item->getValues();
-  sensor_data_t empty_data;
-  return empty_data;
-}
-
-sensor_value_t rSensorX1::getValue(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item) return _item->getValue();
-  sensor_value_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX1::getExtremumsEntirely(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item) return _item->getExtremumsEntirely();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX1::getExtremumsWeekly(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item) return _item->getExtremumsWeekly();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX1::getExtremumsDaily(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item) return _item->getExtremumsDaily();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-#if CONFIG_SENSOR_DISPLAY_ENABLED
-
-char* rSensorX1::getDisplayValue()
-{
-  if (_item) {
-    // sensor_value_t value = _item->getValue();
-    return _item->asStringTimeValue(&_item->getHandle()->lastValue);
-  };
-  return nullptr;
-}
-
-#endif // CONFIG_SENSOR_DISPLAY_ENABLED
-
-#if CONFIG_SENSOR_AS_PLAIN
-
-bool rSensorX1::publishItems()
-{
-  return _item->publishNamedValues();
-}
-
-#endif // CONFIG_SENSOR_AS_PLAIN
-
-#if CONFIG_SENSOR_AS_JSON
-
-char* rSensorX1::getJSON()
+char* rSensor::getJSON()
 {
   char* ret = nullptr;
+  // Concat items
   char* _json_values = nullptr;
-  if (_item) { _json_values = _item->jsonNamedValues(); };
+  for (uint8_t i = 0; i < _items_count; i++) {
+    if (_items[i]) {
+      _json_values = concat_strings_div(_json_values, _items[i]->jsonNamedValues(), ",");
+    };
+  };
   // Add mixed content line
   _json_values = concat_strings_div(_json_values, jsonDisplayAndCustomValues(), ",");
   // Generating full JSON
@@ -1817,57 +1891,7 @@ char* rSensorX1::getJSON()
   return ret;
 }
 
-#endif // CONFIG_SENSOR_AS_JSON
-
-void rSensorX1::resetExtremumsEntirely()
-{
-  if (_item) {
-    _item->resetExtremumsEntirely();
-  };
-}
-
-void rSensorX1::resetExtremumsWeekly()
-{
-  if (_item) {
-    _item->resetExtremumsWeekly();
-  };
-}
-
-void rSensorX1::resetExtremumsDaily()
-{
-  if (_item) {
-    _item->resetExtremumsDaily();
-  };
-}
-
-void rSensorX1::resetExtremumsTotal()
-{
-  if (_item) {
-    _item->resetExtremumsTotal();
-  };
-}
-
-void rSensorX1::nvsStoreExtremums(const char* nvs_space)
-{
-  if (_item) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
-    if (nvs_space_item) {
-      _item->nvsStoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-}
-
-void rSensorX1::nvsRestoreExtremums(const char* nvs_space)
-{
-  if (_item) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
-    if (nvs_space_item) {
-      _item->nvsRestoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-}
+#endif //CONFIG_SENSOR_AS_JSON
 
 // =======================================================================================================================
 // =======================================================================================================================
@@ -1876,375 +1900,59 @@ void rSensorX1::nvsRestoreExtremums(const char* nvs_space)
 // =======================================================================================================================
 
 // Constructor
-rSensorStub::rSensorStub(uint8_t eventId):rSensorX1(eventId)
+rSensorStub::rSensorStub(uint8_t eventId, 
+  const char* sensorName, const char* topicName, const bool topicLocal, 
+  const uint32_t minReadInterval, const uint16_t errorLimit,
+  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+:rSensor(eventId, 1, 
+  sensorName, topicName,  topicLocal, 
+  minReadInterval, errorLimit, 
+  cb_status, cb_publish)
 { 
 }
 
-// Connecting external previously created items, for example statically declared
-bool rSensorStub::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal,
-  rSensorItem* item, const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+void rSensorStub::setSensorItems(rSensorItem* item)
 {
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  this->rSensorX1::setSensorItems(item);
-  return sensorStart();
+  setSensorItem(0, item);
 }
 
 // Sensor reset
 sensor_status_t rSensorStub::sensorReset()
 {
   // Item initialization is called only once in setSensorItems(item); >> _item->initItem();
-  if (_item != nullptr) {
+  if (_items[0] != nullptr) {
     return SENSOR_STATUS_OK;
   } else {
-    return SENSOR_STATUS_ERROR;
-  };
-}
-
-// Initialization of internal items
-void rSensorStub::createSensorItems(const sensor_filter_t filterMode, const uint16_t filterSize)
-{
-  rlog_e(logTAG, "Only external items can be used for [ %s ] sensor!", getName());
-  setRawStatus(SENSOR_STATUS_NOT_SUPPORTED, true);
-}
-
-// Registration of parameters
-void rSensorStub::registerItemsParameters(paramsGroupHandle_t parent_group)
-{
-  if (_item) {
-    _item->registerParameters(parent_group, nullptr, nullptr, nullptr);
+    return SENSOR_STATUS_NO_INIT;
   };
 }
 
 sensor_status_t rSensorStub::readRawData()
 {
   sensor_status_t ret = SENSOR_STATUS_NOT_SUPPORTED;
-  if (_item) {
+  if (_items[0]) {
     value_t rawValue;
-    ret = _item->getRawValue(&rawValue);
+    ret = _items[0]->getRawValue(&rawValue);
     if (ret == SENSOR_STATUS_OK) {
-      return setRawValues(rawValue);
+      return setRawValue(0, rawValue);
     };
   };
   return ret;
 }
 
-// =======================================================================================================================
-// =======================================================================================================================
-// ====================================================== rSensorX2 ======================================================
-// =======================================================================================================================
-// =======================================================================================================================
-
-// Constructor
-rSensorX2::rSensorX2(uint8_t eventId):rSensor(eventId)
-{ 
-  _item1 = nullptr;
-  _item2 = nullptr;
-}
-
-// Destructor
-rSensorX2::~rSensorX2()
+sensor_status_t rSensorStub::setExtValue(const value_t extValue)
 {
-  // We always delete an item, even if it is attached from the outside
-  if (_item1) delete _item1;
-  if (_item2) delete _item2;
-}
-
-// Set external items
-void rSensorX2::setSensorItems(rSensorItem* item1, rSensorItem* item2)
-{
-  _item1 = item1;
-  _item2 = item2;
-  if (_item1) {
-    _item1->setOwner(this);
-    _item1->initItem();
+  if (_items[0]) {
+    sensor_status_t ret = setRawValue(0, extValue);
+    setRawStatus(ret, false);
+    return ret;
   };
-  if (_item2) {
-    _item2->setOwner(this);
-    _item2->initItem();
-  };
-};
-
-// Initialization of internal items
-bool rSensorX2::initSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1,
-                                const sensor_filter_t filterMode2, const uint16_t filterSize2)
-{
-  // Create items by default if they were not assigned externally
-  if ((!_item1) || (!_item2)) {
-    createSensorItems(filterMode1, filterSize1, filterMode2, filterSize2);
-    if (_item1) {
-      _item1->setOwner(this);
-      _item1->initItem();
-    };
-    if (_item2) {
-      _item2->setOwner(this);
-      _item2->initItem();
-    };
-  };
-  return true;
+  return SENSOR_STATUS_NO_INIT;
 }
 
-// Change filter mode
-bool rSensorX2::setFilterMode1(const sensor_filter_t filterMode, const uint16_t filterSize)
+sensor_value_t rSensorStub::getValue(const bool readSensor)
 {
-  if (_item1) return _item1->setFilterMode(filterMode, filterSize);
-  return false;
-}
-
-bool rSensorX2::setFilterMode2(const sensor_filter_t filterMode, const uint16_t filterSize)
-{
-  if (_item2) return _item2->setFilterMode(filterMode, filterSize);
-  return false;
-}
-
-// Writing measured RAW values to internal items
-sensor_status_t rSensorX2::setRawValues(const value_t newValue1, const value_t newValue2)
-{
-  time_t timestamp = time(nullptr);
-  sensor_status_t ret = SENSOR_STATUS_OK;
-  if ((_item1) && (ret == SENSOR_STATUS_OK)) {
-    ret = _item1->checkValue(newValue1);
-    if (ret == SENSOR_STATUS_OK) {
-      _item1->setRawValue(newValue1, timestamp);
-    };
-  };
-  if ((_item2) && (ret == SENSOR_STATUS_OK)) {
-    ret = _item2->checkValue(newValue2);
-    if (ret == SENSOR_STATUS_OK) {
-      _item2->setRawValue(newValue2, timestamp);
-    };
-  };
-  return ret;
-}
-
-// Get a pointer to storage
-rSensorItem* rSensorX2::getSensorItem1()
-{
-  return _item1;
-}
-
-rSensorItem* rSensorX2::getSensorItem2()
-{
-  return _item2;
-}
-
-sensor_handle_t rSensorX2::getHandle1()
-{
-  if (_item1) return _item1->getHandle();
-  return nullptr;
-}
-
-sensor_handle_t rSensorX2::getHandle2()
-{
-  if (_item2) return _item2->getHandle();
-  return nullptr;
-}
-
-// Get data from storage
-sensor_data_t rSensorX2::getValues1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getValues();
-  sensor_data_t empty_data;
-  return empty_data;
-}
-
-sensor_data_t rSensorX2::getValues2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getValues();
-  sensor_data_t empty_data;
-  return empty_data;
-}
-
-sensor_value_t rSensorX2::getValue1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getValue();
-  sensor_value_t empty_data;
-  return empty_data;
-}
-
-sensor_value_t rSensorX2::getValue2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getValue();
-  sensor_value_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX2::getExtremumsEntirely1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getExtremumsEntirely();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX2::getExtremumsEntirely2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getExtremumsEntirely();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX2::getExtremumsWeekly1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getExtremumsWeekly();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX2::getExtremumsWeekly2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getExtremumsWeekly();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX2::getExtremumsDaily1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getExtremumsDaily();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX2::getExtremumsDaily2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getExtremumsDaily();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-// Displaying multiple values in one topic
-#if CONFIG_SENSOR_DISPLAY_ENABLED
-
-char* rSensorX2::getDisplayValue()
-{
-  char* ret = nullptr;
-  if (_item1) { 
-    ret = _item1->getStringFiltered(); 
-  };
-  if (_item2) {
-    ret = concat_strings_div(ret, _item2->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
-  };
-  return ret;
-}
-
-#endif // CONFIG_SENSOR_DISPLAY_ENABLED
-
-#if CONFIG_SENSOR_AS_PLAIN
-
-bool rSensorX2::publishItems()
-{
-  return _item1->publishNamedValues() && _item2->publishNamedValues();
-}
-
-#endif // CONFIG_SENSOR_AS_PLAIN
-
-#if CONFIG_SENSOR_AS_JSON
-
-char* rSensorX2::getJSON()
-{
-  char* ret = nullptr;
-  char* _json_values = nullptr;
-  if (_item1) { _json_values = _item1->jsonNamedValues(); };
-  if (_item2) { _json_values = concat_strings_div(_json_values, _item2->jsonNamedValues(), ","); };
-  // Add mixed content line
-  _json_values = concat_strings_div(_json_values, jsonDisplayAndCustomValues(), ",");
-  // Generating full JSON
-  if (_json_values) {
-    #if CONFIG_SENSOR_STATUS_ENABLE
-      ret = malloc_stringf("{\"%s\":\"%s\",%s}", CONFIG_SENSOR_STATUS, getStatusString(), _json_values);
-    #else
-      ret = malloc_stringf("{%s}", _json_values);
-    #endif //CONFIG_SENSOR_STATUS_ENABLE
-    free(_json_values);
-  };
-  return ret;
-}
-
-#endif // CONFIG_SENSOR_AS_JSON
-
-void rSensorX2::resetExtremumsEntirely()
-{
-  if (_item1) {
-    _item1->resetExtremumsEntirely();
-  };
-  if (_item2) {
-    _item2->resetExtremumsEntirely();
-  };
-}
-
-void rSensorX2::resetExtremumsWeekly()
-{
-  if (_item1) {
-    _item1->resetExtremumsWeekly();
-  };
-  if (_item2) {
-    _item2->resetExtremumsWeekly();
-  };
-}
-
-void rSensorX2::resetExtremumsDaily()
-{
-  if (_item1) {
-    _item1->resetExtremumsDaily();
-  };
-  if (_item2) {
-    _item2->resetExtremumsDaily();
-  };
-}
-
-void rSensorX2::resetExtremumsTotal()
-{
-  if (_item1) {
-    _item1->resetExtremumsTotal();
-  };
-  if (_item2) {
-    _item2->resetExtremumsTotal();
-  };
-}
-
-void rSensorX2::nvsStoreExtremums(const char* nvs_space)
-{
-  if (_item1) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
-    if (nvs_space_item) {
-      _item1->nvsStoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item2) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 2);
-    if (nvs_space_item) {
-      _item2->nvsStoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-}
-
-void rSensorX2::nvsRestoreExtremums(const char* nvs_space)
-{
-  if (_item1) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
-    if (nvs_space_item) {
-      _item1->nvsRestoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item2) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 2);
-    if (nvs_space_item) {
-      _item2->nvsRestoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
+  return getItemValue(0, readSensor);
 }
 
 // =======================================================================================================================
@@ -2253,56 +1961,44 @@ void rSensorX2::nvsRestoreExtremums(const char* nvs_space)
 // =======================================================================================================================
 // =======================================================================================================================
 
-rSensorHT::rSensorHT(uint8_t eventId):rSensorX2(eventId) 
+rSensorHT::rSensorHT(uint8_t eventId, 
+  const char* sensorName, const char* topicName, const bool topicLocal, 
+  const uint32_t minReadInterval, const uint16_t errorLimit,
+  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+:rSensor(eventId, 2, 
+  sensorName, topicName,  topicLocal, 
+  minReadInterval, errorLimit, 
+  cb_status, cb_publish)
 {
 }
 
-// Initialization of internal items
-void rSensorHT::createSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1,
-                                  const sensor_filter_t filterMode2, const uint16_t filterSize2)
+void rSensorHT::setSensorItems(rSensorItem* itemHumidity, rSensorItem* itemTemperature)
 {
-  // Humidity
-  _item1 = new rSensorItem(this, CONFIG_SENSOR_HUMIDITY_NAME, 
-    filterMode1, filterSize1,
-    CONFIG_FORMAT_HUMIDITY_VALUE, CONFIG_FORMAT_HUMIDITY_STRING
-    #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-    , CONFIG_FORMAT_TIMESTAMP_L
-    #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-    #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-    , CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
-    #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-  );
-  if (_item1) {
-    rlog_d(_name, RSENSOR_LOG_MSG_CREATE_ITEM, _item1->getName(), getName());
-  };
-
-  // Temperature
-  _item2 = new rTemperatureItem(this, CONFIG_SENSOR_TEMP_NAME, (unit_temperature_t)CONFIG_FORMAT_TEMP_UNIT,
-    filterMode2, filterSize2,
-    CONFIG_FORMAT_TEMP_VALUE, CONFIG_FORMAT_TEMP_STRING
-    #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-    , CONFIG_FORMAT_TIMESTAMP_L 
-    #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-    #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-    , CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
-    #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-  );
-  if (_item2) {
-    rlog_d(_name, RSENSOR_LOG_MSG_CREATE_ITEM, _item2->getName(), getName());
-  };
+  setSensorItem(0, itemHumidity);
+  setSensorItem(1, itemTemperature);
 }
 
-// Register internal parameters
-void rSensorHT::registerItemsParameters(paramsGroupHandle_t parent_group)
+sensor_status_t rSensorHT::setRawValues(const value_t newHumidity, const value_t newTemperature)
 {
-  // Humidity
-  if (_item1) {
-    _item1->registerParameters(parent_group, CONFIG_SENSOR_HUMIDITY_KEY, CONFIG_SENSOR_HUMIDITY_NAME, CONFIG_SENSOR_HUMIDITY_FRIENDLY);
+  sensor_status_t ret = SENSOR_STATUS_NO_INIT;
+  if (_items[0] && _items[1]) {
+    time_t now = time(nullptr);
+    ret = _items[0]->setRawValue(newHumidity, now);
+    if (ret == SENSOR_STATUS_OK) {
+      ret = _items[1]->setRawValue(newTemperature, now);
+    };
   };
-  // Temperature
-  if (_item2) {
-    _item2->registerParameters(parent_group, CONFIG_SENSOR_TEMP_KEY, CONFIG_SENSOR_TEMP_NAME, CONFIG_SENSOR_TEMP_FRIENDLY);
-  };
+  return ret;
+}
+
+sensor_value_t rSensorHT::getTemperature(const bool readSensor)
+{
+  return getItemValue(1, readSensor);
+}
+
+sensor_value_t rSensorHT::getHumidity(const bool readSensor)
+{
+  return getItemValue(0, readSensor);
 }
 
 // Displaying multiple values in one topic
@@ -2311,11 +2007,11 @@ void rSensorHT::registerItemsParameters(paramsGroupHandle_t parent_group)
 char* rSensorHT::getDisplayValue()
 {
   char* ret = nullptr;
-  if (_item2) { 
-    ret = _item2->getStringFiltered(); 
+  if (_items[1]) { 
+    ret = _items[1]->getStringFiltered(); 
   };
-  if (_item1) {
-    ret = concat_strings_div(ret, _item1->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+  if (_items[0]) {
+    ret = concat_strings_div(ret, _items[0]->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
   };
   return ret;
 }
@@ -2329,9 +2025,9 @@ bool rSensorHT::publishCustomValues()
   bool ret = rSensor::publishCustomValues();
 
   #if CONFIG_SENSOR_DEWPOINT_ENABLE
-    if ((ret) && (_item1) && (_item2)) {
-      ret = _item2->publishDataValue(CONFIG_SENSOR_DEWPOINT, 
-        calcDewPoint(_item2->getValue().filteredValue, _item1->getValue().filteredValue));
+    if ((ret) && (_items[0]) && (_items[1])) {
+      ret = _items[1]->publishDataValue(CONFIG_SENSOR_DEWPOINT, 
+        calcDewPoint(_items[1]->getValue().filteredValue, _items[0]->getValue().filteredValue));
     };
   #endif // CONFIG_SENSOR_DEWPOINT_ENABLE
 
@@ -2345,8 +2041,8 @@ bool rSensorHT::publishCustomValues()
 char* rSensorHT::jsonCustomValues()
 {
   #if CONFIG_SENSOR_DEWPOINT_ENABLE
-    if ((_item1) && (_item2)) {
-      char * _dew_point = _item2->jsonDataValue(true, calcDewPoint(_item2->getValue().filteredValue, _item1->getValue().filteredValue));
+    if ((_items[0]) && (_items[1])) {
+      char * _dew_point = _items[1]->jsonDataValue(true, calcDewPoint(_items[1]->getValue().filteredValue, _items[0]->getValue().filteredValue));
       char * ret = malloc_stringf("\"%s\":%s", CONFIG_SENSOR_DEWPOINT, _dew_point);
       if (_dew_point) free(_dew_point);
       return ret;  
@@ -2356,1589 +2052,4 @@ char* rSensorHT::jsonCustomValues()
 }
 
 #endif // CONFIG_SENSOR_AS_JSON
-
-// =======================================================================================================================
-// =======================================================================================================================
-// ====================================================== rSensorX3 ======================================================
-// =======================================================================================================================
-// =======================================================================================================================
-
-// Constructor
-rSensorX3::rSensorX3(uint8_t eventId):rSensor(eventId)
-{ 
-  _item1 = nullptr;
-  _item2 = nullptr;
-  _item3 = nullptr;
-}
-
-// Destructor
-rSensorX3::~rSensorX3()
-{
-  // We always delete an item, even if it is attached from the outside
-  if (_item1) delete _item1;
-  if (_item2) delete _item2;
-  if (_item3) delete _item3;
-}
-
-// Set external items
-void rSensorX3::setSensorItems(rSensorItem* item1, rSensorItem* item2, rSensorItem* item3)
-{
-  _item1 = item1;
-  _item2 = item2;
-  _item3 = item3;
-  if (_item1) {
-    _item1->setOwner(this);
-    _item1->initItem();
-  };
-  if (_item2) {
-    _item2->setOwner(this);
-    _item2->initItem();
-  };
-  if (_item3) {
-    _item3->setOwner(this);
-    _item3->initItem();
-  };
-};
-
-// Initialization of internal items
-bool rSensorX3::initSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1,
-                                const sensor_filter_t filterMode2, const uint16_t filterSize2,
-                                const sensor_filter_t filterMode3, const uint16_t filterSize3)
-{
-  // Create items by default if they were not assigned externally
-  if ((!_item1) || (!_item2) || (!_item3)) {
-    createSensorItems(filterMode1, filterSize1, filterMode2, filterSize2, filterMode3, filterSize3);
-    if (_item1) {
-      _item1->setOwner(this);
-      _item1->initItem();
-    };
-    if (_item2) {
-      _item2->setOwner(this);
-      _item2->initItem();
-    };
-    if (_item3) {
-      _item3->setOwner(this);
-      _item3->initItem();
-    };
-  };
-  return true;
-}
-
-// Change filter mode
-bool rSensorX3::setFilterMode1(const sensor_filter_t filterMode, const uint16_t filterSize)
-{
-  if (_item1) return _item1->setFilterMode(filterMode, filterSize);
-  return false;
-}
-
-bool rSensorX3::setFilterMode2(const sensor_filter_t filterMode, const uint16_t filterSize)
-{
-  if (_item2) return _item2->setFilterMode(filterMode, filterSize);
-  return false;
-}
-
-bool rSensorX3::setFilterMode3(const sensor_filter_t filterMode, const uint16_t filterSize)
-{
-  if (_item3) return _item3->setFilterMode(filterMode, filterSize);
-  return false;
-}
-
-// Writing measured RAW values to internal items
-sensor_status_t rSensorX3::setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3)
-{
-  time_t timestamp = time(nullptr);
-  sensor_status_t ret = SENSOR_STATUS_OK;
-  if ((_item1) && (ret == SENSOR_STATUS_OK)) {
-    ret = _item1->checkValue(newValue1);
-    if (ret == SENSOR_STATUS_OK) {
-      _item1->setRawValue(newValue1, timestamp);
-    };
-  };
-  if ((_item2) && (ret == SENSOR_STATUS_OK)) {
-    ret = _item2->checkValue(newValue2);
-    if (ret == SENSOR_STATUS_OK) {
-      _item2->setRawValue(newValue2, timestamp);
-    };
-  };
-  if ((_item3) && (ret == SENSOR_STATUS_OK)) {
-    ret = _item3->checkValue(newValue3);
-    if (ret == SENSOR_STATUS_OK) {
-      _item3->setRawValue(newValue3, timestamp);
-    };
-  };
-  return ret;
-}
-
-// Get a pointer to storage
-rSensorItem* rSensorX3::getSensorItem1()
-{
-  return _item1;
-}
-
-rSensorItem* rSensorX3::getSensorItem2()
-{
-  return _item2;
-}
-
-rSensorItem* rSensorX3::getSensorItem3()
-{
-  return _item3;
-}
-
-sensor_handle_t rSensorX3::getHandle1()
-{
-  if (_item1) return _item1->getHandle();
-  return nullptr;
-}
-
-sensor_handle_t rSensorX3::getHandle2()
-{
-  if (_item2) return _item2->getHandle();
-  return nullptr;
-}
-
-sensor_handle_t rSensorX3::getHandle3()
-{
-  if (_item3) return _item3->getHandle();
-  return nullptr;
-}
-
-// Get data from storage
-sensor_data_t rSensorX3::getValues1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getValues();
-  sensor_data_t empty_data;
-  return empty_data;
-}
-
-sensor_data_t rSensorX3::getValues2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getValues();
-  sensor_data_t empty_data;
-  return empty_data;
-}
-
-sensor_data_t rSensorX3::getValues3(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item3) return _item3->getValues();
-  sensor_data_t empty_data;
-  return empty_data;
-}
-
-sensor_value_t rSensorX3::getValue1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getValue();
-  sensor_value_t empty_data;
-  return empty_data;
-}
-
-sensor_value_t rSensorX3::getValue2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getValue();
-  sensor_value_t empty_data;
-  return empty_data;
-}
-
-sensor_value_t rSensorX3::getValue3(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item3) return _item3->getValue();
-  sensor_value_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX3::getExtremumsEntirely1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getExtremumsEntirely();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX3::getExtremumsEntirely2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getExtremumsEntirely();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX3::getExtremumsEntirely3(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item3) return _item3->getExtremumsEntirely();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX3::getExtremumsWeekly1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getExtremumsWeekly();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX3::getExtremumsWeekly2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getExtremumsWeekly();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX3::getExtremumsWeekly3(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item3) return _item3->getExtremumsWeekly();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX3::getExtremumsDaily1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getExtremumsDaily();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX3::getExtremumsDaily2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getExtremumsDaily();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX3::getExtremumsDaily3(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item3) return _item3->getExtremumsDaily();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-#if CONFIG_SENSOR_DISPLAY_ENABLED
-
-char* rSensorX3::getDisplayValue()
-{
-  char* ret = nullptr;
-  if (_item1) { 
-    ret = _item1->getStringFiltered(); 
-  };
-  if (_item2) {
-    ret = concat_strings_div(ret, _item2->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
-  };
-  if (_item3) {
-    ret = concat_strings_div(ret, _item3->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
-  };
-  return ret;
-}
-
-#endif // CONFIG_SENSOR_DISPLAY_ENABLED
-
-#if CONFIG_SENSOR_AS_PLAIN
-
-bool rSensorX3::publishItems()
-{
-  return _item1->publishNamedValues() && _item2->publishNamedValues() && _item3->publishNamedValues();
-}
-
-#endif // CONFIG_SENSOR_AS_PLAIN
-
-#if CONFIG_SENSOR_AS_JSON
-
-char* rSensorX3::getJSON()
-{
-  char* ret = nullptr;
-  char* _json_values = nullptr;
-  if (_item1) { _json_values = _item1->jsonNamedValues(); };
-  if (_item2) { _json_values = concat_strings_div(_json_values, _item2->jsonNamedValues(), ","); };
-  if (_item3) { _json_values = concat_strings_div(_json_values, _item3->jsonNamedValues(), ","); };
-  // Add mixed content line
-  _json_values = concat_strings_div(_json_values, jsonDisplayAndCustomValues(), ",");
-  // Generating full JSON
-  if (_json_values) {
-    #if CONFIG_SENSOR_STATUS_ENABLE
-      ret = malloc_stringf("{\"%s\":\"%s\",%s}", CONFIG_SENSOR_STATUS, getStatusString(), _json_values);
-    #else
-      ret = malloc_stringf("{%s}", _json_values);
-    #endif //CONFIG_SENSOR_STATUS_ENABLE
-    free(_json_values);
-  };
-  return ret;
-}
-
-#endif // CONFIG_SENSOR_AS_JSON
-
-void rSensorX3::resetExtremumsEntirely()
-{
-  if (_item1) {
-    _item1->resetExtremumsEntirely();
-  };
-  if (_item2) {
-    _item2->resetExtremumsEntirely();
-  };
-  if (_item3) {
-    _item3->resetExtremumsEntirely();
-  };
-}
-
-void rSensorX3::resetExtremumsWeekly()
-{
-  if (_item1) {
-    _item1->resetExtremumsWeekly();
-  };
-  if (_item2) {
-    _item2->resetExtremumsWeekly();
-  };
-  if (_item3) {
-    _item3->resetExtremumsWeekly();
-  };
-}
-
-void rSensorX3::resetExtremumsDaily()
-{
-  if (_item1) {
-    _item1->resetExtremumsDaily();
-  };
-  if (_item2) {
-    _item2->resetExtremumsDaily();
-  };
-  if (_item3) {
-    _item3->resetExtremumsDaily();
-  };
-}
-
-void rSensorX3::resetExtremumsTotal()
-{
-  if (_item1) {
-    _item1->resetExtremumsTotal();
-  };
-  if (_item2) {
-    _item2->resetExtremumsTotal();
-  };
-  if (_item3) {
-    _item3->resetExtremumsTotal();
-  };
-}
-
-void rSensorX3::nvsStoreExtremums(const char* nvs_space)
-{
-  if (_item1) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
-    if (nvs_space_item) {
-      _item1->nvsStoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item2) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 2);
-    if (nvs_space_item) {
-      _item2->nvsStoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item3) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 3);
-    if (nvs_space_item) {
-      _item3->nvsStoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-}
-
-void rSensorX3::nvsRestoreExtremums(const char* nvs_space)
-{
-  if (_item1) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
-    if (nvs_space_item) {
-      _item1->nvsRestoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item2) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 2);
-    if (nvs_space_item) {
-      _item2->nvsRestoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item3) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 3);
-    if (nvs_space_item) {
-      _item3->nvsRestoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-}
-
-// =======================================================================================================================
-// =======================================================================================================================
-// ====================================================== rSensorX4 ======================================================
-// =======================================================================================================================
-// =======================================================================================================================
-
-// Constructor
-rSensorX4::rSensorX4(uint8_t eventId):rSensor(eventId)
-{ 
-  _item1 = nullptr;
-  _item2 = nullptr;
-  _item3 = nullptr;
-  _item4 = nullptr;
-}
-
-// Destructor
-rSensorX4::~rSensorX4()
-{
-  // We always delete an item, even if it is attached from the outside
-  if (_item1) delete _item1;
-  if (_item2) delete _item2;
-  if (_item3) delete _item3;
-  if (_item4) delete _item4;
-}
-
-// Set external items
-void rSensorX4::setSensorItems(rSensorItem* item1, rSensorItem* item2, rSensorItem* item3, rSensorItem* item4)
-{
-  _item1 = item1;
-  _item2 = item2;
-  _item3 = item3;
-  _item4 = item4;
-  if (_item1) {
-    _item1->setOwner(this);
-    _item1->initItem();
-  };
-  if (_item2) {
-    _item2->setOwner(this);
-    _item2->initItem();
-  };
-  if (_item3) {
-    _item3->setOwner(this);
-    _item3->initItem();
-  };
-  if (_item4) {
-    _item4->setOwner(this);
-    _item4->initItem();
-  };
-};
-
-// Initialization of internal items
-bool rSensorX4::initSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1,
-                                const sensor_filter_t filterMode2, const uint16_t filterSize2,
-                                const sensor_filter_t filterMode3, const uint16_t filterSize3,
-                                const sensor_filter_t filterMode4, const uint16_t filterSize4)
-{
-  // Create items by default if they were not assigned externally
-  if ((!_item1) || (!_item2) || (!_item3) || (!_item4)) {
-    createSensorItems(filterMode1, filterSize1, filterMode2, filterSize2, filterMode3, filterSize3, filterMode4, filterSize4);
-    if (_item1) {
-      _item1->setOwner(this);
-      _item1->initItem();
-    };
-    if (_item2) {
-      _item2->setOwner(this);
-      _item2->initItem();
-    };
-    if (_item3) {
-      _item3->setOwner(this);
-      _item3->initItem();
-    };
-    if (_item4) {
-      _item4->setOwner(this);
-      _item4->initItem();
-    };
-  };
-  return true;
-}
-
-// Change filter mode
-bool rSensorX4::setFilterMode1(const sensor_filter_t filterMode, const uint16_t filterSize)
-{
-  if (_item1) return _item1->setFilterMode(filterMode, filterSize);
-  return false;
-}
-
-bool rSensorX4::setFilterMode2(const sensor_filter_t filterMode, const uint16_t filterSize)
-{
-  if (_item2) return _item2->setFilterMode(filterMode, filterSize);
-  return false;
-}
-
-bool rSensorX4::setFilterMode3(const sensor_filter_t filterMode, const uint16_t filterSize)
-{
-  if (_item3) return _item3->setFilterMode(filterMode, filterSize);
-  return false;
-}
-
-bool rSensorX4::setFilterMode4(const sensor_filter_t filterMode, const uint16_t filterSize)
-{
-  if (_item4) return _item4->setFilterMode(filterMode, filterSize);
-  return false;
-}
-
-// Writing measured RAW values to internal items
-sensor_status_t rSensorX4::setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4)
-{
-  time_t timestamp = time(nullptr);
-  sensor_status_t ret = SENSOR_STATUS_OK;
-  if ((_item1) && (ret == SENSOR_STATUS_OK)) {
-    ret = _item1->checkValue(newValue1);
-    if (ret == SENSOR_STATUS_OK) {
-      _item1->setRawValue(newValue1, timestamp);
-    };
-  };
-  if ((_item2) && (ret == SENSOR_STATUS_OK)) {
-    ret = _item2->checkValue(newValue2);
-    if (ret == SENSOR_STATUS_OK) {
-      _item2->setRawValue(newValue2, timestamp);
-    };
-  };
-  if ((_item3) && (ret == SENSOR_STATUS_OK)) {
-    ret = _item3->checkValue(newValue3);
-    if (ret == SENSOR_STATUS_OK) {
-      _item3->setRawValue(newValue3, timestamp);
-    };
-  };
-  if ((_item4) && (ret == SENSOR_STATUS_OK)) {
-    ret = _item4->checkValue(newValue4);
-    if (ret == SENSOR_STATUS_OK) {
-      _item4->setRawValue(newValue4, timestamp);
-    };
-  };
-  return ret;
-}
-
-// Get a pointer to storage
-rSensorItem* rSensorX4::getSensorItem1()
-{
-  return _item1;
-}
-
-rSensorItem* rSensorX4::getSensorItem2()
-{
-  return _item2;
-}
-
-rSensorItem* rSensorX4::getSensorItem3()
-{
-  return _item3;
-}
-
-rSensorItem* rSensorX4::getSensorItem4()
-{
-  return _item4;
-}
-
-sensor_handle_t rSensorX4::getHandle1()
-{
-  if (_item1) return _item1->getHandle();
-  return nullptr;
-}
-
-sensor_handle_t rSensorX4::getHandle2()
-{
-  if (_item2) return _item2->getHandle();
-  return nullptr;
-}
-
-sensor_handle_t rSensorX4::getHandle3()
-{
-  if (_item3) return _item3->getHandle();
-  return nullptr;
-}
-
-sensor_handle_t rSensorX4::getHandle4()
-{
-  if (_item4) return _item4->getHandle();
-  return nullptr;
-}
-
-// Get data from storage
-sensor_data_t rSensorX4::getValues1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getValues();
-  sensor_data_t empty_data;
-  return empty_data;
-}
-
-sensor_data_t rSensorX4::getValues2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getValues();
-  sensor_data_t empty_data;
-  return empty_data;
-}
-
-sensor_data_t rSensorX4::getValues3(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item3) return _item3->getValues();
-  sensor_data_t empty_data;
-  return empty_data;
-}
-
-sensor_data_t rSensorX4::getValues4(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item4) return _item4->getValues();
-  sensor_data_t empty_data;
-  return empty_data;
-}
-
-sensor_value_t rSensorX4::getValue1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getValue();
-  sensor_value_t empty_data;
-  return empty_data;
-}
-
-sensor_value_t rSensorX4::getValue2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getValue();
-  sensor_value_t empty_data;
-  return empty_data;
-}
-
-sensor_value_t rSensorX4::getValue3(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item3) return _item3->getValue();
-  sensor_value_t empty_data;
-  return empty_data;
-}
-
-sensor_value_t rSensorX4::getValue4(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item4) return _item4->getValue();
-  sensor_value_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX4::getExtremumsEntirely1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getExtremumsEntirely();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX4::getExtremumsEntirely2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getExtremumsEntirely();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX4::getExtremumsEntirely3(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item3) return _item3->getExtremumsEntirely();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX4::getExtremumsEntirely4(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item4) return _item4->getExtremumsEntirely();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX4::getExtremumsWeekly1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getExtremumsWeekly();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX4::getExtremumsWeekly2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getExtremumsWeekly();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX4::getExtremumsWeekly3(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item3) return _item3->getExtremumsWeekly();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX4::getExtremumsWeekly4(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item4) return _item4->getExtremumsWeekly();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX4::getExtremumsDaily1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getExtremumsDaily();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX4::getExtremumsDaily2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getExtremumsDaily();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX4::getExtremumsDaily3(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item3) return _item3->getExtremumsDaily();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX4::getExtremumsDaily4(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item4) return _item4->getExtremumsDaily();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-#if CONFIG_SENSOR_DISPLAY_ENABLED
-
-char* rSensorX4::getDisplayValue()
-{
-  char* ret = nullptr;
-  if (_item1) { 
-    ret = _item1->getStringFiltered(); 
-  };
-  if (_item2) {
-    ret = concat_strings_div(ret, _item2->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
-  };
-  if (_item3) {
-    ret = concat_strings_div(ret, _item3->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
-  };
-  if (_item4) {
-    ret = concat_strings_div(ret, _item4->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
-  };
-  return ret;
-}
-
-#endif // CONFIG_SENSOR_DISPLAY_ENABLED
-
-#if CONFIG_SENSOR_AS_PLAIN
-
-bool rSensorX4::publishItems()
-{
-  return _item1->publishNamedValues() && _item2->publishNamedValues() && _item3->publishNamedValues() && _item4->publishNamedValues();
-}
-
-#endif // CONFIG_SENSOR_AS_PLAIN
-
-#if CONFIG_SENSOR_AS_JSON
-
-char* rSensorX4::getJSON()
-{
-  char* ret = nullptr;
-  char* _json_values = nullptr;
-  if (_item1) { _json_values = _item1->jsonNamedValues(); };
-  if (_item2) { _json_values = concat_strings_div(_json_values, _item2->jsonNamedValues(), ","); };
-  if (_item3) { _json_values = concat_strings_div(_json_values, _item3->jsonNamedValues(), ","); };
-  if (_item4) { _json_values = concat_strings_div(_json_values, _item4->jsonNamedValues(), ","); };
-  // Add mixed content line
-  _json_values = concat_strings_div(_json_values, jsonDisplayAndCustomValues(), ",");
-  // Generating full JSON
-  if (_json_values) {
-    #if CONFIG_SENSOR_STATUS_ENABLE
-      ret = malloc_stringf("{\"%s\":\"%s\",%s}", CONFIG_SENSOR_STATUS, getStatusString(), _json_values);
-    #else
-      ret = malloc_stringf("{%s}", _json_values);
-    #endif //CONFIG_SENSOR_STATUS_ENABLE
-    free(_json_values);
-  };
-  return ret;
-}
-
-#endif // CONFIG_SENSOR_AS_JSON
-
-void rSensorX4::resetExtremumsEntirely()
-{
-  if (_item1) {
-    _item1->resetExtremumsEntirely();
-  };
-  if (_item2) {
-    _item2->resetExtremumsEntirely();
-  };
-  if (_item3) {
-    _item3->resetExtremumsEntirely();
-  };
-  if (_item4) {
-    _item4->resetExtremumsEntirely();
-  };
-}
-
-void rSensorX4::resetExtremumsWeekly()
-{
-  if (_item1) {
-    _item1->resetExtremumsWeekly();
-  };
-  if (_item2) {
-    _item2->resetExtremumsWeekly();
-  };
-  if (_item3) {
-    _item3->resetExtremumsWeekly();
-  };
-  if (_item4) {
-    _item4->resetExtremumsWeekly();
-  };
-}
-
-void rSensorX4::resetExtremumsDaily()
-{
-  if (_item1) {
-    _item1->resetExtremumsDaily();
-  };
-  if (_item2) {
-    _item2->resetExtremumsDaily();
-  };
-  if (_item3) {
-    _item3->resetExtremumsDaily();
-  };
-  if (_item4) {
-    _item4->resetExtremumsDaily();
-  };
-}
-
-void rSensorX4::resetExtremumsTotal()
-{
-  if (_item1) {
-    _item1->resetExtremumsTotal();
-  };
-  if (_item2) {
-    _item2->resetExtremumsTotal();
-  };
-  if (_item3) {
-    _item3->resetExtremumsTotal();
-  };
-  if (_item4) {
-    _item4->resetExtremumsTotal();
-  };
-}
-
-void rSensorX4::nvsStoreExtremums(const char* nvs_space)
-{
-  if (_item1) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
-    if (nvs_space_item) {
-      _item1->nvsStoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item2) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 2);
-    if (nvs_space_item) {
-      _item2->nvsStoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item3) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 3);
-    if (nvs_space_item) {
-      _item3->nvsStoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item4) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 4);
-    if (nvs_space_item) {
-      _item4->nvsStoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-}
-
-void rSensorX4::nvsRestoreExtremums(const char* nvs_space)
-{
-  if (_item1) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
-    if (nvs_space_item) {
-      _item1->nvsRestoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item2) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 2);
-    if (nvs_space_item) {
-      _item2->nvsRestoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item3) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 3);
-    if (nvs_space_item) {
-      _item3->nvsRestoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item4) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 4);
-    if (nvs_space_item) {
-      _item4->nvsRestoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-}
-
-// =======================================================================================================================
-// =======================================================================================================================
-// ====================================================== rSensorX5 ======================================================
-// =======================================================================================================================
-// =======================================================================================================================
-
-// Constructor
-rSensorX5::rSensorX5(uint8_t eventId):rSensor(eventId)
-{ 
-  _item1 = nullptr;
-  _item2 = nullptr;
-  _item3 = nullptr;
-  _item4 = nullptr;
-  _item5 = nullptr;
-}
-
-// Destructor
-rSensorX5::~rSensorX5()
-{
-  // We always delete an item, even if it is attached from the outside
-  if (_item1) delete _item1;
-  if (_item2) delete _item2;
-  if (_item3) delete _item3;
-  if (_item4) delete _item4;
-  if (_item5) delete _item5;
-}
-
-// Set external items
-void rSensorX5::setSensorItems(rSensorItem* item1, rSensorItem* item2, rSensorItem* item3, rSensorItem* item4, rSensorItem* item5)
-{
-  _item1 = item1;
-  _item2 = item2;
-  _item3 = item3;
-  _item4 = item4;
-  _item5 = item5;
-  if (_item1) {
-    _item1->setOwner(this);
-    _item1->initItem();
-  };
-  if (_item2) {
-    _item2->setOwner(this);
-    _item2->initItem();
-  };
-  if (_item3) {
-    _item3->setOwner(this);
-    _item3->initItem();
-  };
-  if (_item4) {
-    _item4->setOwner(this);
-    _item4->initItem();
-  };
-  if (_item5) {
-    _item5->setOwner(this);
-    _item5->initItem();
-  };
-};
-
-// Initialization of internal items
-bool rSensorX5::initSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1,
-                                const sensor_filter_t filterMode2, const uint16_t filterSize2,
-                                const sensor_filter_t filterMode3, const uint16_t filterSize3,
-                                const sensor_filter_t filterMode4, const uint16_t filterSize4,
-                                const sensor_filter_t filterMode5, const uint16_t filterSize5)
-{
-  // Create items by default if they were not assigned externally
-  if ((!_item1) || (!_item2) || (!_item3) || (!_item4) || (!_item5)) {
-    createSensorItems(filterMode1, filterSize1, filterMode2, filterSize2, filterMode3, filterSize3, filterMode4, filterSize4, filterMode5, filterSize5);
-    if (_item1) {
-      _item1->setOwner(this);
-      _item1->initItem();
-    };
-    if (_item2) {
-      _item2->setOwner(this);
-      _item2->initItem();
-    };
-    if (_item3) {
-      _item3->setOwner(this);
-      _item3->initItem();
-    };
-    if (_item4) {
-      _item4->setOwner(this);
-      _item4->initItem();
-    };
-    if (_item5) {
-      _item5->setOwner(this);
-      _item5->initItem();
-    };
-  };
-  return true;
-}
-
-// Change filter mode
-bool rSensorX5::setFilterMode1(const sensor_filter_t filterMode, const uint16_t filterSize)
-{
-  if (_item1) return _item1->setFilterMode(filterMode, filterSize);
-  return false;
-}
-
-bool rSensorX5::setFilterMode2(const sensor_filter_t filterMode, const uint16_t filterSize)
-{
-  if (_item2) return _item2->setFilterMode(filterMode, filterSize);
-  return false;
-}
-
-bool rSensorX5::setFilterMode3(const sensor_filter_t filterMode, const uint16_t filterSize)
-{
-  if (_item3) return _item3->setFilterMode(filterMode, filterSize);
-  return false;
-}
-
-bool rSensorX5::setFilterMode4(const sensor_filter_t filterMode, const uint16_t filterSize)
-{
-  if (_item4) return _item4->setFilterMode(filterMode, filterSize);
-  return false;
-}
-
-bool rSensorX5::setFilterMode5(const sensor_filter_t filterMode, const uint16_t filterSize)
-{
-  if (_item5) return _item5->setFilterMode(filterMode, filterSize);
-  return false;
-}
-
-// Writing measured RAW values to internal items
-sensor_status_t rSensorX5::setRawValues(const value_t newValue1, const value_t newValue2, const value_t newValue3, const value_t newValue4, const value_t newValue5)
-{
-  time_t timestamp = time(nullptr);
-  sensor_status_t ret = SENSOR_STATUS_OK;
-  if ((_item1) && (ret == SENSOR_STATUS_OK)) {
-    ret = _item1->checkValue(newValue1);
-    if (ret == SENSOR_STATUS_OK) {
-      _item1->setRawValue(newValue1, timestamp);
-    };
-  };
-  if ((_item2) && (ret == SENSOR_STATUS_OK)) {
-    ret = _item2->checkValue(newValue2);
-    if (ret == SENSOR_STATUS_OK) {
-      _item2->setRawValue(newValue2, timestamp);
-    };
-  };
-  if ((_item3) && (ret == SENSOR_STATUS_OK)) {
-    ret = _item3->checkValue(newValue3);
-    if (ret == SENSOR_STATUS_OK) {
-      _item3->setRawValue(newValue3, timestamp);
-    };
-  };
-  if ((_item4) && (ret == SENSOR_STATUS_OK)) {
-    ret = _item4->checkValue(newValue4);
-    if (ret == SENSOR_STATUS_OK) {
-      _item4->setRawValue(newValue4, timestamp);
-    };
-  };
-  if ((_item5) && (ret == SENSOR_STATUS_OK)) {
-    ret = _item5->checkValue(newValue5);
-    if (ret == SENSOR_STATUS_OK) {
-      _item5->setRawValue(newValue5, timestamp);
-    };
-  };
-  return ret;
-}
-
-// Get a pointer to storage
-rSensorItem* rSensorX5::getSensorItem1()
-{
-  return _item1;
-}
-
-rSensorItem* rSensorX5::getSensorItem2()
-{
-  return _item2;
-}
-
-rSensorItem* rSensorX5::getSensorItem3()
-{
-  return _item3;
-}
-
-rSensorItem* rSensorX5::getSensorItem4()
-{
-  return _item4;
-}
-
-rSensorItem* rSensorX5::getSensorItem5()
-{
-  return _item5;
-}
-
-sensor_handle_t rSensorX5::getHandle1()
-{
-  if (_item1) return _item1->getHandle();
-  return nullptr;
-}
-
-sensor_handle_t rSensorX5::getHandle2()
-{
-  if (_item2) return _item2->getHandle();
-  return nullptr;
-}
-
-sensor_handle_t rSensorX5::getHandle3()
-{
-  if (_item3) return _item3->getHandle();
-  return nullptr;
-}
-
-sensor_handle_t rSensorX5::getHandle4()
-{
-  if (_item4) return _item4->getHandle();
-  return nullptr;
-}
-
-sensor_handle_t rSensorX5::getHandle5()
-{
-  if (_item5) return _item5->getHandle();
-  return nullptr;
-}
-
-// Get data from storage
-sensor_data_t rSensorX5::getValues1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getValues();
-  sensor_data_t empty_data;
-  return empty_data;
-}
-
-sensor_data_t rSensorX5::getValues2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getValues();
-  sensor_data_t empty_data;
-  return empty_data;
-}
-
-sensor_data_t rSensorX5::getValues3(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item3) return _item3->getValues();
-  sensor_data_t empty_data;
-  return empty_data;
-}
-
-sensor_data_t rSensorX5::getValues4(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item4) return _item4->getValues();
-  sensor_data_t empty_data;
-  return empty_data;
-}
-
-sensor_data_t rSensorX5::getValues5(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item5) return _item5->getValues();
-  sensor_data_t empty_data;
-  return empty_data;
-}
-
-sensor_value_t rSensorX5::getValue1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getValue();
-  sensor_value_t empty_data;
-  return empty_data;
-}
-
-sensor_value_t rSensorX5::getValue2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getValue();
-  sensor_value_t empty_data;
-  return empty_data;
-}
-
-sensor_value_t rSensorX5::getValue3(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item3) return _item3->getValue();
-  sensor_value_t empty_data;
-  return empty_data;
-}
-
-sensor_value_t rSensorX5::getValue4(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item4) return _item4->getValue();
-  sensor_value_t empty_data;
-  return empty_data;
-}
-
-sensor_value_t rSensorX5::getValue5(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item5) return _item5->getValue();
-  sensor_value_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX5::getExtremumsEntirely1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getExtremumsEntirely();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX5::getExtremumsEntirely2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getExtremumsEntirely();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX5::getExtremumsEntirely3(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item3) return _item3->getExtremumsEntirely();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX5::getExtremumsEntirely4(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item4) return _item4->getExtremumsEntirely();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX5::getExtremumsEntirely5(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item5) return _item5->getExtremumsEntirely();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX5::getExtremumsWeekly1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getExtremumsWeekly();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX5::getExtremumsWeekly2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getExtremumsWeekly();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX5::getExtremumsWeekly3(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item3) return _item3->getExtremumsWeekly();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX5::getExtremumsWeekly4(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item4) return _item4->getExtremumsWeekly();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX5::getExtremumsWeekly5(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item5) return _item5->getExtremumsWeekly();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX5::getExtremumsDaily1(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item1) return _item1->getExtremumsDaily();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX5::getExtremumsDaily2(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item2) return _item2->getExtremumsDaily();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX5::getExtremumsDaily3(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item3) return _item3->getExtremumsDaily();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX5::getExtremumsDaily4(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item4) return _item4->getExtremumsDaily();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-sensor_extremums_t rSensorX5::getExtremumsDaily5(const bool readSensor)
-{
-  if (readSensor) readData();
-  if (_item5) return _item5->getExtremumsDaily();
-  sensor_extremums_t empty_data;
-  return empty_data;
-}
-
-#if CONFIG_SENSOR_DISPLAY_ENABLED
-
-char* rSensorX5::getDisplayValue()
-{
-  char* ret = nullptr;
-  if (_item1) { 
-    ret = _item1->getStringFiltered(); 
-  };
-  if (_item2) {
-    ret = concat_strings_div(ret, _item2->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
-  };
-  if (_item3) {
-    ret = concat_strings_div(ret, _item3->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
-  };
-  if (_item4) {
-    ret = concat_strings_div(ret, _item4->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
-  };
-  if (_item5) {
-    ret = concat_strings_div(ret, _item5->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
-  };
-  return ret;
-}
-
-#endif // CONFIG_SENSOR_DISPLAY_ENABLED
-
-#if CONFIG_SENSOR_AS_PLAIN
-
-bool rSensorX5::publishItems()
-{
-  return _item1->publishNamedValues() 
-      && _item2->publishNamedValues() 
-      && _item3->publishNamedValues() 
-      && _item4->publishNamedValues() 
-      && _item5->publishNamedValues();
-}
-
-#endif // CONFIG_SENSOR_AS_PLAIN
-
-#if CONFIG_SENSOR_AS_JSON
-
-char* rSensorX5::getJSON()
-{
-  char* ret = nullptr;
-  char* _json_values = nullptr;
-  if (_item1) { _json_values = _item1->jsonNamedValues(); };
-  if (_item2) { _json_values = concat_strings_div(_json_values, _item2->jsonNamedValues(), ","); };
-  if (_item3) { _json_values = concat_strings_div(_json_values, _item3->jsonNamedValues(), ","); };
-  if (_item4) { _json_values = concat_strings_div(_json_values, _item4->jsonNamedValues(), ","); };
-  if (_item5) { _json_values = concat_strings_div(_json_values, _item5->jsonNamedValues(), ","); };
-  // Add mixed content line
-  _json_values = concat_strings_div(_json_values, jsonDisplayAndCustomValues(), ",");
-  // Generating full JSON
-  if (_json_values) {
-    #if CONFIG_SENSOR_STATUS_ENABLE
-      ret = malloc_stringf("{\"%s\":\"%s\",%s}", CONFIG_SENSOR_STATUS, getStatusString(), _json_values);
-    #else
-      ret = malloc_stringf("{%s}", _json_values);
-    #endif //CONFIG_SENSOR_STATUS_ENABLE
-    free(_json_values);
-  };
-  return ret;
-}
-
-#endif // CONFIG_SENSOR_AS_JSON
-
-void rSensorX5::resetExtremumsEntirely()
-{
-  if (_item1) {
-    _item1->resetExtremumsEntirely();
-  };
-  if (_item2) {
-    _item2->resetExtremumsEntirely();
-  };
-  if (_item3) {
-    _item3->resetExtremumsEntirely();
-  };
-  if (_item4) {
-    _item4->resetExtremumsEntirely();
-  };
-  if (_item5) {
-    _item5->resetExtremumsEntirely();
-  };
-}
-
-void rSensorX5::resetExtremumsWeekly()
-{
-  if (_item1) {
-    _item1->resetExtremumsWeekly();
-  };
-  if (_item2) {
-    _item2->resetExtremumsWeekly();
-  };
-  if (_item3) {
-    _item3->resetExtremumsWeekly();
-  };
-  if (_item4) {
-    _item4->resetExtremumsWeekly();
-  };
-  if (_item5) {
-    _item5->resetExtremumsWeekly();
-  };
-}
-
-void rSensorX5::resetExtremumsDaily()
-{
-  if (_item1) {
-    _item1->resetExtremumsDaily();
-  };
-  if (_item2) {
-    _item2->resetExtremumsDaily();
-  };
-  if (_item3) {
-    _item3->resetExtremumsDaily();
-  };
-  if (_item4) {
-    _item4->resetExtremumsDaily();
-  };
-  if (_item5) {
-    _item5->resetExtremumsDaily();
-  };
-}
-
-void rSensorX5::resetExtremumsTotal()
-{
-  if (_item1) {
-    _item1->resetExtremumsTotal();
-  };
-  if (_item2) {
-    _item2->resetExtremumsTotal();
-  };
-  if (_item3) {
-    _item3->resetExtremumsTotal();
-  };
-  if (_item4) {
-    _item4->resetExtremumsTotal();
-  };
-  if (_item5) {
-    _item5->resetExtremumsTotal();
-  };
-}
-
-void rSensorX5::nvsStoreExtremums(const char* nvs_space)
-{
-  if (_item1) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
-    if (nvs_space_item) {
-      _item1->nvsStoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item2) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 2);
-    if (nvs_space_item) {
-      _item2->nvsStoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item3) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 3);
-    if (nvs_space_item) {
-      _item3->nvsStoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item4) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 4);
-    if (nvs_space_item) {
-      _item4->nvsStoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item5) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 5);
-    if (nvs_space_item) {
-      _item5->nvsStoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-}
-
-void rSensorX5::nvsRestoreExtremums(const char* nvs_space)
-{
-  if (_item1) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 1);
-    if (nvs_space_item) {
-      _item1->nvsRestoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item2) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 2);
-    if (nvs_space_item) {
-      _item2->nvsRestoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item3) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 3);
-    if (nvs_space_item) {
-      _item3->nvsRestoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item4) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 4);
-    if (nvs_space_item) {
-      _item4->nvsRestoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-  if (_item5) {
-    char* nvs_space_item = malloc_stringf(CONFIG_SENSOR_NVS_ITEMS, nvs_space, 5);
-    if (nvs_space_item) {
-      _item5->nvsRestoreExtremums(nvs_space_item);
-      free(nvs_space_item);
-    };
-  };
-}
 
