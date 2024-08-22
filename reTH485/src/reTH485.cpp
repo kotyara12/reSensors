@@ -40,7 +40,7 @@ sensor_status_t reTH485::readRawData()
   mb_param_request_t _request = {
     .slave_addr = _address,
     .command    = _command,
-    .reg_start  = _reg_humd < _reg_temp ? _reg_humd : _reg_temp,
+    .reg_start  = (_reg_humd < _reg_temp ? _reg_humd : _reg_temp),
     .reg_size   = 2
   };
 
