@@ -4,6 +4,7 @@
 #include "rLog.h"
 #include <time.h>
 #include "mbcontroller.h"
+#include "reSensor.h"
 
 static const char* logTAG = "USWS";
 
@@ -55,7 +56,7 @@ static const char* logTAG = "USWS";
 #define VAL_CAL_RAINFALL_ZERO         0x5A
 
 reCWTUwdSws::reCWTUwdSws(uint8_t eventId, 
-  void* modbus, const uint8_t address,
+  void* modbus, const uint8_t address, const bool windSpeedGusts,
   const char* sensorName, const char* topicName, const bool topicLocal, 
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
@@ -66,6 +67,7 @@ reCWTUwdSws::reCWTUwdSws(uint8_t eventId,
 {
   _modbus = modbus;
   _address = address;
+  _windSpeedGusts = windSpeedGusts;
 }
 
 void reCWTUwdSws::setSensorItems(rSensorItem* itemTemperature, rSensorItem* itemHumidity, 
@@ -124,6 +126,11 @@ sensor_value_t reCWTUwdSws::getWindDirection(const bool readSensor)
   return getItemValue(6, readSensor);
 }
 
+const char* reCWTUwdSws::getWindDirectionChars(const bool readSensor)
+{
+  return degrees2direction(getItemValue(6, readSensor).filteredValue);
+}
+
 sensor_value_t reCWTUwdSws::getNoise(const bool readSensor)
 {
   return getItemValue(7, readSensor);
@@ -144,23 +151,22 @@ sensor_value_t reCWTUwdSws::getRainfall(const bool readSensor)
   return getItemValue(10, readSensor);
 }
 
-#if CONFIG_SENSOR_DISPLAY_ENABLED
+// #if CONFIG_SENSOR_DISPLAY_ENABLED
 
 char* reCWTUwdSws::getDisplayValue()
 {
   char* ret = nullptr;
-  // Temperature
-  if (_items[0]) {
-    ret = _items[0]->getStringFiltered();
-  };
-  // Humidity
-  if (_items[1]) {
-    ret = concat_strings_div(ret, _items[1]->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+  if (_items[4] && _items[6]) {
+    // Wind speed + direction
+    ret = concat_strings_div(_items[4]->getStringFiltered(), _items[6]->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+  } else {
+    // Temperature + humidity
+    ret = concat_strings_div(_items[0]->getStringFiltered(), _items[1]->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
   };
   return ret;
 }
 
-#endif // CONFIG_SENSOR_DISPLAY_ENABLED
+// #endif // CONFIG_SENSOR_DISPLAY_ENABLED
 
 // Start device
 sensor_status_t reCWTUwdSws::sensorReset()
@@ -173,7 +179,7 @@ sensor_status_t reCWTUwdSws::sensorReset()
  * */
 sensor_status_t reCWTUwdSws::readRawData()
 {
-  int16_t buffer[REG_STATUS_COUNT] = {0};
+  uint16_t buffer[REG_STATUS_COUNT] = {0};
   sensor_status_t ret = SENSOR_STATUS_OK;
   mb_param_request_t _request = {
     .slave_addr = _address,
@@ -186,47 +192,66 @@ sensor_status_t reCWTUwdSws::readRawData()
     time_t read_time = time(nullptr);
     // 0 - itemTemperature
     if (_items[0] && (ret = SENSOR_STATUS_OK)) {
-      ret = _items[0]->setRawValue((float)buffer[REG_INDEX_TEMPERATURE] / 10.0, read_time);
+      ret = _items[0]->setRawValue((value_t)((int16_t)buffer[REG_INDEX_TEMPERATURE]) / 10.0, read_time);
     };
     // 1 - itemHumidity
     if (_items[1] && (ret = SENSOR_STATUS_OK)) {
-      ret = _items[1]->setRawValue((float)buffer[REG_INDEX_HUMIDITY] / 10.0, read_time);
+      ret = _items[1]->setRawValue((value_t)((int16_t)buffer[REG_INDEX_HUMIDITY]) / 10.0, read_time);
     };
     // 2 - itemPressure
     if (_items[2] && (ret = SENSOR_STATUS_OK)) {
-      ret = _items[2]->setRawValue((float)buffer[REG_INDEX_PRESSURE] * 100.0, read_time);
+      ret = _items[2]->setRawValue((value_t)buffer[REG_INDEX_PRESSURE] * 100.0, read_time);
     };
     // 3 - itemIlluminance
     if (_items[3] && (ret = SENSOR_STATUS_OK)) {
-      ret = _items[3]->setRawValue((float)(buffer[REG_INDEX_ILLUMINANCE_HIGH] << 16 | buffer[REG_INDEX_ILLUMINANCE_LOW]), read_time);
+      ret = _items[3]->setRawValue((value_t)(buffer[REG_INDEX_ILLUMINANCE_HIGH] << 16 | buffer[REG_INDEX_ILLUMINANCE_LOW]), read_time);
     };
     // 4 - itemWindSpeed
     if (_items[4] && (ret = SENSOR_STATUS_OK)) {
-      ret = _items[4]->setRawValue((float)buffer[REG_INDEX_WIND_SPEED] / 10.0, read_time);
+      value_t windSpeed = (value_t)buffer[REG_INDEX_WIND_SPEED] / 100.0;
+      if (_windSpeedGusts) {
+        if (_windSpeedGustsZero || (windSpeed > getItemValue(4, false).rawValue)) {
+          ret = _items[4]->setRawValue(windSpeed, read_time);
+        };
+      } else {
+        ret = _items[4]->setRawValue(windSpeed, read_time);
+      };
     };
     // 5 - itemWindStrength
     if (_items[5] && (ret = SENSOR_STATUS_OK)) {
-      ret = _items[5]->setRawValue((float)buffer[REG_INDEX_WIND_STRENGHT], read_time);
+      value_t windStrength = (value_t)buffer[REG_INDEX_WIND_STRENGHT];
+      if (_windSpeedGusts) {
+        if (_windSpeedGustsZero || (windStrength > getItemValue(5, false).rawValue)) {
+          ret = _items[5]->setRawValue(windStrength, read_time);
+        };
+      } else {
+        ret = _items[5]->setRawValue(windStrength, read_time);
+      };
     };
     // 6 - itemWindDirection
-    if (_items[6] && (ret = SENSOR_STATUS_OK)) {
-      ret = _items[6]->setRawValue((float)buffer[REG_INDEX_WIND_DIRECTION_360], read_time);
+    if (_items[6] && (ret = SENSOR_STATUS_OK)
+      && (isnan(getItemValue(6, false).rawValue) || (buffer[REG_INDEX_WIND_SPEED] > 0) || (buffer[REG_INDEX_WIND_DIRECTION_360] > 0))) 
+    {
+      ret = _items[6]->setRawValue((value_t)buffer[REG_INDEX_WIND_DIRECTION_360], read_time);
     };
     // 7 - itemNoise
     if (_items[7] && (ret = SENSOR_STATUS_OK)) {
-      ret = _items[7]->setRawValue((float)buffer[REG_INDEX_NOISE] / 10.0, read_time);
+      ret = _items[7]->setRawValue((value_t)buffer[REG_INDEX_NOISE] / 10.0, read_time);
     };
     // 8 - itemPM25
     if (_items[8] && (ret = SENSOR_STATUS_OK)) {
-      ret = _items[8]->setRawValue((float)buffer[REG_INDEX_PM25], read_time);
+      ret = _items[8]->setRawValue((value_t)buffer[REG_INDEX_PM25], read_time);
     };
     // 9 - itemPM10
     if (_items[9] && (ret = SENSOR_STATUS_OK)) {
-      ret = _items[9]->setRawValue((float)buffer[REG_INDEX_PM10], read_time);
+      ret = _items[9]->setRawValue((value_t)buffer[REG_INDEX_PM10], read_time);
     };
     // 10 - itemRainfall
     if (_items[10] && (ret = SENSOR_STATUS_OK)) {
-      ret = _items[10]->setRawValue((float)buffer[REG_INDEX_RAINFALL], read_time);
+      ret = _items[10]->setRawValue((value_t)buffer[REG_INDEX_RAINFALL] / 10.0, read_time);
+      if (buffer[REG_INDEX_RAINFALL] > 0) {
+        ret = setRainfallZero();
+      };
     };
   } else {
     rlog_e(logTAG, RSENSOR_LOG_MSG_READ_DATA_FAILED, _name, err, esp_err_to_name(err));
@@ -270,6 +295,12 @@ sensor_status_t reCWTUwdSws::setWindSpeedZero()
     .reg_size   = 1
   };
   return convertEspError(mbc_master_send_request(&_request, (void*)&value));
+}
+
+sensor_status_t reCWTUwdSws::setWindSpeedZeroGusts()
+{
+  _windSpeedGustsZero = true;
+  return SENSOR_STATUS_OK; 
 }
 
 sensor_status_t reCWTUwdSws::setRainfallZero()

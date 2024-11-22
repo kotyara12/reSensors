@@ -55,8 +55,18 @@ sensor_status_t reTH485::readRawData()
 
   // Store values in sensors
   if (_reg_humd < _reg_temp) {
+    // Check error values
+    if ((_data[0] < 0) || (_data[0] > 1000) || (_data[1] < -1000) || (_data[1] > 1000)) {
+      rlog_e(logTAG, RSENSOR_LOG_MSG_BAD_VALUE, _name);
+      return SENSOR_STATUS_BAD_DATA;
+    };
     return setRawValues((float)_data[0]/10.0, (float)_data[1]/10.0);
   } else {
+    // Check error values
+    if ((_data[0] < -1000) || (_data[0] > 1000) || (_data[1] < 0) || (_data[1] > 1000)) {
+      rlog_e(logTAG, RSENSOR_LOG_MSG_BAD_VALUE, _name);
+      return SENSOR_STATUS_BAD_DATA;
+    };
     return setRawValues((float)_data[1]/10.0, (float)_data[0]/10.0);
   };
 };

@@ -130,8 +130,8 @@ extern "C" {
 class rSensor;
 
 typedef enum {
-  SENSOR_STATUS_NO_INIT       = 0,   // Sensor not initialized
-  SENSOR_STATUS_NO_DATA       = 1,   // Failed to read data
+  SENSOR_STATUS_NO_INIT       = 0,   // Sensor not started
+  SENSOR_STATUS_NO_DATA       = 1,   // Data has not yet been read or read failure
   SENSOR_STATUS_OK            = 2,   // Everything is wonderful
   SENSOR_STATUS_NOT_SUPPORTED = 3,   // Requested operation is not supported
   SENSOR_STATUS_CONN_ERROR    = 4,   // Sensor not connected or communication error
@@ -180,7 +180,8 @@ typedef enum {
   BOUNDS_EXPAND               = 1,
   BOUNDS_EXPAND_MIN           = 2,
   BOUNDS_EXPAND_MAX           = 3,
-  BOUNDS_SHIFT_RANGE          = 4
+  BOUNDS_SHIFT_RANGE          = 4,
+  BOUNDS_FIXED_OVER           = 5
 } type_bounds_t;
 
 
@@ -212,6 +213,7 @@ typedef sensor_data_t * sensor_handle_t;
 double calcAbsoluteHumidity(float temp, float humd);
 value_t calcDewPoint(value_t tempValue, value_t humidityValue);
 value_t calcDewPointSlow(value_t tempValue, value_t humidityValue);
+const char* degrees2direction(const value_t value);
 
 class rSensor;
 class rSensorItem;
@@ -327,14 +329,14 @@ class rSensorItem {
 
     // Publishing extremes
     #if CONFIG_SENSOR_AS_PLAIN
-    bool publishExtremums(const char* topic, sensor_extremums_t *range
+    virtual bool publishExtremums(const char* topic, sensor_extremums_t *range
       #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
       , const bool minValueChanged, const bool maxValueChanged
       #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
       );
     #endif // CONFIG_SENSOR_AS_PLAIN
     #if CONFIG_SENSOR_AS_JSON
-    char* jsonExtremums(const char* type, sensor_extremums_t *range);
+    virtual char* jsonExtremums(const char* type, sensor_extremums_t *range);
     #endif // CONFIG_SENSOR_AS_JSON
 
     // Publishing latest values and extremes
@@ -348,8 +350,8 @@ class rSensorItem {
     #endif // CONFIG_SENSOR_AS_JSON
 
     // NVS
-    void nvsStoreExtremums(const char* nvs_space);
-    void nvsRestoreExtremums(const char* nvs_space);
+    virtual void nvsStoreExtremums(const char* nvs_space);
+    virtual void nvsRestoreExtremums(const char* nvs_space);
   protected:
     rSensor *_owner = nullptr;
     bool _forcedRawPublish = false;
@@ -402,6 +404,27 @@ class rPressureItem: public rSensorItem {
     value_t convertValue(const value_t rawValue) override;
   private:
     unit_pressure_t _units;
+};
+
+class rWindDirectionItem: public rSensorItem {
+  public:
+    rWindDirectionItem(rSensor *sensor, const char* itemKey, const char* _itemName, const char* itemFriendly,
+      const sensor_filter_t filterMode, const uint16_t filterSize,
+      const char* formatNumeric);
+    char* asString(const char* format, const value_t value, bool nan_brackets) override;
+    // Extremums
+    void nvsStoreExtremums(const char* nvs_space) override;
+    void nvsRestoreExtremums(const char* nvs_space) override;
+    #if CONFIG_SENSOR_AS_PLAIN
+    bool publishExtremums(const char* topic, sensor_extremums_t *range
+      #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+      , const bool minValueChanged, const bool maxValueChanged
+      #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+      ) override;
+    #endif // CONFIG_SENSOR_AS_PLAIN
+    #if CONFIG_SENSOR_AS_JSON
+    char* jsonExtremums(const char* type, sensor_extremums_t *range) override;
+    #endif // CONFIG_SENSOR_AS_JSON
 };
 
 class rVirtualItem: public rSensorItem {
@@ -548,10 +571,9 @@ class rSensor {
     uint8_t             _eventId = 0;
     uint32_t            _readInterval;
     int64_t             _readLast;
-    sensor_status_t     _lstStatus;
     sensor_status_t     _errStatus;
     uint16_t            _errLimit;
-    unsigned long       _errCount;
+    uint16_t            _errCount;
     cb_status_changed_t _cbOnChangeStatus;
     cb_publish_data_t   _cbOnPublishData;
     void postEventStatus(const sensor_status_t oldStatus, const sensor_status_t newStatus);

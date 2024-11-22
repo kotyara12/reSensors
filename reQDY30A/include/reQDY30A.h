@@ -17,10 +17,15 @@
 extern "C" {
 #endif
 
+typedef enum {
+  QUNITS_CM = 0,
+  QUNITS_MM = 1
+} qdy_units_t;
+
 class reQDY30A : public rSensor {
   public:
     reQDY30A(uint8_t eventId, 
-      void* modbus, const uint8_t address,
+      void* modbus, const uint8_t address, const qdy_units_t units,
       const char* sensorName, const char* topicName, const bool topicLocal, 
       const uint32_t minReadInterval = 1000, const uint16_t errorLimit = 0,
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
@@ -33,8 +38,7 @@ class reQDY30A : public rSensor {
   private:
     void*            _modbus = nullptr;
     uint8_t          _address = 1;
-    
-    esp_err_t callModbusRegister(uint8_t cmd, uint16_t reg, int16_t* value);
+    qdy_units_t      _units = QUNITS_MM;
 };
 
 #ifdef __cplusplus

@@ -20,7 +20,7 @@ extern "C" {
 class reCWTUwdSws : public rSensor {
   public:
     reCWTUwdSws(uint8_t eventId, 
-      void* modbus, const uint8_t address,
+      void* modbus, const uint8_t address, const bool windSpeedGusts,
       const char* sensorName, const char* topicName, const bool topicLocal, 
       const uint32_t minReadInterval = 1000, const uint16_t errorLimit = 0,
       cb_status_changed_t cb_status = nullptr, cb_publish_data_t cb_publish = nullptr);
@@ -42,6 +42,7 @@ class reCWTUwdSws : public rSensor {
     sensor_value_t getWindSpeed(const bool readSensor);
     sensor_value_t getWindStrength(const bool readSensor);
     sensor_value_t getWindDirection(const bool readSensor);
+    const char* getWindDirectionChars(const bool readSensor);
     sensor_value_t getNoise(const bool readSensor);
     sensor_value_t getPM25(const bool readSensor);
     sensor_value_t getPM10(const bool readSensor);
@@ -50,6 +51,7 @@ class reCWTUwdSws : public rSensor {
     sensor_status_t setBaudRate(uint16_t value);
     sensor_status_t setSlaveId(uint16_t value);
     sensor_status_t setWindSpeedZero();
+    sensor_status_t setWindSpeedZeroGusts();
     sensor_status_t setRainfallZero();
   protected:
     sensor_status_t readRawData() override;  
@@ -60,6 +62,9 @@ class reCWTUwdSws : public rSensor {
   private:
     void*           _modbus = nullptr;
     uint8_t         _address = 1;
+    bool            _windSpeedGusts = true;
+    bool            _windSpeedGustsZero = true;
+    value_t         _rainfallIncrement = NAN;
 };
 
 #ifdef __cplusplus

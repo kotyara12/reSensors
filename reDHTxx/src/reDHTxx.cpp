@@ -14,62 +14,28 @@ static const char* logTAG = "DHTxx";
 #define DHT_MIN_RESET_INTERVAL 600
 
 // Constructor
-DHTxx::DHTxx(uint8_t eventId):rSensorHT(eventId)
+DHTxx::DHTxx(uint8_t eventId,
+  DHTxx_TYPE sensorType, const gpio_num_t gpioNum, const bool gpioPullup, const gpio_num_t gpioReset, const uint8_t levelReset,
+  const char* sensorName, const char* topicName, const bool topicLocal, 
+  const uint32_t minReadInterval, const uint16_t errorLimit,
+  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
+:rSensorHT(eventId, 
+  sensorName, topicName, topicLocal, 
+  minReadInterval, errorLimit,
+  cb_status, cb_publish)
 { 
+  _sensorType = sensorType;
+  _sensorGPIO = gpioNum;
+  _gpioPullup = gpioPullup;
+  _resetGPIO  = gpioReset;
+  _resetLevel = levelReset;
+  _resetTime  = 0;
+  
   // 1 millisecond timeout for reading pulses from DHT sensor
   // Note that count is now ignored as the DHT reading algorithm adjusts itself based on the speed of the processor.
   rtc_cpu_freq_config_t conf;
   rtc_clk_cpu_freq_get_config(&conf);
   _maxCycles = conf.freq_mhz * 1000;
-  
-  _resetGPIO = GPIO_NUM_NC;
-  _resetLevel = 1;
-  _resetTime = 0;
-}
-
-// Dynamically creating internal items on the heap
-bool DHTxx::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-  DHTxx_TYPE sensorType, const uint8_t gpioNum, const bool gpioPullup, const int8_t gpioReset, const uint8_t levelReset,
-  const sensor_filter_t filterMode1, const uint16_t filterSize1, 
-  const sensor_filter_t filterMode2, const uint16_t filterSize2,
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
-{
-  _sensorType = sensorType;
-  _sensorGPIO = (gpio_num_t)gpioNum;
-  _gpioPullup = gpioPullup;
-  _resetGPIO  = (gpio_num_t)gpioReset;
-  _resetLevel = levelReset;
-  _resetTime  = 0;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Initialize internal items
-  if (this->rSensorX2::initSensorItems(filterMode1, filterSize1, filterMode2, filterSize2)) {
-    // Start device
-    return sensorStart();
-  };
-  return false;
-}
-
-// Connecting external previously created items, for example statically declared
-bool DHTxx::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-  DHTxx_TYPE sensorType, const uint8_t gpioNum, const bool gpioPullup, const int8_t gpioReset, const uint8_t levelReset,
-  rSensorItem* item1, rSensorItem* item2,
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
-{
-  _sensorType = sensorType;
-  _sensorGPIO = (gpio_num_t)gpioNum;
-  _gpioPullup = gpioPullup;
-  _resetGPIO  = (gpio_num_t)gpioReset;
-  _resetLevel = levelReset;
-  _resetTime  = 0;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Assign items
-  this->rSensorX2::setSensorItems(item1, item2);
-  // Start device
-  return sensorStart();
 }
 
 // Sensor initialization and start

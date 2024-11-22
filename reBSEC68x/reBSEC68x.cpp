@@ -72,16 +72,29 @@ static void BME68x_delay_us(uint32_t period, void *intf_ptr)
 // ------------------------------------------------------- BME68x --------------------------------------------------------
 // -----------------------------------------------------------------------------------------------------------------------
 
-BSEC68x::BSEC68x(uint8_t eventId):rSensorX4(eventId)
+BSEC68x::BSEC68x(uint8_t eventId,
+  const i2c_port_t numI2C, const uint8_t addrI2C, 
+  BME68x_STANDBYTIME odr, BME68x_IIR_FILTER filter,
+  BME68x_OVERSAMPLING osPress, BME68x_OVERSAMPLING osTemp, BME68x_OVERSAMPLING osHum,
+  BME68x_BSEC2_OUTPUT bsec_output, float bsec_rate,
+  const char* sensorName, const char* topicName, const bool topicLocal, 
+  const uint32_t minReadInterval, const uint16_t errorLimit,
+  cb_status_changed_t cb_status, cb_publish_data_t cb_publish
+):rSensor(eventId, 4, 
+  sensorName, topicName, topicLocal, 
+  minReadInterval, errorLimit,
+  cb_status, cb_publish)
 {
-  _I2C_num = I2C_NUM_0;
-  _I2C_address = 0;
+  _I2C_num = numI2C;
+  _I2C_address = addrI2C;
 
-  _filter = BME68X_FILTER_OFF;
-  _odr = BME68X_ODR_125_MS;
-  _os_press = BME68X_OS_4X;
-  _os_temp = BME68X_OS_4X;
-  _os_humd = BME68X_OS_4X;
+  _odr = odr;
+  _filter = filter;
+  _os_press = osPress;
+  _os_temp = osTemp;
+  _os_humd = osHum;
+  _bsec_output_type = bsec_output;
+  _bsec_sample_rate = bsec_rate;
 
   memset(&_dev, 0, sizeof(_dev));
   _dev.chip_id = 0;
@@ -103,17 +116,30 @@ BSEC68x::~BSEC68x()
   // nothing
 }
 
-// Displaying multiple values in one topic
+void BSEC68x::setSensorItems(rSensorItem* itemPressure, rSensorItem* itemTemperature, rSensorItem* itemHumidity, rSensorItem* itemIAQ)
+{
+  setSensorItem(0, itemPressure);
+  setSensorItem(1, itemTemperature);
+  setSensorItem(2, itemHumidity);
+  setSensorItem(3, itemIAQ);
+}
+
+/**
+ * Displaying multiple values in one topic
+ * */
 #if CONFIG_SENSOR_DISPLAY_ENABLED
 
 char* BSEC68x::getDisplayValue()
 {
   char* ret = nullptr;
-  if (_item2) { 
-    ret = _item2->getStringFiltered(); 
+  if (_items[1]) { 
+    ret = _items[1]->getStringFiltered(); 
   };
-  if (_item3) {
-    ret = concat_strings_div(ret, _item3->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+  if (_items[2]) {
+    ret = concat_strings_div(ret, _items[2]->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
+  };
+  if (_items[3]) {
+    ret = concat_strings_div(ret, _items[3]->getStringFiltered(), CONFIG_JSON_CHAR_EOL);
   };
   return ret;
 }
@@ -127,9 +153,9 @@ bool BSEC68x::publishCustomValues()
   bool ret = rSensor::publishCustomValues();
 
   #if CONFIG_SENSOR_DEWPOINT_ENABLE
-    if ((ret) && (_item2) && (_item3)) {
-      ret = _item2->publishDataValue(CONFIG_SENSOR_DEWPOINT, 
-        calcDewPoint(_item2->getValue().filteredValue, _item3->getValue().filteredValue));
+    if ((ret) && (_items[1]) && (_items[2])) {
+      ret = _items[1]->publishDataValue(CONFIG_SENSOR_DEWPOINT, 
+        calcDewPoint(getItemValue(1, false).filteredValue, getItemValue(2, false).filteredValue));
     };
   #endif // CONFIG_SENSOR_DEWPOINT_ENABLE
 
@@ -143,8 +169,8 @@ bool BSEC68x::publishCustomValues()
 char* BSEC68x::jsonCustomValues()
 {
   #if CONFIG_SENSOR_DEWPOINT_ENABLE
-    if ((_item2) && (_item3)) {
-      char * _dew_point = _item2->jsonDataValue(true, calcDewPoint(_item2->getValue().filteredValue, _item3->getValue().filteredValue));
+    if ((_items[1]) && (_items[2])) {
+      char * _dew_point = _item1->jsonDataValue(true, calcDewPoint(getItemValue(1, false).filteredValue, getItemValue(2, false).filteredValue));
       char * ret = malloc_stringf("\"%s\":%s", CONFIG_SENSOR_DEWPOINT, _dew_point);
       if (_dew_point) free(_dew_point);
       return ret;  
@@ -154,157 +180,6 @@ char* BSEC68x::jsonCustomValues()
 }
 
 #endif // CONFIG_SENSOR_AS_JSON
-
-/**
- * Dynamically creating internal items on the heap
- * */
-bool BSEC68x::initIntItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-  const i2c_port_t numI2C, const uint8_t addrI2C, 
-  BME68x_STANDBYTIME odr, BME68x_IIR_FILTER filter, BME68x_OVERSAMPLING osPress, BME68x_OVERSAMPLING osTemp, BME68x_OVERSAMPLING osHum,
-  BME68x_BSEC2_OUTPUT bsec_output, float bsec_rate,
-  sensor_filter_t filterMode1, uint16_t filterSize1, 
-  sensor_filter_t filterMode2, uint16_t filterSize2,
-  sensor_filter_t filterMode3, uint16_t filterSize3,
-  sensor_filter_t filterMode4, uint16_t filterSize4,
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
-{
-  _I2C_num = numI2C;
-  _I2C_address = addrI2C;
-  // Set configuration
-  _odr = (uint8_t)odr;
-  _filter = (uint8_t)filter;
-  _os_press = (uint8_t)osPress;
-  _os_temp = (uint8_t)osTemp;
-  _os_humd = (uint8_t)osHum;
-  // Initialize BSEC2
-  _bsec_output_type = bsec_output;
-  _bsec_sample_rate = bsec_rate;
-   // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Initialize internal items
-  if (this->rSensorX4::initSensorItems(filterMode1, filterSize1, filterMode2, filterSize2, filterMode3, filterSize3, filterMode4, filterSize4)) {
-    // Start device
-    return sensorStart();
-  };
-  return false;
-}
-
-void BSEC68x::createSensorItems(const sensor_filter_t filterMode1, const uint16_t filterSize1,
-                               const sensor_filter_t filterMode2, const uint16_t filterSize2,
-                               const sensor_filter_t filterMode3, const uint16_t filterSize3,
-                               const sensor_filter_t filterMode4, const uint16_t filterSize4)
-{
-  // Pressure
-  _item1 = new rPressureItem(this, CONFIG_SENSOR_PRESSURE_NAME, CONFIG_FORMAT_PRESSURE_UNIT,
-    filterMode1, filterSize1,
-    CONFIG_FORMAT_PRESSURE_VALUE, CONFIG_FORMAT_PRESSURE_STRING,
-    #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-    CONFIG_FORMAT_TIMESTAMP_L, 
-    #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-    #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-    CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
-    #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-  );
-  if (_item1) {
-    rlog_d(_name, RSENSOR_LOG_MSG_CREATE_ITEM, _item1->getName(), _name);
-  };
-
-  // Temperature
-  _item2 = new rTemperatureItem(this, CONFIG_SENSOR_TEMP_NAME, CONFIG_FORMAT_TEMP_UNIT,
-    filterMode2, filterSize2,
-    CONFIG_FORMAT_TEMP_VALUE, CONFIG_FORMAT_TEMP_STRING,
-    #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-    CONFIG_FORMAT_TIMESTAMP_L, 
-    #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-    #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-    CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
-    #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-  );
-  if (_item2) {
-    rlog_d(_name, RSENSOR_LOG_MSG_CREATE_ITEM, _item2->getName(), _name);
-  };
-
-  // Humidity
-  _item3 = new rSensorItem(this, CONFIG_SENSOR_HUMIDITY_NAME, 
-    filterMode3, filterSize3,
-    CONFIG_FORMAT_HUMIDITY_VALUE, CONFIG_FORMAT_HUMIDITY_STRING,
-    #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-    CONFIG_FORMAT_TIMESTAMP_L, 
-    #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-    #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-    CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
-    #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-  );
-  if (_item3) {
-    rlog_d(_name, RSENSOR_LOG_MSG_CREATE_ITEM, _item3->getName(), _name);
-  };
-
-  // Gas
-  _item4 = new rSensorItem(this, CONFIG_SENSOR_IAQ_NAME, 
-    filterMode4, filterSize4,
-    CONFIG_FORMAT_IAQ_VALUE, CONFIG_FORMAT_IAQ_STRING,
-    #if CONFIG_SENSOR_TIMESTAMP_ENABLE
-    CONFIG_FORMAT_TIMESTAMP_L, 
-    #endif // CONFIG_SENSOR_TIMESTAMP_ENABLE
-    #if CONFIG_SENSOR_TIMESTRING_ENABLE  
-    CONFIG_FORMAT_TIMESTAMP_S, CONFIG_FORMAT_TSVALUE
-    #endif // CONFIG_SENSOR_TIMESTRING_ENABLE
-  );
-  if (_item4) {
-    rlog_d(_name, RSENSOR_LOG_MSG_CREATE_ITEM, _item4->getName(), _name);
-  };
-}
-
-void BSEC68x::registerItemsParameters(paramsGroupHandle_t parent_group)
-{
-  // Pressure
-  if (_item1) {
-    _item1->registerParameters(parent_group, CONFIG_SENSOR_PRESSURE_KEY, CONFIG_SENSOR_PRESSURE_NAME, CONFIG_SENSOR_PRESSURE_FRIENDLY);
-  };
-  // Temperature
-  if (_item2) {
-    _item2->registerParameters(parent_group, CONFIG_SENSOR_TEMP_KEY, CONFIG_SENSOR_TEMP_NAME, CONFIG_SENSOR_TEMP_FRIENDLY);
-  };
-  // Humidity
-  if (_item3) {
-    _item3->registerParameters(parent_group, CONFIG_SENSOR_HUMIDITY_KEY, CONFIG_SENSOR_HUMIDITY_NAME, CONFIG_SENSOR_HUMIDITY_FRIENDLY);
-  };
-  // Gas
-  if (_item4) {
-    _item4->registerParameters(parent_group, CONFIG_SENSOR_IAQ_KEY, CONFIG_SENSOR_IAQ_NAME, CONFIG_SENSOR_IAQ_FRIENDLY);
-  };
-}
-
-/**
- * Connecting external previously created items, for example statically declared
- * */
-bool BSEC68x::initExtItems(const char* sensorName, const char* topicName, const bool topicLocal, 
-  const i2c_port_t numI2C, const uint8_t addrI2C, 
-  BME68x_STANDBYTIME odr, BME68x_IIR_FILTER filter, BME68x_OVERSAMPLING osPress, BME68x_OVERSAMPLING osTemp, BME68x_OVERSAMPLING osHum,
-  BME68x_BSEC2_OUTPUT bsec_output, float bsec_rate,
-  rSensorItem* item1, rSensorItem* item2, rSensorItem* item3, rSensorItem* item4,
-  const uint32_t minReadInterval, const uint16_t errorLimit,
-  cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
-{
-  _I2C_num = numI2C;
-  _I2C_address = addrI2C;
-  // Set configuration
-  _odr = (uint8_t)odr;
-  _filter = (uint8_t)filter;
-  _os_press = (uint8_t)osPress;
-  _os_temp = (uint8_t)osTemp;
-  _os_humd = (uint8_t)osHum;
-  // Initialize BSEC2
-  _bsec_output_type = bsec_output;
-  _bsec_sample_rate = bsec_rate;
-  // Initialize properties
-  initProperties(sensorName, topicName, topicLocal, minReadInterval, errorLimit, cb_status, cb_publish);
-  // Assign items
-  this->rSensorX4::setSensorItems(item1, item2, item3, item4);
-  // Start device
-  return sensorStart();
-}
 
 /**
  * Get I2C parameters
@@ -319,7 +194,32 @@ uint8_t BSEC68x::getI2CAddress()
   return _I2C_address;
 }
 
-// API error handling
+/**
+ * Get values
+ * */
+sensor_value_t BSEC68x::getPressure(const bool readSensor)
+{
+  return getItemValue(0, readSensor);
+}
+
+sensor_value_t BSEC68x::getTemperature(const bool readSensor)
+{
+  return getItemValue(1, readSensor);
+}
+
+sensor_value_t BSEC68x::getHumidity(const bool readSensor)
+{
+  return getItemValue(2, readSensor);
+}
+
+sensor_value_t BSEC68x::getIAQ(const bool readSensor)
+{
+  return getItemValue(3, readSensor);
+}
+
+/**
+ * API error handling
+ * */
 sensor_status_t BSEC68x::checkApiCode(const char* api_name, int8_t rslt)
 {
   switch (rslt) {
@@ -568,7 +468,7 @@ sensor_status_t BSEC68x::updateSubscription()
  * */
 sensor_status_t BSEC68x::readRawData()
 {
-  sensor_status_t rslt;
+  sensor_status_t rslt = SENSOR_STATUS_OK;
   struct bme68x_data data;
   uint8_t last_op_mode;
   uint8_t n_reads, n_inputs, n_outputs;
@@ -645,7 +545,7 @@ sensor_status_t BSEC68x::readRawData()
         value_t out_pressure = data.pressure;
         value_t out_temperature = data.temperature;
         value_t out_humidity = data.humidity;
-        value_t out_iaq = 0.0;
+        value_t out_iaq = data.gas_resistance;
         for (uint8_t i = 0; i < n_outputs; i++) {
           if (outputs[i].sensor_id == BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_TEMPERATURE) {
             out_temperature = outputs[i].signal;
@@ -665,11 +565,19 @@ sensor_status_t BSEC68x::readRawData()
         };
         
         time_t timestamp = time(nullptr);
-        _item1->setRawValue(data.pressure, timestamp);
-        _item2->setRawAndConvertedValue(data.temperature, out_temperature, timestamp);
-        _item3->setRawAndConvertedValue(data.humidity, out_humidity, timestamp);
-        _item4->setRawAndConvertedValue(data.gas_resistance, out_iaq, timestamp);
-        return SENSOR_STATUS_OK;
+        if ((rslt == SENSOR_STATUS_OK) && (_items[0])) {
+          rslt = _items[0]->setRawValue(data.pressure, timestamp);
+        };
+        if (_items[1]) {
+          _items[1]->setRawAndConvertedValue(data.temperature, out_temperature, timestamp);
+        };
+        if (_items[2]) {
+          _items[2]->setRawAndConvertedValue(data.humidity, out_humidity, timestamp);
+        };
+        if (_items[3]) {
+          _items[3]->setRawAndConvertedValue(data.gas_resistance, out_iaq, timestamp);
+        };
+        return rslt;
       };
     };
   };

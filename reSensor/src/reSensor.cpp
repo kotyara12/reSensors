@@ -38,6 +38,27 @@ value_t calcDewPointSlow(value_t tempValue, value_t humidityValue)
   return (value_t)((241.88 * T) / (17.558-T));
 }
 
+const char* degrees2direction(const value_t value)
+{
+  if ((value > 22.5) && (value <= 67.5)) { 
+    return CONFIG_FORMAT_NORTHEAST;
+  } else if ((value > 67.5) && (value <= 112.5)) { 
+    return CONFIG_FORMAT_EAST;
+  } else if ((value > 112.5) && (value <= 157.5)) { 
+    return CONFIG_FORMAT_SOUTHEAST;
+  } else if ((value > 157.5) && (value <= 202.5)) { 
+    return CONFIG_FORMAT_SOUTH;
+  } else if ((value > 202.5) && (value <= 247.5)) { 
+    return CONFIG_FORMAT_SOUTHWEST;
+  } else if ((value > 247.5) && (value <= 292.5)) { 
+    return CONFIG_FORMAT_WEST;
+  } else if ((value > 292.5) && (value <= 337.5)) { 
+    return CONFIG_FORMAT_NORTHWEST;
+  } else { 
+    return CONFIG_FORMAT_NORTH;
+  };
+}
+
 // =======================================================================================================================
 // =======================================================================================================================
 // ================================================= Filter mode handler =================================================
@@ -138,7 +159,7 @@ bool rSensorItem::doChangeFilterMode()
   // Allocating memory for an array of filter values
   if ((_filterMode != SENSOR_FILTER_RAW) && (_filterSize > 0)) {
     _filterInit = false;
-    _filterBuf = (value_t*)esp_calloc(_filterSize, sizeof(value_t)); 
+    _filterBuf = (value_t*)psram_calloc(_filterSize, sizeof(value_t)); 
     if (_filterBuf == nullptr) {
       _filterSize = 0;
       if (_owner) {
@@ -1087,6 +1108,60 @@ value_t rPressureItem::convertValue(const value_t rawValue)
 
 // =======================================================================================================================
 // =======================================================================================================================
+// ================================================= rWindDirectionItem ==================================================
+// =======================================================================================================================
+// =======================================================================================================================
+
+// Constructor
+rWindDirectionItem::rWindDirectionItem(rSensor *sensor, const char* itemKey, const char* itemName, const char* itemFriendly,
+  const sensor_filter_t filterMode, const uint16_t filterSize,
+  const char* formatNumeric) 
+// inherited constructor
+:rSensorItem(sensor, itemKey, itemName, itemFriendly, filterMode, filterSize, formatNumeric, nullptr) 
+{
+};
+
+char* rWindDirectionItem::asString(const char* format, const value_t value, bool nan_brackets)
+{
+  if (isnan(value)) {
+    return malloc_stringf(nan_brackets ? "\"%s\"" : "%s", CONFIG_FORMAT_EMPTY);
+  } else {
+    if (format) {
+      return malloc_stringf(format, (float)value);
+    } else {
+      return malloc_string(degrees2direction(value));
+    };
+  };
+}
+
+void rWindDirectionItem::nvsStoreExtremums(const char* nvs_space)
+{
+}
+
+void rWindDirectionItem::nvsRestoreExtremums(const char* nvs_space)
+{
+}
+
+#if CONFIG_SENSOR_AS_PLAIN
+bool rWindDirectionItem::publishExtremums(const char* topic, sensor_extremums_t *range
+  #if CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+  , const bool minValueChanged, const bool maxValueChanged
+  #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
+  )
+{
+  return true;
+}
+#endif // CONFIG_SENSOR_AS_PLAIN
+
+#if CONFIG_SENSOR_AS_JSON
+char* rWindDirectionItem::jsonExtremums(const char* type, sensor_extremums_t *range)
+{
+  return nullptr;
+}
+#endif // CONFIG_SENSOR_AS_JSON
+
+// =======================================================================================================================
+// =======================================================================================================================
 // ==================================================== rVirtualItem =====================================================
 // =======================================================================================================================
 // =======================================================================================================================
@@ -1194,12 +1269,14 @@ value_t rMapItem::checkBounds(value_t newValue)
   };
 
   // Value normalization
-  if (_in_min < _in_max) {
-    if (_value < _in_min) { _value = _in_min; };
-    if (_value > _in_max) { _value = _in_max; };
-  } else {
-    if (_value > _in_min) { _value = _in_min; };
-    if (_value < _in_max) { _value = _in_max; };
+  if (_in_bounds != BOUNDS_FIXED_OVER) {
+    if (_in_min < _in_max) {
+      if (_value < _in_min) { _value = _in_min; };
+      if (_value > _in_max) { _value = _in_max; };
+    } else {
+      if (_value > _in_min) { _value = _in_min; };
+      if (_value < _in_max) { _value = _in_max; };
+    };
   };
 
   // Store new bounds
@@ -1250,7 +1327,6 @@ rSensor::rSensor(uint8_t eventId, const uint8_t items,
   _errLimit = errorLimit;
   _errCount = 0;
   _pgSensor = nullptr;
-  _lstStatus = SENSOR_STATUS_NO_INIT;
   _errStatus = SENSOR_STATUS_NO_INIT;
   _cbOnChangeStatus = cb_status;
   _cbOnPublishData = cb_publish;
@@ -1456,51 +1532,64 @@ void rSensor::postEventStatus(const sensor_status_t oldStatus, const sensor_stat
 
 void rSensor::setRawStatus(sensor_status_t newStatus, bool forced)
 {
-  sensor_status_t prvStatus = _errStatus;
-  _lstStatus = newStatus;
-  // Status changed
-  if (_errStatus != newStatus) {
-    // No init
-    if (newStatus == SENSOR_STATUS_NO_INIT) {
-      _errStatus = newStatus;
-      _errCount = 0;
-      if (_cbOnChangeStatus) {
-        _cbOnChangeStatus(this, prvStatus, newStatus);
-      };
-      postEventStatus(prvStatus, newStatus);
-    // OK
-    } else if (newStatus == SENSOR_STATUS_OK) {
-      bool isFirstOk = (_errStatus == SENSOR_STATUS_NO_INIT) && (_errCount == 0);
-      _errStatus = newStatus;
-      _errCount = 0;
-      if (!isFirstOk) {
-        if (_cbOnChangeStatus) {
-          _cbOnChangeStatus(this, prvStatus, newStatus);
-        };
-        postEventStatus(prvStatus, newStatus);
-        publishData(false);
-      };
-    // Errors
-    } else {
-      _errCount++;
-      if (forced || (_errCount > _errLimit)) {
-        _errStatus = newStatus;
-        if (_cbOnChangeStatus) {
-          _cbOnChangeStatus(this, prvStatus, newStatus);
-        };
-        postEventStatus(prvStatus, newStatus);
-        publishData(false);
-      };
-    };
+  bool isAction = false;
+
+  // Temporarily save previous data and record new ones
+  uint16_t prevErrors = _errCount;
+  sensor_status_t prevStatus = _errStatus;
+  _errStatus = newStatus;
+
+  // Counter of consecutive errors
+  if (newStatus == SENSOR_STATUS_OK) {
+    if (_errCount > 0) _errCount = 0;
   } else {
-    // Count error anyway
-    if ((newStatus == SENSOR_STATUS_NO_INIT) || (newStatus == SENSOR_STATUS_OK)) {
-      if (_errCount > 0) {
-        _errCount = 0;
-      };
-    } else {
-      _errCount++;
+    if (_errCount < UINT16_MAX) _errCount++;
+  }
+  
+  #if CONFIG_RLOG_PROJECT_LEVEL >= RLOG_LEVEL_DEBUG
+  if (prevStatus != newStatus) {
+    rlog_d(logTAG, "Set status [%s] for sensor \"%s\"", statusString(newStatus), _name);
+  };
+  #endif // CONFIG_RLOG_PROJECT_LEVEL
+
+  // SENSOR_STATUS_NO_INIT :: Sensor not started
+  if (newStatus == SENSOR_STATUS_NO_INIT) {
+    if (prevStatus != newStatus) {
+      // How can this even be possible!!??
+      isAction = true;
+      rlog_w(logTAG, "Setting SENSOR_STATUS_NO_INIT status in sensor %s!", _name);
     }
+  }
+
+  // SENSOR_STATUS_NO_DATA :: Data has not yet been read or read failure
+  else if (newStatus == SENSOR_STATUS_NO_DATA) {
+    if (prevStatus == SENSOR_STATUS_NO_INIT) {
+      // After resetting the sensor
+      _errCount = 0;
+    } else {
+      // Failed to read data from the sensor for some reason
+      isAction = forced || ((_errLimit > 0) && (_errCount == _errLimit));
+    }
+  }
+
+  // SENSOR_STATUS_OK :: Everything is wonderful
+  else if (newStatus == SENSOR_STATUS_OK) {
+    isAction = (prevStatus != newStatus) && !(((prevStatus == SENSOR_STATUS_NO_INIT) || (prevStatus == SENSOR_STATUS_NO_DATA)) && (prevErrors == 0));
+  }
+
+  // SENSOR_STATUS_ERROR or OTHER :: Any error
+  else {
+    isAction = forced || ((_errLimit > 0) && (_errCount == _errLimit));
+  }
+
+  // Create an event and publish data
+  if (isAction) {
+    rlog_d(logTAG, "Activate status [%s] for sensor \"%s\"", statusString(newStatus), _name);
+    if (_cbOnChangeStatus) {
+      _cbOnChangeStatus(this, prevStatus, newStatus);
+    }
+    postEventStatus(prevStatus, newStatus);
+    publishData(false);
   };
 }
 
@@ -1581,9 +1670,9 @@ bool rSensor::sensorStart()
   sensor_status_t resetStatus = sensorBusReset();
   if (resetStatus == SENSOR_STATUS_OK) {
     resetStatus = sensorReset();
-    if (resetStatus == SENSOR_STATUS_OK) {
+    if ((resetStatus == SENSOR_STATUS_NO_DATA) || (resetStatus == SENSOR_STATUS_OK)) {
       rlog_i(logTAG, RSENSOR_LOG_MSG_INIT_OK, getName());
-      setRawStatus(resetStatus, true);
+      setRawStatus(SENSOR_STATUS_NO_DATA, true);
       return true;
     };
   };
@@ -1600,11 +1689,12 @@ sensor_status_t rSensor::readData()
   };
 
   // If the previous operation was completed with an error, reset the sensor
-  if (!((_lstStatus == SENSOR_STATUS_OK) || (_lstStatus == SENSOR_STATUS_NO_DATA))) {
-    _lstStatus = sensorReset();
-    if (_lstStatus != SENSOR_STATUS_OK) {
-      setRawStatus(_lstStatus, false);
-      return _lstStatus;
+  sensor_status_t retStatus = SENSOR_STATUS_OK;
+  if (!((_errStatus == SENSOR_STATUS_OK) || (_errStatus == SENSOR_STATUS_NO_DATA))) {
+    retStatus = sensorReset();
+    if (!((retStatus == SENSOR_STATUS_OK) || (retStatus == SENSOR_STATUS_NO_DATA))) {
+      setRawStatus(retStatus, false);
+      return retStatus;
     };
   };
 
@@ -1612,17 +1702,17 @@ sensor_status_t rSensor::readData()
   if ((_readInterval == 0) || ((esp_timer_get_time() - _readLast) >= (int64_t)(_readInterval * 1000))) {
     _readLast = esp_timer_get_time();
     rlog_v(logTAG, "Read data from [ %s ]...", getName());
-    _lstStatus = readRawData();
+    retStatus = readRawData();
 
     // If reading fails, reset sensor and try again
-    if (!((_lstStatus == SENSOR_STATUS_OK) || (_lstStatus == SENSOR_STATUS_NO_DATA))) {
-      _lstStatus = sensorReset();
-      if (_lstStatus == SENSOR_STATUS_OK) {
-        _lstStatus = readRawData();
+    if (!((retStatus == SENSOR_STATUS_OK) || (retStatus == SENSOR_STATUS_NO_DATA))) {
+      retStatus = sensorReset();
+      if ((retStatus == SENSOR_STATUS_OK) || (retStatus == SENSOR_STATUS_NO_DATA)) {
+        retStatus = readRawData();
       };
     };
 
-    setRawStatus(_lstStatus, false);
+    setRawStatus(retStatus, false);
   };
 
   return _errStatus;
@@ -1921,7 +2011,7 @@ sensor_status_t rSensorStub::sensorReset()
 {
   // Item initialization is called only once in setSensorItems(item); >> _item->initItem();
   if (_items[0] != nullptr) {
-    return SENSOR_STATUS_OK;
+    return SENSOR_STATUS_NO_DATA;
   } else {
     return SENSOR_STATUS_NO_INIT;
   };

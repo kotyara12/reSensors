@@ -20,7 +20,7 @@ static const char* logTAG = "QDY30";
 #define REG_STATUS_FULL              0x0006
 
 reQDY30A::reQDY30A(uint8_t eventId, 
-  void* modbus, const uint8_t address,
+  void* modbus, const uint8_t address, const qdy_units_t units,
   const char* sensorName, const char* topicName, const bool topicLocal, 
   const uint32_t minReadInterval, const uint16_t errorLimit,
   cb_status_changed_t cb_status, cb_publish_data_t cb_publish)
@@ -31,6 +31,7 @@ reQDY30A::reQDY30A(uint8_t eventId,
 {
   _modbus = nullptr;
   _address = address;
+  _units = units;
 }
 
 void reQDY30A::setSensorItems(rSensorItem* itemLevel)
@@ -40,32 +41,21 @@ void reQDY30A::setSensorItems(rSensorItem* itemLevel)
 
 sensor_status_t reQDY30A::sensorReset()
 {
-  // int16_t value = 2;
-  // callModbusRegister(FUNCTION_CODE_STATUS_WRITE, REG_STATUS_UNITS, &value);
-  // value = 0;
-  // callModbusRegister(FUNCTION_CODE_STATUS_WRITE, REG_STATUS_PRECISION, &value);
   return SENSOR_STATUS_OK;
 };
 
-esp_err_t reQDY30A::callModbusRegister(uint8_t cmd, uint16_t reg, int16_t* value)
-{
-  mb_param_request_t _request = {
-    .slave_addr = _address,
-    .command    = cmd,
-    .reg_start  = reg,
-    .reg_size   = 1
-  };
-  return mbc_master_send_request(&_request, (void*)value);
-}
-
 sensor_status_t reQDY30A::readRawData()
 {
-  int16_t value, precs, units = 0;
-  esp_err_t err = ESP_OK;
+  int16_t buffer[3] = {0};
 
-  err = callModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_OUTPUT, &value);
-  if (err != ESP_OK) err = callModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_PRECISION, &precs);
-  if (err != ESP_OK) err = callModbusRegister(FUNCTION_CODE_STATUS_READ, REG_STATUS_UNITS, &units);
+  mb_param_request_t _request = {
+    .slave_addr = _address,
+    .command    = FUNCTION_CODE_STATUS_READ,
+    .reg_start  = REG_STATUS_UNITS,
+    .reg_size   = 3
+  };
+  esp_err_t err = mbc_master_send_request(&_request, (void*)&buffer[0]);
+  // rlog_d(logTAG, "Read data: value = %d, precs = %d, units = %d", buffer[2], buffer[1], buffer[0]);
   
   // Check exit code
   if (err != ESP_OK) {
@@ -74,17 +64,41 @@ sensor_status_t reQDY30A::readRawData()
   };
 
   // Check exit value
-  if (value < 0) {
+  if (buffer[2] < 0) {
     rlog_e(logTAG, RSENSOR_LOG_MSG_BAD_VALUE, _name);
     return SENSOR_STATUS_BAD_DATA;
   };
 
-  switch (precs) {
-    case 1:  return setRawValue(0, (value_t)value/10.0);    // 1-###.#
-    case 2:  return setRawValue(0, (value_t)value/100.0);   // 2-##.##
-    case 3:  return setRawValue(0, (value_t)value/1000.0);  // 3-#.###
-    default: return setRawValue(0, (value_t)value);         // 0-####
+  value_t level = NAN;
+  switch (buffer[1]) {
+    case 1:  
+      level = (value_t)buffer[2]/10.0;    // 1-###.#
+      break;
+    case 2:  
+      level = (value_t)buffer[2]/100.0;   // 2-##.##
+      break;
+    case 3:  
+      level = (value_t)buffer[2]/1000.0;  // 3-#.###
+      break;
+    default: 
+      level = (value_t)buffer[2];         // 0-####
+      break;
   }
+
+  switch (_units) {
+    case QUNITS_CM:
+      if (buffer[0] == 2) {
+        level = level / 10.0;
+      };
+      break;
+    default:
+      if (buffer[0] == 1) {
+        level = level * 10.0;
+      };
+      break;
+  };
+
+  return setRawValue(0, level); 
 };
 
 sensor_value_t reQDY30A::getLevel(const bool readSensor)
