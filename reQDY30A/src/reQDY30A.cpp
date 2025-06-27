@@ -19,6 +19,21 @@ static const char* logTAG = "QDY30";
 #define REG_STATUS_ZERO              0x0005
 #define REG_STATUS_FULL              0x0006
 
+// UNITS : 0 – not defined, 1 – cm, 2 – mm, 3 – MPa, 4 – Pa, 5 – KPa, 6 – MA
+#define VAL_UNITS_UNDEFINED          0x0000
+#define VAL_UNITS_CM                 0x0001
+#define VAL_UNITS_MM                 0x0002
+#define VAL_UNITS_MPA                0x0003
+#define VAL_UNITS_PA                 0x0004
+#define VAL_UNITS_KPA                0x0005
+#define VAL_UNITS_MA                 0x0006
+
+// PRESC : 0 – ####, 1 – ###.#, 2 – ##.##, 3 – #.###
+#define VAL_PRECS_0                  0x0000
+#define VAL_PRECS_1                  0x0001
+#define VAL_PRECS_2                  0x0002
+#define VAL_PRECS_3                  0x0003
+
 reQDY30A::reQDY30A(uint8_t eventId, 
   void* modbus, const uint8_t address, const qdy_units_t units,
   const char* sensorName, const char* topicName, const bool topicLocal, 
@@ -46,8 +61,9 @@ sensor_status_t reQDY30A::sensorReset()
 
 sensor_status_t reQDY30A::readRawData()
 {
-  int16_t buffer[3] = {0};
-
+  int16_t buffer[3] = {2, 0, 0};
+  
+  // Read data
   mb_param_request_t _request = {
     .slave_addr = _address,
     .command    = FUNCTION_CODE_STATUS_READ,
@@ -69,30 +85,34 @@ sensor_status_t reQDY30A::readRawData()
     return SENSOR_STATUS_BAD_DATA;
   };
 
-  value_t level = NAN;
-  switch (buffer[1]) {
-    case 1:  
-      level = (value_t)buffer[2]/10.0;    // 1-###.#
-      break;
-    case 2:  
-      level = (value_t)buffer[2]/100.0;   // 2-##.##
-      break;
-    case 3:  
-      level = (value_t)buffer[2]/1000.0;  // 3-#.###
-      break;
-    default: 
-      level = (value_t)buffer[2];         // 0-####
-      break;
-  }
+  value_t level = (value_t)buffer[2];
+  // Recalculate the result only for cm
+  if (buffer[0] == VAL_UNITS_CM) {
+    switch (buffer[1]) {
+      case VAL_PRECS_1:  
+        level = (value_t)buffer[2]/10.0;    // 1-###.#
+        break;
+      case VAL_PRECS_2:  
+        level = (value_t)buffer[2]/100.0;   // 2-##.##
+        break;
+      case VAL_PRECS_3:  
+        level = (value_t)buffer[2]/1000.0;  // 3-#.###
+        break;
+      default: 
+        level = (value_t)buffer[2];         // 0-####
+        break;
+    };
+  };
 
+  // Convert units of measurement if necessary
   switch (_units) {
     case QUNITS_CM:
-      if (buffer[0] == 2) {
+      if (buffer[0] == VAL_UNITS_MM) {
         level = level / 10.0;
       };
       break;
     default:
-      if (buffer[0] == 1) {
+      if (buffer[0] == VAL_UNITS_CM) {
         level = level * 10.0;
       };
       break;
@@ -104,4 +124,9 @@ sensor_status_t reQDY30A::readRawData()
 sensor_value_t reQDY30A::getLevel(const bool readSensor)
 {
   return getItemValue(0, readSensor);
+}
+
+sensor_value_t reQDY30A::getLevelTimeout(const bool readSensor, const uint32_t timeout)
+{
+  return getItemValueTimeout(0, readSensor, timeout);
 }

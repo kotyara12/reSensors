@@ -198,15 +198,15 @@ typedef struct {
   bool minValueChanged = false;
   bool maxValueChanged = false;
   #endif // CONFIG_SENSOR_EXTREMUMS_OPTIMIZED
-  sensor_value_t minValue;
-  sensor_value_t maxValue;
+  sensor_value_t minValue = {0};
+  sensor_value_t maxValue = {0};
 } sensor_extremums_t;
 
 typedef struct {
-  sensor_value_t lastValue;
-  sensor_extremums_t extremumsEntirely;
-  sensor_extremums_t extremumsWeekly;
-  sensor_extremums_t extremumsDaily;
+  sensor_value_t lastValue = {0};
+  sensor_extremums_t extremumsEntirely = {0};
+  sensor_extremums_t extremumsWeekly = {0};
+  sensor_extremums_t extremumsDaily = {0};
 } sensor_data_t;
 typedef sensor_data_t * sensor_handle_t;
 
@@ -495,6 +495,7 @@ class rSensor {
     sensor_handle_t getHandle(const uint8_t index);
     sensor_data_t getItemData(const uint8_t index, const bool readSensor);
     sensor_value_t getItemValue(const uint8_t index, const bool readSensor);
+    sensor_value_t getItemValueTimeout(const uint8_t index, const bool readSensor, const uint32_t timeout);
     sensor_extremums_t getItemExtremumsEntirely(const uint8_t index, const bool readSensor);
     sensor_extremums_t getItemExtremumsWeekly(const uint8_t index, const bool readSensor);
     sensor_extremums_t getItemExtremumsDaily(const uint8_t index, const bool readSensor);
@@ -574,6 +575,7 @@ class rSensor {
     sensor_status_t     _errStatus;
     uint16_t            _errLimit;
     uint16_t            _errCount;
+    uint8_t             _errNotify;
     cb_status_changed_t _cbOnChangeStatus;
     cb_publish_data_t   _cbOnPublishData;
     void postEventStatus(const sensor_status_t oldStatus, const sensor_status_t newStatus);

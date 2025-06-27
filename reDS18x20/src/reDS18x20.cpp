@@ -515,3 +515,8 @@ sensor_value_t DS18x20::getTemperature(const bool readSensor)
 {
   return getItemValue(0, readSensor);
 }
+
+sensor_value_t DS18x20::getTemperatureTimeout(const bool readSensor, const uint32_t timeout)
+{
+  return getItemValueTimeout(0, readSensor, timeout);
+}

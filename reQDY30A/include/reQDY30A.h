@@ -33,6 +33,7 @@ class reQDY30A : public rSensor {
     sensor_status_t sensorReset() override;
     
     sensor_value_t getLevel(const bool readSensor);
+    sensor_value_t getLevelTimeout(const bool readSensor, const uint32_t timeout);
   protected:
     sensor_status_t readRawData() override;  
   private:

@@ -1326,6 +1326,7 @@ rSensor::rSensor(uint8_t eventId, const uint8_t items,
   _readLast = 0;
   _errLimit = errorLimit;
   _errCount = 0;
+  _errNotify = false;
   _pgSensor = nullptr;
   _errStatus = SENSOR_STATUS_NO_INIT;
   _cbOnChangeStatus = cb_status;
@@ -1435,7 +1436,7 @@ sensor_data_t rSensor::getItemData(const uint8_t index, const bool readSensor)
   if ((_items) && (index < _items_count) && (_items[index])) {
     return _items[index]->getValues();
   };
-  sensor_data_t empty_data;
+  sensor_data_t empty_data = {0};
   return empty_data;
 }
 
@@ -1445,7 +1446,21 @@ sensor_value_t rSensor::getItemValue(const uint8_t index, const bool readSensor)
   if ((_items) && (index < _items_count) && (_items[index])) {
     return _items[index]->getValue();
   };
-  sensor_value_t empty_data;
+  sensor_value_t empty_data = {0};
+  return empty_data;
+}
+
+sensor_value_t rSensor::getItemValueTimeout(const uint8_t index, const bool readSensor, const uint32_t timeout)
+{
+  if (readSensor) readData();
+  if ((_items) && (index < _items_count) && (_items[index])) {
+    time_t now = time(nullptr);
+    sensor_value_t last_value = _items[index]->getValue();
+    if ((now - last_value.timestamp) <= timeout) {
+      return last_value;
+    };
+  };
+  sensor_value_t empty_data = {0};
   return empty_data;
 }
 
@@ -1455,7 +1470,7 @@ sensor_extremums_t rSensor::getItemExtremumsEntirely(const uint8_t index, const 
   if ((_items) && (index < _items_count) && (_items[index])) {
     return _items[index]->getExtremumsEntirely();
   };
-  sensor_extremums_t empty_data;
+  sensor_extremums_t empty_data = {0};
   return empty_data;
 }
 
@@ -1465,7 +1480,7 @@ sensor_extremums_t rSensor::getItemExtremumsWeekly(const uint8_t index, const bo
   if ((_items) && (index < _items_count) && (_items[index])) {
     return _items[index]->getExtremumsWeekly();
   };
-  sensor_extremums_t empty_data;
+  sensor_extremums_t empty_data = {0};
   return empty_data;
 }
 
@@ -1475,7 +1490,7 @@ sensor_extremums_t rSensor::getItemExtremumsDaily(const uint8_t index, const boo
   if ((_items) && (index < _items_count) && (_items[index])) {
     return _items[index]->getExtremumsDaily();
   };
-  sensor_extremums_t empty_data;
+  sensor_extremums_t empty_data = {0};
   return empty_data;
 }
 
@@ -1566,25 +1581,27 @@ void rSensor::setRawStatus(sensor_status_t newStatus, bool forced)
     if (prevStatus == SENSOR_STATUS_NO_INIT) {
       // After resetting the sensor
       _errCount = 0;
+      _errNotify = false;
     } else {
       // Failed to read data from the sensor for some reason
-      isAction = forced || ((_errLimit > 0) && (_errCount == _errLimit));
+      isAction = forced || ((_errLimit > 0) && (_errCount >= _errLimit) && !_errNotify);
     }
   }
 
   // SENSOR_STATUS_OK :: Everything is wonderful
   else if (newStatus == SENSOR_STATUS_OK) {
-    isAction = (prevStatus != newStatus) && !(((prevStatus == SENSOR_STATUS_NO_INIT) || (prevStatus == SENSOR_STATUS_NO_DATA)) && (prevErrors == 0));
+    isAction = (prevStatus != newStatus) && _errNotify;
   }
 
   // SENSOR_STATUS_ERROR or OTHER :: Any error
   else {
-    isAction = forced || ((_errLimit > 0) && (_errCount == _errLimit));
+    isAction = forced || ((_errLimit > 0) && (_errCount >= _errLimit) && !_errNotify);
   }
 
   // Create an event and publish data
   if (isAction) {
     rlog_d(logTAG, "Activate status [%s] for sensor \"%s\"", statusString(newStatus), _name);
+    _errNotify = (newStatus != SENSOR_STATUS_OK);
     if (_cbOnChangeStatus) {
       _cbOnChangeStatus(this, prevStatus, newStatus);
     }

@@ -53,6 +53,7 @@ class DS18x20 : public rSensor {
     sensor_status_t setResolution(DS18x20_RESOLUTION resolution);
     
     sensor_value_t getTemperature(const bool readSensor);
+    sensor_value_t getTemperatureTimeout(const bool readSensor, const uint32_t timeout);
   protected:
     sensor_status_t readRawData() override;
 
